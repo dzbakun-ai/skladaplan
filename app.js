@@ -1,6 +1,14 @@
-let DATA = {};
+const SUPABASE_URL = 'https://ithhecprdosvjiddoalq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_0dB5DQt2_ysOohx42IN4rA_mnypLeOR';
 
-async function loadDatabase() {
+const supabaseClient = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
+
+let DATA={};
+
+async function loadDatabase(){
   try {
     const r = await fetch('database.json', { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
