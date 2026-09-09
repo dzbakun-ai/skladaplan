@@ -1558,57 +1558,58 @@ function removeLocalBox(id) {
    SUPABASE PAYLOAD
    ========================================================= */
 
-function boxToPayload(
-  formData
-) {
+function boxToPayload(formData) {
 
   return {
 
-    barcode:
+    "Штрихкод":
       normalizeBarcode(
         formData.barcode
       ),
 
-    article:
+    "Артикул":
       normalizeText(
         formData.article
       ) || null,
 
-    quantity_in_box:
+    "Кол-во в коробке":
       normalizeText(
         formData.quantity_in_box
       ) || null,
 
-    zone_row:
+    "Зона/ряд":
       normalizeText(
         formData.zone_row
       ) || null,
 
-    pallet:
+    "Поддон":
       normalizeText(
         formData.pallet
       ) || null,
 
-    status:
+    "Статус":
       normalizeText(
         formData.status
-      ) ||
-      STATUSES.STOCK,
+      ) || STATUSES.STOCK,
 
-    date:
+    "ДатаРазмещения":
       toISODate(
         formData.date
       ),
 
-    warehouse:
+    "Склад":
       normalizeText(
         formData.warehouse
+      ) || null,
+
+    "Изменил":
+      normalizeText(
+        formData.worker
       ) || null
 
   };
 
 }
-
 
 /* =========================================================
    BASE
@@ -2850,87 +2851,107 @@ async function deleteSelectedBoxes() {
 
 async function markSelectedForPicking() {
 
-  const ids =
-    [...state.selectedIds];
+  const selected =
+    getSelectedBoxes();
 
+  if (!selected.length) {
 
-  if (
-    !ids.length
-  ) {
+    alert(
+      'Выберите хотя бы одну коробку.'
+    );
 
     return;
 
   }
 
 
-  let done =
-    0;
+  const ids =
+    selected
+      .map(
+        box => box.id
+      )
+      .filter(Boolean);
 
 
-  for (
-    const id of ids
-  ) {
+  if (!ids.length) {
 
-    const {
-      data,
-      error
-    } =
-      await supabaseClient
-        .from('boxes')
-        .update({
-          status:
-            STATUSES.PICK,
-          pick:
-            true
-        })
-        .eq(
-          'id',
-          id
-        )
-        .select(
-          BOX_SELECT
-        )
-        .single();
-
-
-    if (error) {
-
-      console.error(
-        error
-      );
-
-      continue;
-
-    }
-
-
-    updateLocalBox(
-      id,
-      data
+    alert(
+      'Не удалось определить выбранные коробки.'
     );
 
-
-    done++;
+    return;
 
   }
 
 
-  state.selectedIds.clear();
+  const {
+    error
+  } =
+    await supabaseClient
+      .from('boxes')
+      .update({
+        "Статус":
+          STATUSES.PICK
+      })
+      .in(
+        'id',
+        ids
+      );
 
+
+  if (error) {
+
+    console.error(
+      'Ошибка отправки коробок в подбор:',
+      error
+    );
+
+    alert(
+      'Ошибка при отправке коробок в подбор:\n' +
+      error.message
+    );
+
+    return;
+
+  }
+
+
+  /*
+    Обновляем локальное состояние.
+  */
+
+  selected.forEach(
+    box => {
+
+      box.status =
+        STATUSES.PICK;
+
+    }
+  );
+
+
+  await loadBoxes();
+
+
+  /*
+    Снимаем выделение.
+  */
+
+  clearSelectedBoxes();
+
+
+  /*
+    Обновляем интерфейс.
+  */
 
   render();
 
 
-  toast(
-    `Добавлено в подбор: ${done}`
+  alert(
+    `В подбор отправлено: ${ids.length}`
   );
 
 }
-
-
-/* =========================================================
-   ASSEMBLY
-   ========================================================= */
 
 function getPickingBoxes() {
 
@@ -3288,6 +3309,14 @@ async function processScan(
   }
 
 
+  /*
+    Ищем коробку по штрихкоду
+    только среди коробок, которые
+    находятся в подборе.
+
+    Поле pick больше не используется.
+  */
+
   const candidates =
     state.boxes.filter(
       row =>
@@ -3295,7 +3324,6 @@ async function processScan(
           row.barcode
         ) === barcode &&
         (
-          row.pick === true ||
           row.status ===
             STATUSES.PICK ||
           row.status ===
@@ -3326,6 +3354,12 @@ async function processScan(
   let box =
     null;
 
+
+  /*
+    Если выбран текущий поддон,
+    разрешаем сканировать только
+    коробку с этого поддона.
+  */
 
   if (
     state.currentPallet
@@ -3367,6 +3401,13 @@ async function processScan(
   }
 
 
+  /*
+    Отмечаем коробку как собранную.
+
+    Используем реальные названия
+    колонок Supabase.
+  */
+
   const {
     data,
     error
@@ -3375,13 +3416,10 @@ async function processScan(
       .from('boxes')
       .update({
 
-        status:
+        "Статус":
           STATUSES.COLLECTED,
 
-        pick:
-          false,
-
-        worker:
+        "Изменил":
           state.user?.email ||
           null
 
@@ -3399,7 +3437,32 @@ async function processScan(
   if (error) {
 
     console.error(
+      'Ошибка сканирования:',
       error
+    );
+
+
+    console.error(
+      'Message:',
+      error?.message
+    );
+
+
+    console.error(
+      'Details:',
+      error?.details
+    );
+
+
+    console.error(
+      'Hint:',
+      error?.hint
+    );
+
+
+    console.error(
+      'Code:',
+      error?.code
     );
 
 
@@ -3418,11 +3481,19 @@ async function processScan(
   }
 
 
+  /*
+    Обновляем локальную коробку.
+  */
+
   updateLocalBox(
     box.id,
     data
   );
 
+
+  /*
+    Показываем успешный результат.
+  */
 
   showScannerResult(
     `✓ Коробка ${barcode} скомплектована`,
@@ -3442,7 +3513,6 @@ async function processScan(
   );
 
 }
-
 
 function showScannerResult(
   message,
@@ -3770,7 +3840,6 @@ async function shipSelectedCollected() {
       'error'
     );
 
-
     return;
 
   }
@@ -3802,15 +3871,17 @@ async function shipSelectedCollected() {
       await supabaseClient
         .from('boxes')
         .update({
-          status:
+
+          "Статус":
             STATUSES.SHIPPED
+
         })
         .eq(
           'id',
           id
         )
         .eq(
-          'status',
+          '"Статус"',
           STATUSES.COLLECTED
         )
         .select(
@@ -3822,7 +3893,28 @@ async function shipSelectedCollected() {
     if (error) {
 
       console.error(
+        'Ошибка отгрузки:',
         error
+      );
+
+      console.error(
+        'Message:',
+        error?.message
+      );
+
+      console.error(
+        'Details:',
+        error?.details
+      );
+
+      console.error(
+        'Hint:',
+        error?.hint
+      );
+
+      console.error(
+        'Code:',
+        error?.code
       );
 
       continue;
@@ -3849,7 +3941,6 @@ async function shipSelectedCollected() {
   );
 
 }
-
 
 /* =========================================================
    RECEIVED
