@@ -55,6 +55,9 @@ const BOX_SELECT =
   'date:"ДатаРазмещения",' +
   'warehouse:"Склад",' +
   'worker:"Изменил",' +
+  'warehouse_id,' +
+  'location_id,' +
+  'pallet_id,' +
   'created_at,' +
   'updated_at';
 
@@ -83,7 +86,31 @@ const STATUSES = {
 const state = {
 
   boxes: [],
+   
+  /* =======================================================
+     RECEIVING
+     ======================================================= */
 
+  receivingWarehouses: [],
+  receivingLocations: [],
+  receivingPallets: [],
+
+  receivingWarehouseId: null,
+  receivingLocationId: null,
+  receivingPalletId: null,
+
+  receivingReceiptId: null,
+  receivingReceiptStatus: null,
+
+  receivingPalletNumber: '',
+  receivingScannerInput: '',
+
+  receivingScannedIds: [],
+  receivingRecentScans: [],
+
+  receivingScanning: false,
+  receivingLoading: false,
+   
   loading: false,
 
   currentPage: 'dashboard',
@@ -1251,6 +1278,70 @@ function ensureAppStyles() {
         font-size:24px;
       }
 
+          .sp-receiving-header {
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:20px;
+      flex-wrap:wrap;
+    }
+
+    .sp-receiving-form {
+      display:grid;
+      grid-template-columns:
+        repeat(auto-fit,minmax(220px,1fr));
+      gap:14px;
+      margin-top:14px;
+    }
+
+    .sp-receiving-field {
+      display:flex;
+      flex-direction:column;
+      gap:7px;
+    }
+
+    .sp-receiving-field label {
+      font-size:13px;
+      color:#777;
+      font-weight:600;
+    }
+
+    .sp-receiving-field input,
+    .sp-receiving-field select {
+      width:100%;
+      min-height:44px;
+      box-sizing:border-box;
+      border:1px solid #ddd;
+      border-radius:10px;
+      padding:0 12px;
+      background:#fff;
+      font-size:15px;
+    }
+
+    .sp-receiving-field input:focus,
+    .sp-receiving-field select:focus,
+    #receivingScannerInput:focus {
+      outline:none;
+      border-color:#999;
+      box-shadow:0 0 0 3px rgba(0,0,0,.06);
+    }
+
+    @media (max-width:700px) {
+
+      .sp-receiving-header {
+        flex-direction:column;
+      }
+
+      .sp-receiving-form {
+        grid-template-columns:1fr;
+      }
+
+      #receivingScannerInput {
+        font-size:18px !important;
+      }
+
+    }
+
       .sp-import-stats {
         grid-template-columns:1fr;
       }
@@ -1590,6 +1681,1226 @@ async function loadBoxesFromSupabase() {
   }
 
 }
+
+/* =========================================================
+   RECEIVING DATA
+   ========================================================= */
+
+async function loadReceivingData() {
+
+  const [
+    warehousesResult,
+    locationsResult,
+    palletsResult
+  ] = await Promise.all([
+
+    supabaseClient
+      .from('warehouses')
+      .select('*')
+      .eq('is_active', true)
+      .order('id'),
+
+    supabaseClient
+      .from('locations')
+      .select('*')
+      .eq('is_active', true)
+      .order('warehouse_id')
+      .order('code'),
+
+    supabaseClient
+      .from('pallets')
+      .select('*')
+      .order('id', {
+        ascending: false
+      })
+
+  ]);
+
+
+  if (warehousesResult.error) {
+    throw warehousesResult.error;
+  }
+
+  if (locationsResult.error) {
+    throw locationsResult.error;
+  }
+
+  if (palletsResult.error) {
+    throw palletsResult.error;
+  }
+
+
+  state.receivingWarehouses =
+    warehousesResult.data || [];
+
+  state.receivingLocations =
+    locationsResult.data || [];
+
+  state.receivingPallets =
+    palletsResult.data || [];
+
+
+  /*
+    Если склад ещё не выбран —
+    автоматически выбираем первый.
+  */
+
+  if (
+    !state.receivingWarehouseId &&
+    state.receivingWarehouses.length
+  ) {
+
+    state.receivingWarehouseId =
+      state.receivingWarehouses[0].id;
+
+  }
+
+}
+
+async function getOrCreateReceivingPallet() {
+
+  const warehouseId =
+    state.receivingWarehouseId;
+
+  const locationId =
+    state.receivingLocationId;
+
+  const palletNumber =
+    normalizeText(
+      state.receivingPalletNumber
+    );
+
+
+  if (
+    !warehouseId ||
+    !locationId ||
+    !palletNumber
+  ) {
+
+    throw new Error(
+      'Выберите склад, место и укажите номер поддона.'
+    );
+
+  }
+
+
+  /*
+    Сначала ищем существующий поддон.
+  */
+
+  const {
+    data: existing,
+    error: existingError
+  } =
+    await supabaseClient
+      .from('pallets')
+      .select('*')
+      .eq(
+        'warehouse_id',
+        warehouseId
+      )
+      .eq(
+        'location_id',
+        locationId
+      )
+      .eq(
+        'pallet_number',
+        palletNumber
+      )
+      .maybeSingle();
+
+
+  if (existingError) {
+    throw existingError;
+  }
+
+
+  if (existing) {
+
+    if (
+      existing.status ===
+      'Закрыт'
+    ) {
+
+      throw new Error(
+        `Поддон ${palletNumber} уже закрыт. Создайте новый поддон.`
+      );
+
+    }
+
+
+    return existing;
+
+  }
+
+
+  /*
+    Создаём новый поддон.
+  */
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+      .from('pallets')
+      .insert({
+        warehouse_id:
+          warehouseId,
+
+        location_id:
+          locationId,
+
+        pallet_number:
+          palletNumber,
+
+        status:
+          'На складе'
+      })
+      .select('*')
+      .single();
+
+
+  if (error) {
+    throw error;
+  }
+
+
+  state.receivingPallets.unshift(
+    data
+  );
+
+
+  return data;
+
+}
+
+async function startReceiving() {
+
+  if (
+    state.receivingReceiptId
+  ) {
+
+    toast(
+      'Приёмка уже открыта',
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  state.receivingLoading =
+    true;
+
+
+  try {
+
+    const pallet =
+      await getOrCreateReceivingPallet();
+
+
+    state.receivingPalletId =
+      pallet.id;
+
+
+    /*
+      Ищем уже открытую приёмку
+      для этого поддона.
+    */
+
+    const {
+      data: existingReceipt,
+      error: receiptSearchError
+    } =
+      await supabaseClient
+        .from('receipts')
+        .select('*')
+        .eq(
+          'pallet_id',
+          pallet.id
+        )
+        .eq(
+          'status',
+          'В процессе'
+        )
+        .order('id', {
+          ascending: false
+        })
+        .limit(1)
+        .maybeSingle();
+
+
+    if (receiptSearchError) {
+      throw receiptSearchError;
+    }
+
+
+    if (existingReceipt) {
+
+      state.receivingReceiptId =
+        existingReceipt.id;
+
+      state.receivingReceiptStatus =
+        existingReceipt.status;
+
+    } else {
+
+      const {
+        data: receipt,
+        error
+      } =
+        await supabaseClient
+          .from('receipts')
+          .insert({
+
+            warehouse_id:
+              state.receivingWarehouseId,
+
+            location_id:
+              state.receivingLocationId,
+
+            pallet_id:
+              pallet.id,
+
+            status:
+              'В процессе',
+
+            barcode_count:
+              0,
+
+            worker:
+              state.user?.email ||
+              'Не указан',
+
+            started_at:
+              new Date().toISOString()
+
+          })
+          .select('*')
+          .single();
+
+
+      if (error) {
+        throw error;
+      }
+
+
+      state.receivingReceiptId =
+        receipt.id;
+
+      state.receivingReceiptStatus =
+        receipt.status;
+
+    }
+
+
+    /*
+      Загружаем уже принятые коробки
+      этой приёмки.
+
+      Это позволяет обновить страницу
+      и не потерять прогресс.
+    */
+
+    const {
+      data: receiptItems,
+      error: itemsError
+    } =
+      await supabaseClient
+        .from('receipt_items')
+        .select(
+          'id,box_id,barcode,created_at'
+        )
+        .eq(
+          'receipt_id',
+          state.receivingReceiptId
+        )
+        .order('id', {
+          ascending: true
+        });
+
+
+    if (itemsError) {
+      throw itemsError;
+    }
+
+
+    state.receivingScannedIds =
+      (receiptItems || [])
+        .map(
+          item =>
+            item.box_id
+        )
+        .filter(
+          id =>
+            id !== null &&
+            id !== undefined
+        );
+
+
+    state.receivingRecentScans =
+      (receiptItems || [])
+        .slice(-10)
+        .reverse()
+        .map(
+          item => ({
+            barcode:
+              item.barcode,
+
+            time:
+              item.created_at
+                ? new Date(
+                    item.created_at
+                  ).toLocaleTimeString(
+                    'ru-RU',
+                    {
+                      hour:
+                        '2-digit',
+
+                      minute:
+                        '2-digit',
+
+                      second:
+                        '2-digit'
+                    }
+                  )
+                : ''
+          })
+        );
+
+
+    toast(
+      `Приёмка открыта. Поддон ${pallet.pallet_number}`
+    );
+
+
+    render();
+
+
+    setTimeout(
+      focusReceivingScanner,
+      100
+    );
+
+  } catch (error) {
+
+    console.error(
+      'Ошибка открытия приёмки:',
+      error
+    );
+
+    toast(
+      error.message ||
+      'Не удалось открыть приёмку',
+      'error'
+    );
+
+  } finally {
+
+    state.receivingLoading =
+      false;
+
+  }
+
+}
+
+async function processReceivingScan(
+  rawBarcode
+) {
+
+  const barcode =
+    normalizeBarcode(
+      rawBarcode
+    );
+
+
+  if (!barcode) {
+    return;
+  }
+
+
+  if (
+    !state.receivingReceiptId ||
+    !state.receivingPalletId
+  ) {
+
+    toast(
+      'Сначала откройте приёмку',
+      'error'
+    );
+
+    beep(false);
+
+    return;
+
+  }
+
+
+  if (
+    state.receivingScanning
+  ) {
+
+    return;
+
+  }
+
+
+  state.receivingScanning =
+    true;
+
+
+  const scanner =
+    $('#receivingScannerInput');
+
+
+  try {
+
+    /*
+      ВАЖНО:
+
+      Одинаковый barcode НЕ считается
+      дублем автоматически.
+
+      Один barcode может соответствовать
+      нескольким физическим коробкам.
+    */
+
+
+    const warehouse =
+      state.receivingWarehouses.find(
+        row =>
+          String(row.id) ===
+          String(
+            state.receivingWarehouseId
+          )
+      );
+
+
+    const location =
+      state.receivingLocations.find(
+        row =>
+          String(row.id) ===
+          String(
+            state.receivingLocationId
+          )
+      );
+
+
+    const pallet =
+      state.receivingPallets.find(
+        row =>
+          String(row.id) ===
+          String(
+            state.receivingPalletId
+          )
+      );
+
+
+    if (
+      !warehouse ||
+      !location ||
+      !pallet
+    ) {
+
+      throw new Error(
+        'Не удалось определить склад, место или поддон.'
+      );
+
+    }
+
+
+    /*
+      Создаём ФИЗИЧЕСКУЮ коробку.
+    */
+
+    const {
+      data: box,
+      error: boxError
+    } =
+      await supabaseClient
+        .from('boxes')
+        .insert({
+
+          "Штрихкод":
+            barcode,
+
+          "Артикул":
+            null,
+
+          "Кол-во в коробке":
+            1,
+
+          "Зона/ряд":
+            location.code,
+
+          "Поддон":
+            pallet.pallet_number,
+
+          "Статус":
+            STATUSES.STOCK,
+
+          "ДатаРазмещения":
+            todayFileDate(),
+
+          "Склад":
+            warehouse.name,
+
+          "Изменил":
+            state.user?.email ||
+            null,
+
+          warehouse_id:
+            warehouse.id,
+
+          location_id:
+            location.id,
+
+          pallet_id:
+            pallet.id
+
+        })
+        .select(
+          BOX_SELECT
+        )
+        .single();
+
+
+    if (boxError) {
+      throw boxError;
+    }
+
+
+    /*
+      Связываем коробку
+      с текущей приёмкой.
+    */
+
+    const {
+      data: receiptItem,
+      error: itemError
+    } =
+      await supabaseClient
+        .from('receipt_items')
+        .insert({
+
+          receipt_id:
+            state.receivingReceiptId,
+
+          box_id:
+            box.id,
+
+          barcode:
+            barcode
+
+        })
+        .select(
+          'id,box_id,barcode,created_at'
+        )
+        .single();
+
+
+    if (itemError) {
+
+      /*
+        Если receipt_items не создалась,
+        удаляем только что созданную
+        коробку.
+
+        Так не останется "висячей"
+        коробки без приёмки.
+      */
+
+      await supabaseClient
+        .from('boxes')
+        .delete()
+        .eq(
+          'id',
+          box.id
+        );
+
+      throw itemError;
+
+    }
+
+
+    /*
+      Обновляем количество
+      в текущей приёмке.
+    */
+
+    const newCount =
+      state.receivingScannedIds.length +
+      1;
+
+
+    const {
+      data: updatedReceipt,
+      error: receiptUpdateError
+    } =
+      await supabaseClient
+        .from('receipts')
+        .update({
+
+          barcode_count:
+            newCount
+
+        })
+        .eq(
+          'id',
+          state.receivingReceiptId
+        )
+        .eq(
+          'status',
+          'В процессе'
+        )
+        .select('*')
+        .single();
+
+
+    if (receiptUpdateError) {
+
+      console.warn(
+        'Коробка создана, но счётчик приёмки не обновился:',
+        receiptUpdateError
+      );
+
+    }
+
+
+    /*
+      Локальное состояние.
+    */
+
+    addLocalBox(
+      box
+    );
+
+
+    state.receivingScannedIds.push(
+      box.id
+    );
+
+
+    state.receivingRecentScans.unshift({
+
+      barcode:
+        receiptItem.barcode,
+
+      time:
+        new Date().toLocaleTimeString(
+          'ru-RU',
+          {
+            hour:
+              '2-digit',
+
+            minute:
+              '2-digit',
+
+            second:
+              '2-digit'
+          }
+        )
+
+    });
+
+
+    state.receivingRecentScans =
+      state.receivingRecentScans
+        .slice(0, 10);
+
+
+    showReceivingScannerResult(
+      `✓ ${barcode} — коробка принята`,
+      'success'
+    );
+
+
+    beep(true);
+
+
+    if (scanner) {
+
+      scanner.value =
+        '';
+
+    }
+
+
+    render();
+
+
+    setTimeout(
+      focusReceivingScanner,
+      50
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      'Ошибка приёмки:',
+      error
+    );
+
+
+    showReceivingScannerResult(
+      error.message ||
+      'Ошибка приёмки',
+      'error'
+    );
+
+
+    beep(false);
+
+
+    if (scanner) {
+
+      scanner.value =
+        '';
+
+    }
+
+
+    setTimeout(
+      focusReceivingScanner,
+      50
+    );
+
+  } finally {
+
+    state.receivingScanning =
+      false;
+
+  }
+
+}
+
+async function closeReceiving() {
+
+  if (
+    !state.receivingReceiptId
+  ) {
+
+    return;
+
+  }
+
+
+  const count =
+    state.receivingScannedIds.length;
+
+
+  if (!count) {
+
+    toast(
+      'Нельзя закрыть пустую приёмку',
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  if (
+    !confirm(
+      `Закрыть приёмку?\n\nПринято коробок: ${count}`
+    )
+  ) {
+
+    return;
+
+  }
+
+
+  state.receivingLoading =
+    true;
+
+
+  try {
+
+    const {
+      data: receipt,
+      error
+    } =
+      await supabaseClient
+        .from('receipts')
+        .update({
+
+          status:
+            'Завершена',
+
+          barcode_count:
+            count,
+
+          completed_at:
+            new Date().toISOString()
+
+        })
+        .eq(
+          'id',
+          state.receivingReceiptId
+        )
+        .eq(
+          'status',
+          'В процессе'
+        )
+        .select('*')
+        .single();
+
+
+    if (error) {
+      throw error;
+    }
+
+
+    /*
+      Закрываем поддон.
+
+      Коробки при этом остаются
+      на складе.
+    */
+
+    const {
+      error: palletError
+    } =
+      await supabaseClient
+        .from('pallets')
+        .update({
+
+          status:
+            'На складе',
+
+          closed_at:
+            new Date().toISOString()
+
+        })
+        .eq(
+          'id',
+          state.receivingPalletId
+        );
+
+
+    if (palletError) {
+
+      console.warn(
+        'Приёмка закрыта, но статус поддона не обновился:',
+        palletError
+      );
+
+    }
+
+
+    state.receivingReceiptStatus =
+      receipt.status;
+
+
+    toast(
+      `Приёмка завершена. Принято коробок: ${count}`
+    );
+
+
+    /*
+      После завершения очищаем
+      активную сессию.
+
+      Саму историю приёмки
+      мы НЕ удаляем.
+    */
+
+    state.receivingReceiptId =
+      null;
+
+    state.receivingPalletId =
+      null;
+
+    state.receivingPalletNumber =
+      '';
+
+    state.receivingScannedIds =
+      [];
+
+    state.receivingRecentScans =
+      [];
+
+
+    await loadReceivingData();
+
+
+    render();
+
+
+  } catch (error) {
+
+    console.error(
+      'Ошибка закрытия приёмки:',
+      error
+    );
+
+
+    toast(
+      error.message ||
+      'Не удалось закрыть приёмку',
+      'error'
+    );
+
+  } finally {
+
+    state.receivingLoading =
+      false;
+
+  }
+
+}
+
+function setupReceived() {
+
+  /*
+    Загружаем данные приёмки,
+    если они ещё не загружены.
+  */
+
+  if (
+    !state.receivingWarehouses.length
+  ) {
+
+    loadReceivingData()
+      .then(
+        () => render()
+      )
+      .catch(
+        error => {
+
+          console.error(
+            'Ошибка загрузки данных приёмки:',
+            error
+          );
+
+          toast(
+            error.message ||
+            'Не удалось загрузить склады',
+            'error'
+          );
+
+        }
+      );
+
+  }
+
+
+  /*
+    СКЛАД
+  */
+
+  $('#receivingWarehouse')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.receivingWarehouseId =
+          event.target.value ||
+          null;
+
+        state.receivingLocationId =
+          null;
+
+        state.receivingPalletId =
+          null;
+
+        render();
+
+      }
+    );
+
+
+  /*
+    МЕСТО
+  */
+
+  $('#receivingLocation')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.receivingLocationId =
+          event.target.value ||
+          null;
+
+        state.receivingPalletId =
+          null;
+
+        render();
+
+      }
+    );
+
+
+  /*
+    НОМЕР ПОДДОНА
+  */
+
+  $('#receivingPalletNumber')
+    ?.addEventListener(
+      'input',
+      event => {
+
+        state.receivingPalletNumber =
+          event.target.value;
+
+        const button =
+          $('#startReceivingBtn');
+
+        if (button) {
+
+          button.disabled =
+            !state.receivingWarehouseId ||
+            !state.receivingLocationId ||
+            !normalizeText(
+              state.receivingPalletNumber
+            );
+
+        }
+
+      }
+    );
+
+
+  /*
+    ОТКРЫТЬ ПРИЁМКУ
+  */
+
+  $('#startReceivingBtn')
+    ?.addEventListener(
+      'click',
+      startReceiving
+    );
+
+
+  /*
+    ЗАКРЫТЬ ПРИЁМКУ
+  */
+
+  $('#closeReceivingBtn')
+    ?.addEventListener(
+      'click',
+      closeReceiving
+    );
+
+
+  /*
+    СКАНЕР
+  */
+
+  const scanner =
+    $('#receivingScannerInput');
+
+
+  scanner?.addEventListener(
+    'keydown',
+    async event => {
+
+      if (
+        event.key !== 'Enter'
+      ) {
+
+        return;
+
+      }
+
+
+      event.preventDefault();
+
+
+      const barcode =
+        scanner.value;
+
+
+      scanner.value =
+        '';
+
+
+      await processReceivingScan(
+        barcode
+      );
+
+    }
+  );
+
+
+  /*
+    После рендера сразу возвращаем
+    фокус на сканер.
+  */
+
+  if (
+    state.receivingReceiptId
+  ) {
+
+    setTimeout(
+      focusReceivingScanner,
+      80
+    );
+
+  }
+
+}
+
+function focusReceivingScanner() {
+
+  const scanner =
+    $('#receivingScannerInput');
+
+
+  if (!scanner) {
+    return;
+  }
+
+
+  scanner.focus({
+    preventScroll: true
+  });
+
+}
+
+function showReceivingScannerResult(
+  message,
+  type
+) {
+
+  const element =
+    $('#receivingScannerResult');
+
+
+  if (!element) {
+    return;
+  }
+
+
+  element.textContent =
+    message;
+
+
+  element.style.border =
+    type === 'error'
+      ? '2px solid #b42318'
+      : '2px solid #18794e';
+
+
+  element.style.background =
+    type === 'error'
+      ? '#fff4f2'
+      : '#f0faf4';
+
+
+  element.style.color =
+    type === 'error'
+      ? '#b42318'
+      : '#18794e';
+
+}
+
 
 
 /*
@@ -6573,125 +7884,611 @@ async function shipSelectedCollected() {
    RECEIVED
    ========================================================= */
 
+/* =========================================================
+   RECEIVING
+   ========================================================= */
+
 function receivedView() {
 
-  const rows =
-    state.boxes
-      .filter(
-        row =>
-          row.status ===
-          STATUSES.STOCK
-      )
-      .slice(-300)
-      .reverse();
+  const warehouses =
+    state.receivingWarehouses || [];
 
+  const locations =
+    state.receivingLocations || [];
+
+  const pallets =
+    state.receivingPallets || [];
+
+  const currentWarehouse =
+    warehouses.find(
+      row =>
+        String(row.id) ===
+        String(state.receivingWarehouseId)
+    );
+
+  const currentLocation =
+    locations.find(
+      row =>
+        String(row.id) ===
+        String(state.receivingLocationId)
+    );
+
+  const currentPallet =
+    pallets.find(
+      row =>
+        String(row.id) ===
+        String(state.receivingPalletId)
+    );
+
+  const scannedCount =
+    state.receivingScannedIds.length;
+
+  const isOpen =
+    Boolean(
+      state.receivingReceiptId &&
+      state.receivingReceiptStatus ===
+        'В процессе'
+    );
+
+  const canStart =
+    Boolean(
+      state.receivingWarehouseId &&
+      state.receivingLocationId &&
+      state.receivingPalletNumber.trim()
+    );
 
   return `
 
-    <div class="sp-card">
+    <div class="sp-receiving">
 
-      <div class="sp-card-label">
-        На складе
+      <div class="sp-receiving-header">
+
+        <div>
+
+          <div class="sp-card-label">
+            ПРИЁМКА
+          </div>
+
+          <h2 style="
+            margin:4px 0 6px;
+            font-size:28px;
+          ">
+            Приёмка товара
+          </h2>
+
+          <div class="muted">
+            Склад → место → поддон → сканирование коробок
+          </div>
+
+        </div>
+
+        <div class="sp-receiving-status">
+
+          ${
+            isOpen
+              ? `
+                <span style="
+                  display:inline-flex;
+                  align-items:center;
+                  gap:7px;
+                  padding:8px 12px;
+                  border-radius:999px;
+                  background:#eaf7ef;
+                  color:#18794e;
+                  font-weight:700;
+                ">
+                  <span>●</span>
+                  Приёмка открыта
+                </span>
+              `
+              : `
+                <span style="
+                  display:inline-flex;
+                  align-items:center;
+                  gap:7px;
+                  padding:8px 12px;
+                  border-radius:999px;
+                  background:#f2f2f2;
+                  color:#666;
+                  font-weight:600;
+                ">
+                  Приёмка не открыта
+                </span>
+              `
+          }
+
+        </div>
+
       </div>
 
-      <div class="sp-big-number">
 
-        ${
-          state.boxes.filter(
-            row =>
-              row.status ===
-              STATUSES.STOCK
-          ).length
-        }
+      <!-- ================================================
+           НАСТРОЙКИ ПРИЁМКИ
+           ================================================ -->
 
-      </div>
+      <div class="sp-card" style="margin-top:18px;">
 
-    </div>
+        <div class="sp-card-label">
+          1. МЕСТО ПРИЁМКИ
+        </div>
+
+        <div class="sp-receiving-form">
+
+          <div class="sp-receiving-field">
+
+            <label>
+              Склад
+            </label>
+
+            <select
+              id="receivingWarehouse"
+              ${isOpen ? 'disabled' : ''}
+            >
+
+              <option value="">
+                Выберите склад
+              </option>
+
+              ${
+                warehouses
+                  .map(
+                    warehouse => `
+                      <option
+                        value="${escapeHtml(warehouse.id)}"
+                        ${
+                          String(
+                            warehouse.id
+                          ) ===
+                          String(
+                            state.receivingWarehouseId
+                          )
+                            ? 'selected'
+                            : ''
+                        }
+                      >
+                        ${escapeHtml(
+                          warehouse.name
+                        )}
+                      </option>
+                    `
+                  )
+                  .join('')
+              }
+
+            </select>
+
+          </div>
 
 
-    <br>
+          <div class="sp-receiving-field">
+
+            <label>
+              Место
+            </label>
+
+            <select
+              id="receivingLocation"
+              ${
+                isOpen ||
+                !state.receivingWarehouseId
+                  ? 'disabled'
+                  : ''
+              }
+            >
+
+              <option value="">
+                Выберите место
+              </option>
+
+              ${
+                locations
+                  .filter(
+                    location =>
+                      String(
+                        location.warehouse_id
+                      ) ===
+                      String(
+                        state.receivingWarehouseId
+                      )
+                  )
+                  .map(
+                    location => `
+                      <option
+                        value="${escapeHtml(location.id)}"
+                        ${
+                          String(
+                            location.id
+                          ) ===
+                          String(
+                            state.receivingLocationId
+                          )
+                            ? 'selected'
+                            : ''
+                        }
+                      >
+                        ${escapeHtml(
+                          location.code
+                        )}
+                      </option>
+                    `
+                  )
+                  .join('')
+              }
+
+            </select>
+
+          </div>
 
 
-    <div class="sp-table-wrap">
+          <div class="sp-receiving-field">
 
-      <table class="sp-table">
+            <label>
+              Номер поддона
+            </label>
 
-        <thead>
+            <input
+              id="receivingPalletNumber"
+              type="text"
+              placeholder="Например: 1"
+              value="${escapeHtml(
+                state.receivingPalletNumber
+              )}"
+              ${
+                isOpen
+                  ? 'disabled'
+                  : ''
+              }
+              autocomplete="off"
+            >
 
-          <tr>
+          </div>
 
-            <th>Штрихкод</th>
-            <th>Артикул</th>
-            <th>Зона/ряд</th>
-            <th>Поддон</th>
-            <th>Склад</th>
-            <th>Дата</th>
-
-          </tr>
-
-        </thead>
+        </div>
 
 
-        <tbody>
+        <div style="
+          display:flex;
+          gap:10px;
+          flex-wrap:wrap;
+          margin-top:16px;
+        ">
 
-          ${rows.map(
-            row => `
+          ${
+            !isOpen
+              ? `
+                <button
+                  class="sp-btn success"
+                  id="startReceivingBtn"
+                  ${
+                    canStart
+                      ? ''
+                      : 'disabled'
+                  }
+                >
+                  Открыть приёмку
+                </button>
+              `
+              : `
+                <button
+                  class="sp-btn danger"
+                  id="closeReceivingBtn"
+                >
+                  Закрыть приёмку
+                </button>
+              `
+          }
 
-              <tr>
-
-                <td>
-                  <b>
+          ${
+            currentPallet
+              ? `
+                <div style="
+                  display:flex;
+                  align-items:center;
+                  padding:0 12px;
+                  border-radius:9px;
+                  background:#f6f6f6;
+                  color:#555;
+                ">
+                  Поддон:
+                  <b style="margin-left:5px;">
                     ${escapeHtml(
-                      row.barcode
+                      currentPallet.pallet_number
                     )}
                   </b>
-                </td>
+                </div>
+              `
+              : ''
+          }
 
-                <td>
-                  ${escapeHtml(
-                    row.article
-                  )}
-                </td>
+        </div>
 
-                <td>
-                  ${escapeHtml(
-                    row.zone_row
-                  )}
-                </td>
+      </div>
 
-                <td>
-                  ${escapeHtml(
-                    row.pallet
-                  )}
-                </td>
 
-                <td>
-                  ${escapeHtml(
-                    row.warehouse
-                  )}
-                </td>
+      ${
+        isOpen
+          ? `
 
-                <td>
-                  ${escapeHtml(
-                    formatDate(row.date)
-                  )}
-                </td>
+            <!-- ==========================================
+                 СКАНИРОВАНИЕ
+                 ========================================== -->
 
-              </tr>
+            <div
+              class="sp-card"
+              style="margin-top:18px;"
+            >
 
-            `
-          ).join('')}
+              <div class="sp-card-label">
+                2. СКАНИРОВАНИЕ
+              </div>
 
-        </tbody>
+              <div style="
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:20px;
+                flex-wrap:wrap;
+              ">
 
-      </table>
+                <div>
+
+                  <div style="
+                    font-size:42px;
+                    line-height:1;
+                    font-weight:800;
+                  ">
+                    ${scannedCount}
+                  </div>
+
+                  <div class="muted" style="margin-top:6px;">
+                    коробок принято
+                  </div>
+
+                </div>
+
+
+                <div style="
+                  flex:1;
+                  min-width:280px;
+                ">
+
+                  <input
+                    id="receivingScannerInput"
+                    class="search"
+                    style="
+                      width:100%;
+                      min-height:54px;
+                      font-size:20px;
+                      box-sizing:border-box;
+                    "
+                    inputmode="none"
+                    autocomplete="off"
+                    autocorrect="off"
+                    spellcheck="false"
+                    placeholder="Сканируйте штрихкод..."
+                  >
+
+                  <div
+                    id="receivingScannerResult"
+                    class="notice"
+                    style="
+                      margin-top:10px;
+                      margin-bottom:0;
+                    "
+                  >
+                    Готов к сканированию.
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            <!-- ==========================================
+                 ПОСЛЕДНИЕ СКАНЫ
+                 ========================================== -->
+
+            <div
+              class="sp-card"
+              style="margin-top:18px;"
+            >
+
+              <div class="sp-card-label">
+                ПОСЛЕДНИЕ КОРОБКИ
+              </div>
+
+              ${
+                state.receivingRecentScans.length
+                  ? `
+                    <div style="
+                      display:flex;
+                      flex-direction:column;
+                      gap:8px;
+                    ">
+
+                      ${
+                        state.receivingRecentScans
+                          .map(
+                            item => `
+                              <div style="
+                                display:flex;
+                                align-items:center;
+                                justify-content:space-between;
+                                padding:11px 13px;
+                                border-radius:10px;
+                                background:#f7f7f7;
+                              ">
+
+                                <div>
+                                  <b>
+                                    ${escapeHtml(
+                                      item.barcode
+                                    )}
+                                  </b>
+
+                                  <div style="
+                                    font-size:12px;
+                                    color:#888;
+                                    margin-top:3px;
+                                  ">
+                                    ${
+                                      item.time
+                                        ? escapeHtml(
+                                            item.time
+                                          )
+                                        : ''
+                                    }
+                                  </div>
+                                </div>
+
+                                <span style="
+                                  color:#18794e;
+                                  font-weight:700;
+                                ">
+                                  ✓
+                                </span>
+
+                              </div>
+                            `
+                          )
+                          .join('')
+                      }
+
+                    </div>
+                  `
+                  : `
+                    <div class="sp-empty">
+                      Пока ничего не отсканировано
+                    </div>
+                  `
+              }
+
+            </div>
+
+          `
+          : ''
+      }
+
+
+      <!-- ================================================
+           ИНФОРМАЦИЯ
+           ================================================ -->
+
+      <div
+        class="sp-card"
+        style="margin-top:18px;"
+      >
+
+        <div class="sp-card-label">
+          ТЕКУЩАЯ ЛОКАЦИЯ
+        </div>
+
+        <div style="
+          display:grid;
+          grid-template-columns:
+            repeat(auto-fit,minmax(160px,1fr));
+          gap:12px;
+        ">
+
+          <div style="
+            padding:14px;
+            background:#f7f7f7;
+            border-radius:12px;
+          ">
+
+            <div class="muted">
+              Склад
+            </div>
+
+            <b>
+              ${
+                currentWarehouse
+                  ? escapeHtml(
+                      currentWarehouse.name
+                    )
+                  : '—'
+              }
+            </b>
+
+          </div>
+
+
+          <div style="
+            padding:14px;
+            background:#f7f7f7;
+            border-radius:12px;
+          ">
+
+            <div class="muted">
+              Место
+            </div>
+
+            <b>
+              ${
+                currentLocation
+                  ? escapeHtml(
+                      currentLocation.code
+                    )
+                  : '—'
+              }
+            </b>
+
+          </div>
+
+
+          <div style="
+            padding:14px;
+            background:#f7f7f7;
+            border-radius:12px;
+          ">
+
+            <div class="muted">
+              Поддон
+            </div>
+
+            <b>
+              ${
+                currentPallet
+                  ? escapeHtml(
+                      currentPallet.pallet_number
+                    )
+                  : state.receivingPalletNumber
+                    ? escapeHtml(
+                        state.receivingPalletNumber
+                      )
+                    : '—'
+              }
+            </b>
+
+          </div>
+
+
+          <div style="
+            padding:14px;
+            background:#f7f7f7;
+            border-radius:12px;
+          ">
+
+            <div class="muted">
+              Принято
+            </div>
+
+            <b>
+              ${scannedCount}
+            </b>
+
+          </div>
+
+        </div>
+
+      </div>
 
     </div>
 
   `;
-
 }
-
 
 /* =========================================================
    SHIPPED
@@ -10070,15 +11867,13 @@ const PAGE_META = {
   },
 
 
-  received: {
+received: {
+  title:
+    'Приёмка',
 
-    title:
-      'Принято',
-
-    heading:
-      'Принятые коробки'
-
-  },
+  heading:
+    'Приёмка товара'
+},
 
 
   collected: {
@@ -10229,12 +12024,14 @@ function render() {
       break;
 
 
-    case 'received':
+case 'received':
 
-      content.innerHTML =
-        receivedView();
+  content.innerHTML =
+    receivedView();
 
-      break;
+  setupReceived();
+
+  break;
 
 
     case 'collected':
