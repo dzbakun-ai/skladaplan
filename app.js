@@ -1270,6 +1270,138 @@ async function saveBox(){
 
   try {
 
+    // =================================================
+    // ДОБАВЛЕНИЕ НОВОЙ КОРОБКИ
+    // =================================================
+
+    if (
+      state.editingRow === null
+    ) {
+
+      const payload =
+        rowToSupabase(
+          newRow
+        );
+
+
+      delete payload.updated_at;
+
+
+      const {
+        error
+      } = await supabaseClient
+        .from('boxes')
+        .insert(payload);
+
+
+      if (error) {
+        throw error;
+      }
+
+    }
+
+    // =================================================
+    // РЕДАКТИРОВАНИЕ
+    // =================================================
+
+    else {
+
+      const id =
+        BOX_IDS[
+          state.editingRow
+        ];
+
+
+      if (!id) {
+
+        throw new Error(
+          'Не найден ID коробки в Supabase.'
+        );
+
+      }
+
+
+      const payload =
+        rowToSupabase(
+          newRow
+        );
+
+
+      const {
+        error
+      } = await supabaseClient
+        .from('boxes')
+        .update(payload)
+        .eq('id', id);
+
+
+      if (error) {
+        throw error;
+      }
+
+    }
+
+
+    // =================================================
+    // СОХРАНЕНИЕ УСПЕШНО
+    // =================================================
+
+    state.editingRow =
+      null;
+
+
+    // СРАЗУ УБИРАЕМ МОДАЛЬНОЕ ОКНО
+    const modal =
+      $('#boxModal');
+
+
+    if (modal) {
+
+      modal.classList.remove(
+        'show'
+      );
+
+      modal.remove();
+
+    }
+
+
+    // Показываем обновление страницы
+    // после успешного сохранения
+    await reloadAndRender();
+
+
+  } catch (error) {
+
+    console.error(
+      'Ошибка сохранения коробки:',
+      error
+    );
+
+
+    alert(
+      'Не удалось сохранить коробку:\n' +
+      (error.message || error)
+    );
+
+
+    if (button) {
+
+      button.disabled =
+        false;
+
+      button.textContent =
+        '💾 Сохранить';
+
+    }
+
+  }
+
+}
+
+
+  try {
+
     if (
       state.editingRow === null
     ) {
