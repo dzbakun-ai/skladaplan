@@ -202,6 +202,17 @@ function normalizeBarcode(value) {
   }
 
 
+  /*
+    ВАЖНО:
+
+    Штрихкод нельзя обрабатывать
+    через Number(), потому что 13-значный
+    код может потерять точность.
+
+    Поэтому сначала работаем только
+    со строкой.
+  */
+
   let str =
     String(value).trim();
 
@@ -213,29 +224,30 @@ function normalizeBarcode(value) {
   }
 
 
-  // Убираем пробелы
   str =
     str.replace(/\s+/g, '');
 
 
-  // Excel иногда использует запятую
+  /*
+    Excel иногда использует запятую
+    вместо точки.
+  */
+
   str =
     str.replace(',', '.');
 
 
   /*
-    Возможные варианты из Excel:
+    Обычный вариант:
 
-    4810122659354
-    4810122659354.0
-    4810122659354,0
+    4810122595003.0
+    4810122595003,0
 
-    4.810122659354E+12
-    4.81012E+12
+    превращаем в:
+
+    4810122595003
   */
 
-
-  // Обычное целое число с .0
   if (
     /^\d+\.0+$/.test(str)
   ) {
@@ -247,20 +259,21 @@ function normalizeBarcode(value) {
 
 
   /*
-    Обработка научной записи.
+    Научная запись Excel:
 
-    Например:
+    4.810122595003E+12
 
-    4.810122659354E+12
+    ВАЖНО:
 
-    превращаем в:
+    Здесь НЕ используем Number().
 
-    4810122659354
+    Восстанавливаем строку
+    математически из отдельных цифр.
   */
 
   const scientificMatch =
     str.match(
-      /^(\d+(?:\.\d+)?)[eE]([+-]?\d+)$/
+      /^(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/
     );
 
 
@@ -268,26 +281,19 @@ function normalizeBarcode(value) {
     scientificMatch
   ) {
 
-    const coefficient =
-      scientificMatch[1];
-
-    const exponent =
-      parseInt(
-        scientificMatch[2],
-        10
-      );
-
-
-    const parts =
-      coefficient.split('.');
-
-
     const integerPart =
-      parts[0];
+      scientificMatch[1] || '';
 
 
     const decimalPart =
-      parts[1] || '';
+      scientificMatch[2] || '';
+
+
+    const exponent =
+      parseInt(
+        scientificMatch[3],
+        10
+      );
 
 
     const digits =
@@ -295,35 +301,31 @@ function normalizeBarcode(value) {
       decimalPart;
 
 
-    const decimalLength =
-      decimalPart.length;
-
-
-    const newPosition =
+    const decimalPosition =
       integerPart.length +
       exponent;
 
 
     if (
-      newPosition >=
+      decimalPosition >=
       digits.length
     ) {
 
       str =
         digits +
         '0'.repeat(
-          newPosition -
+          decimalPosition -
           digits.length
         );
 
     } else if (
-      newPosition > 0
+      decimalPosition > 0
     ) {
 
       str =
         digits.slice(
           0,
-          newPosition
+          decimalPosition
         );
 
     } else {
@@ -332,7 +334,7 @@ function normalizeBarcode(value) {
         '0.' +
         '0'.repeat(
           Math.abs(
-            newPosition
+            decimalPosition
           )
         ) +
         digits;
@@ -343,8 +345,9 @@ function normalizeBarcode(value) {
 
 
   /*
-    Если после преобразования
-    осталась десятичная часть .0
+    Если осталась десятичная часть,
+    состоящая только из нулей —
+    убираем её.
   */
 
   if (
@@ -358,30 +361,17 @@ function normalizeBarcode(value) {
 
 
   /*
-    Штрихкод у нас должен быть
-    только цифрами.
+    Финальная очистка.
 
-    Если Excel всё-таки оставил
-    десятичную часть — убираем её.
+    Штрихкод должен содержать
+    только цифры.
   */
 
-  if (
-    /^\d+\.\d+$/.test(str)
-  ) {
-
-    const decimal =
-      str.split('.')[1];
-
-    if (
-      /^0+$/.test(decimal)
-    ) {
-
-      str =
-        str.split('.')[0];
-
-    }
-
-  }
+  str =
+    str.replace(
+      /[^0-9]/g,
+      ''
+    );
 
 
   return str;
