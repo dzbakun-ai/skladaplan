@@ -10635,6 +10635,968 @@ Excel:
 
     </div>
 
+        <!-- =====================================================
+         DASHBOARD
+         ===================================================== -->
+
+    <div
+      style="
+        margin-bottom:20px;
+      "
+    >
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:flex-end;
+          gap:20px;
+          flex-wrap:wrap;
+          margin-bottom:14px;
+        "
+      >
+
+        <div>
+
+          <div
+            style="
+              font-size:12px;
+              font-weight:700;
+              letter-spacing:.08em;
+              text-transform:uppercase;
+              color:#888;
+              margin-bottom:5px;
+            "
+          >
+            SKLADAPLAN
+          </div>
+
+          <h2
+            style="
+              margin:0;
+              font-size:24px;
+              line-height:1.15;
+            "
+          >
+            Состояние склада
+          </h2>
+
+          <div
+            class="sp-muted"
+            style="
+              margin-top:5px;
+            "
+          >
+            Основные показатели и текущая ситуация
+          </div>
+
+        </div>
+
+        <div
+          style="
+            font-size:12px;
+            color:#888;
+          "
+        >
+          Всего физических коробок:
+          <b
+            style="
+              color:#111;
+              font-size:14px;
+            "
+          >
+            ${total}
+          </b>
+        </div>
+
+      </div>
+
+
+      <!-- ===================================================
+           ОСНОВНЫЕ KPI
+           =================================================== -->
+
+      <div
+        style="
+          display:grid;
+          grid-template-columns:
+            repeat(
+              4,
+              minmax(0,1fr)
+            );
+          gap:12px;
+          margin-bottom:12px;
+        "
+        class="sp-dashboard-kpi-grid"
+      >
+
+        <!-- НА СКЛАДЕ -->
+
+        <div
+          class="sp-card"
+          style="
+            margin:0;
+            padding:20px;
+          "
+        >
+
+          <div
+            style="
+              display:flex;
+              justify-content:space-between;
+              align-items:flex-start;
+              gap:10px;
+            "
+          >
+
+            <div>
+
+              <div
+                class="sp-card-label"
+                style="
+                  margin-bottom:6px;
+                "
+              >
+                На складе
+              </div>
+
+              <div
+                style="
+                  font-size:32px;
+                  line-height:1;
+                  font-weight:750;
+                "
+              >
+                ${stock}
+              </div>
+
+            </div>
+
+            <div
+              style="
+                width:38px;
+                height:38px;
+                border-radius:11px;
+                background:#f2f2f2;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                font-size:18px;
+              "
+            >
+              ●
+            </div>
+
+          </div>
+
+          <div
+            style="
+              margin-top:12px;
+              height:4px;
+              border-radius:10px;
+              background:#eee;
+              overflow:hidden;
+            "
+          >
+            <div
+              style="
+                width:${total ? Math.min(100, stock / total * 100) : 0}%;
+                height:100%;
+                background:#111;
+                border-radius:10px;
+              "
+            ></div>
+          </div>
+
+        </div>
+
+
+        <!-- К СБОРКЕ -->
+
+        <div
+          class="sp-card"
+          style="
+            margin:0;
+            padding:20px;
+          "
+        >
+
+          <div
+            style="
+              display:flex;
+              justify-content:space-between;
+              align-items:flex-start;
+              gap:10px;
+            "
+          >
+
+            <div>
+
+              <div
+                class="sp-card-label"
+                style="
+                  margin-bottom:6px;
+                "
+              >
+                К сборке
+              </div>
+
+              <div
+                style="
+                  font-size:32px;
+                  line-height:1;
+                  font-weight:750;
+                "
+              >
+                ${picking}
+              </div>
+
+            </div>
+
+            <div
+              style="
+                width:38px;
+                height:38px;
+                border-radius:11px;
+                background:#f2f2f2;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                font-size:18px;
+              "
+            >
+              ◫
+            </div>
+
+          </div>
+
+          <div
+            style="
+              margin-top:12px;
+              height:4px;
+              border-radius:10px;
+              background:#eee;
+              overflow:hidden;
+            "
+          >
+            <div
+              style="
+                width:${total ? Math.min(100, picking / total * 100) : 0}%;
+                height:100%;
+                background:#111;
+                border-radius:10px;
+              "
+            ></div>
+          </div>
+
+        </div>
+
+
+        <!-- СОБРАНО -->
+
+        <div
+          class="sp-card"
+          style="
+            margin:0;
+            padding:20px;
+          "
+        >
+
+          <div
+            style="
+              display:flex;
+              justify-content:space-between;
+              align-items:flex-start;
+              gap:10px;
+            "
+          >
+
+            <div>
+
+              <div
+                class="sp-card-label"
+                style="
+                  margin-bottom:6px;
+                "
+              >
+                Скомплектовано
+              </div>
+
+              <div
+                style="
+                  font-size:32px;
+                  line-height:1;
+                  font-weight:750;
+                "
+              >
+                ${collected}
+              </div>
+
+            </div>
+
+            <div
+              style="
+                width:38px;
+                height:38px;
+                border-radius:11px;
+                background:#f2f2f2;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                font-size:18px;
+              "
+            >
+              ✓
+            </div>
+
+          </div>
+
+          <div
+            style="
+              margin-top:12px;
+              height:4px;
+              border-radius:10px;
+              background:#eee;
+              overflow:hidden;
+            "
+          >
+            <div
+              style="
+                width:${total ? Math.min(100, collected / total * 100) : 0}%;
+                height:100%;
+                background:#111;
+                border-radius:10px;
+              "
+            ></div>
+          </div>
+
+        </div>
+
+
+        <!-- ОТГРУЖЕНО -->
+
+        <div
+          class="sp-card"
+          style="
+            margin:0;
+            padding:20px;
+          "
+        >
+
+          <div
+            style="
+              display:flex;
+              justify-content:space-between;
+              align-items:flex-start;
+              gap:10px;
+            "
+          >
+
+            <div>
+
+              <div
+                class="sp-card-label"
+                style="
+                  margin-bottom:6px;
+                "
+              >
+                Убыло
+              </div>
+
+              <div
+                style="
+                  font-size:32px;
+                  line-height:1;
+                  font-weight:750;
+                "
+              >
+                ${shipped}
+              </div>
+
+            </div>
+
+            <div
+              style="
+                width:38px;
+                height:38px;
+                border-radius:11px;
+                background:#f2f2f2;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                font-size:18px;
+              "
+            >
+              ↑
+            </div>
+
+          </div>
+
+          <div
+            style="
+              margin-top:12px;
+              height:4px;
+              border-radius:10px;
+              background:#eee;
+              overflow:hidden;
+            "
+          >
+            <div
+              style="
+                width:${total ? Math.min(100, shipped / total * 100) : 0}%;
+                height:100%;
+                background:#111;
+                border-radius:10px;
+              "
+            ></div>
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ===================================================
+           ДВЕ КОЛОНКИ
+           =================================================== -->
+
+      <div
+        style="
+          display:grid;
+          grid-template-columns:
+            minmax(0,1.35fr)
+            minmax(280px,.65fr);
+          gap:12px;
+        "
+        class="sp-dashboard-columns"
+      >
+
+        <!-- СОСТОЯНИЕ -->
+
+        <div
+          class="sp-card"
+          style="
+            margin:0;
+          "
+        >
+
+          <div
+            style="
+              display:flex;
+              justify-content:space-between;
+              align-items:center;
+              gap:10px;
+              margin-bottom:18px;
+            "
+          >
+
+            <div>
+
+              <div
+                style="
+                  font-size:16px;
+                  font-weight:700;
+                "
+              >
+                Состояние коробок
+              </div>
+
+              <div
+                class="sp-muted"
+                style="
+                  font-size:12px;
+                  margin-top:3px;
+                "
+              >
+                Распределение по текущему статусу
+              </div>
+
+            </div>
+
+          </div>
+
+
+          <!-- На складе -->
+
+          <div
+            style="
+              margin-bottom:14px;
+            "
+          >
+
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                gap:10px;
+                margin-bottom:6px;
+                font-size:13px;
+              "
+            >
+
+              <span>
+                На складе
+              </span>
+
+              <b>
+                ${stock}
+              </b>
+
+            </div>
+
+            <div
+              style="
+                height:8px;
+                background:#eee;
+                border-radius:20px;
+                overflow:hidden;
+              "
+            >
+
+              <div
+                style="
+                  width:${total ? stock / total * 100 : 0}%;
+                  height:100%;
+                  background:#111;
+                  border-radius:20px;
+                "
+              ></div>
+
+            </div>
+
+          </div>
+
+
+          <!-- К сборке -->
+
+          <div
+            style="
+              margin-bottom:14px;
+            "
+          >
+
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                gap:10px;
+                margin-bottom:6px;
+                font-size:13px;
+              "
+            >
+
+              <span>
+                К сборке
+              </span>
+
+              <b>
+                ${picking}
+              </b>
+
+            </div>
+
+            <div
+              style="
+                height:8px;
+                background:#eee;
+                border-radius:20px;
+                overflow:hidden;
+              "
+            >
+
+              <div
+                style="
+                  width:${total ? picking / total * 100 : 0}%;
+                  height:100%;
+                  background:#555;
+                  border-radius:20px;
+                "
+              ></div>
+
+            </div>
+
+          </div>
+
+
+          <!-- Скомплектовано -->
+
+          <div
+            style="
+              margin-bottom:14px;
+            "
+          >
+
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                gap:10px;
+                margin-bottom:6px;
+                font-size:13px;
+              "
+            >
+
+              <span>
+                Скомплектовано
+              </span>
+
+              <b>
+                ${collected}
+              </b>
+
+            </div>
+
+            <div
+              style="
+                height:8px;
+                background:#eee;
+                border-radius:20px;
+                overflow:hidden;
+              "
+            >
+
+              <div
+                style="
+                  width:${total ? collected / total * 100 : 0}%;
+                  height:100%;
+                  background:#777;
+                  border-radius:20px;
+                "
+              ></div>
+
+            </div>
+
+          </div>
+
+
+          <!-- Отгружено -->
+
+          <div>
+
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                gap:10px;
+                margin-bottom:6px;
+                font-size:13px;
+              "
+            >
+
+              <span>
+                Отгружено
+              </span>
+
+              <b>
+                ${shipped}
+              </b>
+
+            </div>
+
+            <div
+              style="
+                height:8px;
+                background:#eee;
+                border-radius:20px;
+                overflow:hidden;
+              "
+            >
+
+              <div
+                style="
+                  width:${total ? shipped / total * 100 : 0}%;
+                  height:100%;
+                  background:#999;
+                  border-radius:20px;
+                "
+              ></div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <!-- ИНФОРМАЦИЯ -->
+
+        <div
+          class="sp-card"
+          style="
+            margin:0;
+          "
+        >
+
+          <div
+            style="
+              font-size:16px;
+              font-weight:700;
+              margin-bottom:16px;
+            "
+          >
+            Информация
+          </div>
+
+
+          <div
+            style="
+              display:grid;
+              gap:1px;
+              background:#eee;
+              border:1px solid #eee;
+              border-radius:12px;
+              overflow:hidden;
+            "
+          >
+
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                padding:12px;
+                background:#fff;
+                font-size:13px;
+              "
+            >
+              <span class="sp-muted">
+                Всего коробок
+              </span>
+              <b>${total}</b>
+            </div>
+
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                padding:12px;
+                background:#fff;
+                font-size:13px;
+              "
+            >
+              <span class="sp-muted">
+                Склады
+              </span>
+              <b>${warehouses}</b>
+            </div>
+
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                padding:12px;
+                background:#fff;
+                font-size:13px;
+              "
+            >
+              <span class="sp-muted">
+                Артикулы
+              </span>
+              <b>${articles}</b>
+            </div>
+
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                padding:12px;
+                background:#fff;
+                font-size:13px;
+              "
+            >
+              <span class="sp-muted">
+                Поддоны
+              </span>
+              <b>${pallets}</b>
+            </div>
+
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                padding:12px;
+                background:#fff;
+                font-size:13px;
+              "
+            >
+              <span class="sp-muted">
+                Зарезервировано
+              </span>
+              <b>${reserved}</b>
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ===================================================
+           БЫСТРЫЕ ДЕЙСТВИЯ
+           =================================================== -->
+
+      <div
+        style="
+          margin-top:12px;
+          display:grid;
+          grid-template-columns:
+            repeat(4,minmax(0,1fr));
+          gap:10px;
+        "
+        class="sp-dashboard-actions"
+      >
+
+        <button
+          type="button"
+          class="sp-card"
+          onclick="goToPage('received')"
+          style="
+            text-align:left;
+            cursor:pointer;
+            border:1px solid #e5e5e5;
+          "
+        >
+
+          <div
+            style="
+              font-size:20px;
+              margin-bottom:8px;
+            "
+          >
+            ↓
+          </div>
+
+          <b>
+            Приёмка
+          </b>
+
+          <div
+            class="sp-muted"
+            style="
+              font-size:12px;
+              margin-top:3px;
+            "
+          >
+            Принять коробки
+          </div>
+
+        </button>
+
+
+        <button
+          type="button"
+          class="sp-card"
+          onclick="goToPage('assembly')"
+          style="
+            text-align:left;
+            cursor:pointer;
+            border:1px solid #e5e5e5;
+          "
+        >
+
+          <div
+            style="
+              font-size:20px;
+              margin-bottom:8px;
+            "
+          >
+            ◫
+          </div>
+
+          <b>
+            Сборка
+          </b>
+
+          <div
+            class="sp-muted"
+            style="
+              font-size:12px;
+              margin-top:3px;
+            "
+          >
+            Комплектовать заявки
+          </div>
+
+        </button>
+
+
+        <button
+          type="button"
+          class="sp-card"
+          onclick="goToPage('collected')"
+          style="
+            text-align:left;
+            cursor:pointer;
+            border:1px solid #e5e5e5;
+          "
+        >
+
+          <div
+            style="
+              font-size:20px;
+              margin-bottom:8px;
+            "
+          >
+            ✓
+          </div>
+
+          <b>
+            Собрано
+          </b>
+
+          <div
+            class="sp-muted"
+            style="
+              font-size:12px;
+              margin-top:3px;
+            "
+          >
+            Проверить готовые
+          </div>
+
+        </button>
+
+
+        <button
+          type="button"
+          class="sp-card"
+          onclick="goToPage('shipped')"
+          style="
+            text-align:left;
+            cursor:pointer;
+            border:1px solid #e5e5e5;
+          "
+        >
+
+          <div
+            style="
+              font-size:20px;
+              margin-bottom:8px;
+            "
+          >
+            ↑
+          </div>
+
+          <b>
+            Убыло
+          </b>
+
+          <div
+            class="sp-muted"
+            style="
+              font-size:12px;
+              margin-top:3px;
+            "
+          >
+            История отгрузок
+          </div>
+
+        </button>
+
+      </div>
+
+    </div>
+
 
     <!-- =====================================================
          СТАТИСТИКА
