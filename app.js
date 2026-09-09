@@ -45,7 +45,18 @@ const EXCEL_MIN_FALLBACK_CHUNK = 50;
 
 
 const BOX_SELECT =
-  'id,"Штрихкод","Артикул","Кол-во в коробке","Зона/ряд","Поддон","Статус","ДатаРазмещения","Склад","Изменил",created_at,updated_at';
+  'id,' +
+  'barcode:"Штрихкод",' +
+  'article:"Артикул",' +
+  'quantity_in_box:"Кол-во в коробке",' +
+  'zone_row:"Зона/ряд",' +
+  'pallet:"Поддон",' +
+  'status:"Статус",' +
+  'date:"ДатаРазмещения",' +
+  'warehouse:"Склад",' +
+  'worker:"Изменил",' +
+  'created_at,' +
+  'updated_at';
 
 
 const STATUSES = {
