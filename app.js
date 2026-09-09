@@ -1,5 +1,5 @@
 const SUPABASE_URL = 'https://ithhecprdosvjiddoalq.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_0dB5DQt2_ysOohx42IN4rA_mnypLeOR';
+const SUPABASE_KEY = 'sb_publishable_0dB5Qt2_ysOohx42IN4rA_mnypLeOR';
 
 const supabaseClient = window.supabase.createClient(
   SUPABASE_URL,
@@ -9,8 +9,15 @@ const supabaseClient = window.supabase.createClient(
 let DATA = {};
 let BOX_IDS = [];
 
+
+// =====================================================
+// ЗАГРУЗКА БАЗЫ
+// =====================================================
+
 async function loadDatabase(){
+
   try {
+
     const r = await fetch('database.json', {
       cache: 'no-store'
     });
@@ -20,6 +27,7 @@ async function loadDatabase(){
     }
 
     DATA = await r.json();
+
 
     const {
       data,
@@ -31,13 +39,19 @@ async function loadDatabase(){
         ascending: true
       });
 
+
     if (error) {
       throw error;
     }
 
-    BOX_IDS = data.map(row => row.id);
+
+    BOX_IDS = data.map(
+      row => row.id
+    );
+
 
     DATA['База'] = [
+
       [
         'Штрихкод',
         'Артикул',
@@ -53,27 +67,34 @@ async function loadDatabase(){
         'Кто работал'
       ],
 
-      ...data.map(row => [
-        row.barcode ?? '',
-        row.article ?? '',
-        row.quantity_in_box ?? '',
-        row.zone_row ?? '',
-        row.pallet ?? '',
-        row.status ?? '',
-        row.date ?? '',
-        row.warehouse ?? '',
-        row.column_9 ?? '',
-        row.direction ?? '',
-        row.pick ? 'ИСТИНА' : 'ЛОЖЬ',
-        row.worker ?? ''
-      ])
+      ...data.map(
+        row => [
+
+          row.barcode ?? '',
+          row.article ?? '',
+          row.quantity_in_box ?? '',
+          row.zone_row ?? '',
+          row.pallet ?? '',
+          row.status ?? '',
+          row.date ?? '',
+          row.warehouse ?? '',
+          row.column_9 ?? '',
+          row.direction ?? '',
+          row.pick ? 'ИСТИНА' : 'ЛОЖЬ',
+          row.worker ?? ''
+
+        ]
+      )
+
     ];
+
 
     console.log(
       'SKLADAPLAN: База загружена из Supabase:',
       data.length,
       'коробок'
     );
+
 
     return true;
 
@@ -84,6 +105,7 @@ async function loadDatabase(){
       err
     );
 
+
     try {
 
       const r = await fetch(
@@ -93,16 +115,21 @@ async function loadDatabase(){
         }
       );
 
+
       if (!r.ok) {
         throw new Error('HTTP ' + r.status);
       }
 
+
       DATA = await r.json();
+
       BOX_IDS = [];
+
 
       console.warn(
         'Supabase недоступен. Используется database.json.'
       );
+
 
       return true;
 
@@ -113,11 +140,16 @@ async function loadDatabase(){
         fallbackError
       );
 
+
       return false;
     }
   }
 }
 
+
+// =====================================================
+// STATE
+// =====================================================
 
 const state = {
   page: 'dashboard',
@@ -125,7 +157,12 @@ const state = {
 };
 
 
+// =====================================================
+// PAGES
+// =====================================================
+
 const pages = {
+
   dashboard: [
     'Главная',
     'Главный экран склада'
@@ -160,8 +197,13 @@ const pages = {
     'Инструменты',
     'Сервисные операции'
   ]
+
 };
 
+
+// =====================================================
+// HELPERS
+// =====================================================
 
 const $ = selector =>
   document.querySelector(selector);
@@ -181,56 +223,78 @@ const esc = value =>
 
 
 function rows(sheet){
+
   return DATA[sheet] || [];
+
 }
 
 
 function headerRows(sheet){
-  const data = rows(sheet);
+
+  const data =
+    rows(sheet);
+
 
   return data.length
-    ? data[0].map(x => x ?? '')
+    ? data[0].map(
+        x => x ?? ''
+      )
     : [];
+
 }
 
 
 function objects(sheet){
 
-  const data = rows(sheet);
+  const data =
+    rows(sheet);
+
 
   if (!data.length) {
     return [];
   }
 
-  const headers = data[0];
+
+  const headers =
+    data[0];
+
 
   return data
     .slice(1)
-    .filter(row =>
-      row.some(
-        value =>
-          value !== null &&
-          value !== '' &&
-          value !== undefined
-      )
-    )
-    .map((row, index) => ({
-      __rowIndex: index + 1,
-
-      ...Object.fromEntries(
-        headers.map(
-          (key, i) => [
-            key || `col_${i + 1}`,
-            row[i] ?? ''
-          ]
+    .filter(
+      row =>
+        row.some(
+          value =>
+            value !== null &&
+            value !== '' &&
+            value !== undefined
         )
-      )
-    }));
+    )
+    .map(
+      (row, index) => ({
+
+        __rowIndex:
+          index + 1,
+
+        ...Object.fromEntries(
+          headers.map(
+            (key, i) => [
+              key || `col_${i + 1}`,
+              row[i] ?? ''
+            ]
+          )
+        )
+
+      })
+    );
+
 }
 
 
 function count(sheet){
+
   return objects(sheet).length;
+
 }
 
 
@@ -243,18 +307,28 @@ function fmt(value){
     return '';
   }
 
+
   if (
     typeof value === 'string' &&
     /^\d{4}-\d\d-\d\d/.test(value)
   ) {
+
     return value.slice(0, 10);
+
   }
 
-  if (typeof value === 'number') {
+
+  if (
+    typeof value === 'number'
+  ) {
+
     return value.toLocaleString('ru-RU');
+
   }
+
 
   return String(value);
+
 }
 
 
@@ -262,60 +336,96 @@ function status(value){
 
   let className = '';
 
+
   if (
     String(value).includes('Скомплект')
   ) {
+
     className = 'green';
+
   }
+
 
   if (
     String(value).includes('Взять') ||
     String(value).includes('КПодбору')
   ) {
+
     className = 'yellow';
+
   }
+
 
   if (
     String(value).includes('Отгруж')
   ) {
+
     className = 'red';
+
   }
 
+
   return `
+
     <span class="status ${className}">
       ${esc(value)}
     </span>
+
   `;
+
 }
 
 
-function table(sheet, limit = 500){
+// =====================================================
+// ОБЩАЯ ТАБЛИЦА
+// =====================================================
 
-  const data = rows(sheet);
+function table(
+  sheet,
+  limit = 500
+){
+
+  const data =
+    rows(sheet);
+
 
   if (!data.length) {
+
     return `
+
       <div class="empty">
         Нет данных
       </div>
+
     `;
+
   }
 
-  const headers = data[0];
 
-  const body = data
-    .slice(1)
-    .filter(row =>
-      row.some(
-        value =>
-          value !== null &&
-          value !== '' &&
-          value !== undefined
+  const headers =
+    data[0];
+
+
+  const body =
+    data
+      .slice(1)
+      .filter(
+        row =>
+          row.some(
+            value =>
+              value !== null &&
+              value !== '' &&
+              value !== undefined
+          )
       )
-    )
-    .slice(0, limit);
+      .slice(
+        0,
+        limit
+      );
+
 
   return `
+
     <div class="table-wrap">
 
       <table class="data-table">
@@ -323,6 +433,7 @@ function table(sheet, limit = 500){
         <thead>
 
           <tr>
+
             ${headers
               .map(
                 header =>
@@ -330,56 +441,73 @@ function table(sheet, limit = 500){
               )
               .join('')
             }
+
           </tr>
 
         </thead>
 
+
         <tbody>
 
-          ${body.map(row => `
+          ${body
+            .map(
+              row => `
 
-            <tr>
+                <tr>
 
-              ${headers
-                .map(
-                  (header, i) => `
+                  ${headers
+                    .map(
+                      (header, i) => `
 
-                    <td data-label="${esc(header ?? '')}">
+                        <td
+                          data-label="${esc(header ?? '')}"
+                        >
 
-                      ${
-                        i === 5 &&
-                        sheet !== 'Сборка'
-                          ? status(row[i])
-                          : esc(fmt(row[i]))
-                      }
+                          ${
+                            i === 5 &&
+                            sheet !== 'Сборка'
+                              ? status(row[i])
+                              : esc(fmt(row[i]))
+                          }
 
-                    </td>
+                        </td>
 
-                  `
-                )
-                .join('')
-              }
+                      `
+                    )
+                    .join('')
+                  }
 
-            </tr>
+                </tr>
 
-          `).join('')}
+              `
+            )
+            .join('')}
 
         </tbody>
 
       </table>
 
     </div>
+
   `;
+
 }
 
 
+// =====================================================
+// БАЗА
+// =====================================================
+
 function baseView(){
 
-  const data = rows('База');
+  const data =
+    rows('База');
+
 
   if (!data.length) {
 
     return `
+
       <div class="panel">
 
         <div class="empty">
@@ -387,28 +515,35 @@ function baseView(){
         </div>
 
       </div>
+
     `;
+
   }
 
-  const headers = data[0];
 
-  const body = data
-    .slice(1)
-    .map(
-      (row, index) => ({
-        row,
-        index
-      })
-    )
-    .filter(
-      ({row}) =>
-        row.some(
-          value =>
-            value !== null &&
-            value !== '' &&
-            value !== undefined
-        )
-    );
+  const headers =
+    data[0];
+
+
+  const body =
+    data
+      .slice(1)
+      .map(
+        (row, index) => ({
+          row,
+          index
+        })
+      )
+      .filter(
+        ({row}) =>
+          row.some(
+            value =>
+              value !== null &&
+              value !== '' &&
+              value !== undefined
+          )
+      );
+
 
   return `
 
@@ -425,13 +560,17 @@ function baseView(){
           placeholder="Поиск штрихкода, артикула, зоны, поддона…"
         >
 
+
         <span
           class="muted"
           style="padding:10px 0"
         >
+
           ${count('База').toLocaleString('ru-RU')}
           коробок
+
         </span>
+
 
         <button
           class="primary"
@@ -442,21 +581,33 @@ function baseView(){
 
       </div>
 
+
       <div
         id="baseTable"
         style="margin-top:12px"
       >
-        ${baseTable(body, headers)}
+
+        ${baseTable(
+          body,
+          headers
+        )}
+
       </div>
 
     </div>
 
+
     ${boxModal()}
+
   `;
+
 }
 
 
-function baseTable(body, headers){
+function baseTable(
+  body,
+  headers
+){
 
   return `
 
@@ -484,132 +635,155 @@ function baseTable(body, headers){
 
         </thead>
 
+
         <tbody>
 
-          ${body.map(
-            ({row, index}) => `
+          ${body
+            .map(
+              ({row, index}) => `
 
-              <tr>
+                <tr>
 
-                ${headers
-                  .map(
-                    (header, i) => `
+                  ${headers
+                    .map(
+                      (header, i) => `
 
-                      <td
-                        data-label="${esc(header ?? '')}"
+                        <td
+                          data-label="${esc(header ?? '')}"
+                        >
+
+                          ${
+                            i === 5
+                              ? status(row[i])
+                              : esc(fmt(row[i]))
+                          }
+
+                        </td>
+
+                      `
+                    )
+                    .join('')
+                  }
+
+
+                  <td data-label="Действия">
+
+                    <div
+                      style="
+                        display:flex;
+                        gap:6px;
+                        flex-wrap:wrap
+                      "
+                    >
+
+                      <button
+                        class="ghost edit-box"
+                        data-row="${index}"
+                        style="padding:7px 10px"
                       >
+                        ✏️
+                      </button>
 
-                        ${
-                          i === 5
-                            ? status(row[i])
-                            : esc(fmt(row[i]))
-                        }
 
-                      </td>
+                      <button
+                        class="ghost delete-box"
+                        data-row="${index}"
+                        style="padding:7px 10px"
+                      >
+                        🗑️
+                      </button>
 
-                    `
-                  )
-                  .join('')
-                }
+                    </div>
 
-                <td data-label="Действия">
+                  </td>
 
-                  <div
-                    style="
-                      display:flex;
-                      gap:6px;
-                      flex-wrap:wrap
-                    "
-                  >
+                </tr>
 
-                    <button
-                      class="ghost edit-box"
-                      data-row="${index}"
-                      style="padding:7px 10px"
-                    >
-                      ✏️
-                    </button>
-
-                    <button
-                      class="ghost delete-box"
-                      data-row="${index}"
-                      style="padding:7px 10px"
-                    >
-                      🗑️
-                    </button>
-
-                  </div>
-
-                </td>
-
-              </tr>
-
-            `
-          ).join('')}
+              `
+            )
+            .join('')}
 
         </tbody>
 
       </table>
 
     </div>
+
   `;
+
 }
 
 
+// =====================================================
+// MODAL КОРОБКИ
+// =====================================================
+
 function boxModal(){
 
-  const headers = headerRows('База');
+  const headers =
+    headerRows('База');
+
 
   let row = [];
 
-  if (state.editingRow !== null) {
+
+  if (
+    state.editingRow !== null
+  ) {
 
     row =
       rows('База')[
         state.editingRow + 1
       ] || [];
+
   }
 
-  const fields = headers
-    .map(
-      (header, i) => {
 
-        const value =
-          row[i] ?? '';
+  const fields =
+    headers
+      .map(
+        (header, i) => {
 
-        return `
+          const value =
+            row[i] ?? '';
 
-          <label
-            style="
-              display:block;
-              margin-bottom:12px
-            "
-          >
 
-            <span
+          return `
+
+            <label
               style="
                 display:block;
-                font-size:11px;
-                font-weight:700;
-                margin-bottom:5px
+                margin-bottom:12px
               "
             >
-              ${esc(header)}
-            </span>
 
-            <input
-              class="box-field"
-              data-index="${i}"
-              value="${esc(value)}"
-              autocomplete="off"
-            >
+              <span
+                style="
+                  display:block;
+                  font-size:11px;
+                  font-weight:700;
+                  margin-bottom:5px
+                "
+              >
+                ${esc(header)}
+              </span>
 
-          </label>
 
-        `;
-      }
-    )
-    .join('');
+              <input
+                class="box-field"
+                data-index="${i}"
+                value="${esc(value)}"
+                autocomplete="off"
+              >
+
+            </label>
+
+          `;
+
+        }
+      )
+      .join('');
+
 
   return `
 
@@ -630,12 +804,15 @@ function boxModal(){
         <div class="scan-head">
 
           <h2>
+
             ${
               state.editingRow === null
                 ? 'Добавить коробку'
                 : 'Редактировать коробку'
             }
+
           </h2>
+
 
           <button
             class="scan-close"
@@ -646,9 +823,13 @@ function boxModal(){
 
         </div>
 
+
         <div style="margin-top:15px">
+
           ${fields}
+
         </div>
+
 
         <div
           style="
@@ -667,6 +848,7 @@ function boxModal(){
             Отмена
           </button>
 
+
           <button
             class="primary"
             id="boxSave"
@@ -679,14 +861,21 @@ function boxModal(){
       </div>
 
     </div>
+
   `;
+
 }
 
+
+// =====================================================
+// НАСТРОЙКА БАЗЫ
+// =====================================================
 
 function setupBase(){
 
   const addButton =
     $('#addBoxBtn');
+
 
   if (addButton) {
 
@@ -694,182 +883,260 @@ function setupBase(){
 
       state.editingRow = null;
 
+
       const oldModal =
         $('#boxModal');
+
 
       if (oldModal) {
         oldModal.remove();
       }
+
 
       document.body.insertAdjacentHTML(
         'beforeend',
         boxModal()
       );
 
+
       openBoxModal();
+
     };
+
   }
 
 
   document
     .querySelectorAll('.edit-box')
-    .forEach(button => {
+    .forEach(
+      button => {
 
-      button.onclick = () => {
+        button.onclick = () => {
 
-        state.editingRow =
-          Number(button.dataset.row);
+          state.editingRow =
+            Number(
+              button.dataset.row
+            );
 
-        const oldModal =
-          $('#boxModal');
 
-        if (oldModal) {
-          oldModal.remove();
-        }
+          const oldModal =
+            $('#boxModal');
 
-        document.body.insertAdjacentHTML(
-          'beforeend',
-          boxModal()
-        );
 
-        openBoxModal();
-      };
-    });
+          if (oldModal) {
+            oldModal.remove();
+          }
+
+
+          document.body.insertAdjacentHTML(
+            'beforeend',
+            boxModal()
+          );
+
+
+          openBoxModal();
+
+        };
+
+      }
+    );
 
 
   document
     .querySelectorAll('.delete-box')
-    .forEach(button => {
+    .forEach(
+      button => {
 
-      button.onclick = async () => {
+        button.onclick =
+          async () => {
 
-        const index =
-          Number(button.dataset.row);
+            const index =
+              Number(
+                button.dataset.row
+              );
 
-        const row =
-          rows('База')[index + 1];
 
-        if (!row) {
-          return;
-        }
+            const row =
+              rows('База')[
+                index + 1
+              ];
 
-        const barcode =
-          row[0] || '';
 
-        const id =
-          BOX_IDS[index];
+            if (!row) {
+              return;
+            }
 
-        if (!id) {
 
-          alert(
-            'Для этой строки не найден ID Supabase.\n\n' +
-            'Обновите страницу и попробуйте ещё раз.'
-          );
+            const barcode =
+              row[0] || '';
 
-          return;
-        }
 
-        const confirmed =
-          confirm(
-            `Удалить коробку ${barcode}?\n\n` +
-            'Она будет удалена из общей базы Supabase.'
-          );
+            const id =
+              BOX_IDS[index];
 
-        if (!confirmed) {
-          return;
-        }
 
-        button.disabled = true;
+            if (!id) {
 
-        const {
-          error
-        } = await supabaseClient
-          .from('boxes')
-          .delete()
-          .eq('id', id);
+              alert(
+                'Для этой строки не найден ID Supabase.\n\n' +
+                'Обновите страницу и попробуйте ещё раз.'
+              );
 
-        if (error) {
+              return;
+            }
 
-          console.error(error);
 
-          alert(
-            'Не удалось удалить коробку:\n' +
-            error.message
-          );
+            const confirmed =
+              confirm(
+                `Удалить коробку ${barcode}?\n\n` +
+                'Она будет удалена из общей базы Supabase.'
+              );
 
-          button.disabled = false;
 
-          return;
-        }
+            if (!confirmed) {
+              return;
+            }
 
-        await reloadAndRender();
-      };
-    });
+
+            button.disabled = true;
+
+
+            const {
+              error
+            } = await supabaseClient
+              .from('boxes')
+              .delete()
+              .eq('id', id);
+
+
+            if (error) {
+
+              console.error(error);
+
+
+              alert(
+                'Не удалось удалить коробку:\n' +
+                error.message
+              );
+
+
+              button.disabled = false;
+
+              return;
+            }
+
+
+            await reloadAndRender();
+
+          };
+
+      }
+    );
+
 }
 
+
+// =====================================================
+// MODAL
+// =====================================================
 
 function openBoxModal(){
 
   const modal =
     $('#boxModal');
 
+
   if (!modal) {
     return;
   }
+
 
   modal.classList.add('show');
 
 
   const close = () => {
 
-    modal.classList.remove('show');
+    modal.classList.remove(
+      'show'
+    );
+
 
     state.editingRow = null;
 
-    setTimeout(() => {
 
-      const current =
-        $('#boxModal');
+    setTimeout(
+      () => {
 
-      if (current) {
-        current.remove();
-      }
+        const current =
+          $('#boxModal');
 
-    }, 150);
+
+        if (current) {
+          current.remove();
+        }
+
+      },
+      150
+    );
+
   };
 
 
   $('#boxModalClose').onclick =
     close;
 
+
   $('#boxCancel').onclick =
     close;
 
 
-  modal.onclick = event => {
+  modal.onclick =
+    event => {
 
-    if (event.target === modal) {
-      close();
-    }
-  };
+      if (
+        event.target === modal
+      ) {
+
+        close();
+
+      }
+
+    };
 
 
   $('#boxSave').onclick =
     saveBox;
+
 }
 
+
+// =====================================================
+// BARCODE
+// =====================================================
 
 function normBarcode(value){
 
   return String(value ?? '')
-    .replace(/\.0$|,0$/, '')
-    .replace(/\D/g, '');
+    .replace(
+      /\.0$|,0$/,
+      ''
+    )
+    .replace(
+      /\D/g,
+      ''
+    );
+
 }
 
+
+// =====================================================
+// SUPABASE ROW
+// =====================================================
 
 function rowToSupabase(row){
 
   let quantity = null;
+
 
   if (
     row[2] !== '' &&
@@ -880,11 +1147,14 @@ function rowToSupabase(row){
     const parsed =
       Number(row[2]);
 
+
     quantity =
       Number.isFinite(parsed)
         ? parsed
         : null;
+
   }
+
 
   return {
 
@@ -929,31 +1199,44 @@ function rowToSupabase(row){
 
     updated_at:
       new Date().toISOString()
+
   };
+
 }
 
+
+// =====================================================
+// СОХРАНЕНИЕ КОРОБКИ
+// =====================================================
 
 async function saveBox(){
 
   const headers =
     headerRows('База');
 
+
   const newRow =
-    headers.map((_, i) => {
+    headers.map(
+      (_, i) => {
 
-      const input =
-        document.querySelector(
-          `.box-field[data-index="${i}"]`
-        );
+        const input =
+          document.querySelector(
+            `.box-field[data-index="${i}"]`
+          );
 
-      return input
-        ? input.value.trim()
-        : '';
-    });
+
+        return input
+          ? input.value.trim()
+          : '';
+
+      }
+    );
 
 
   const barcode =
-    normBarcode(newRow[0]);
+    normBarcode(
+      newRow[0]
+    );
 
 
   if (!barcode) {
@@ -981,6 +1264,7 @@ async function saveBox(){
 
     button.textContent =
       'Сохранение…';
+
   }
 
 
@@ -991,15 +1275,20 @@ async function saveBox(){
     ) {
 
       const payload =
-        rowToSupabase(newRow);
+        rowToSupabase(
+          newRow
+        );
+
 
       delete payload.updated_at;
+
 
       const {
         error
       } = await supabaseClient
         .from('boxes')
         .insert(payload);
+
 
       if (error) {
         throw error;
@@ -1012,16 +1301,20 @@ async function saveBox(){
           state.editingRow
         ];
 
+
       if (!id) {
 
         throw new Error(
           'Не найден ID коробки в Supabase.'
         );
+
       }
 
 
       const payload =
-        rowToSupabase(newRow);
+        rowToSupabase(
+          newRow
+        );
 
 
       const {
@@ -1035,11 +1328,13 @@ async function saveBox(){
       if (error) {
         throw error;
       }
+
     }
 
 
     state.editingRow =
       null;
+
 
     await reloadAndRender();
 
@@ -1047,10 +1342,12 @@ async function saveBox(){
 
     console.error(error);
 
+
     alert(
       'Не удалось сохранить коробку:\n' +
       (error.message || error)
     );
+
 
     if (button) {
 
@@ -1059,10 +1356,17 @@ async function saveBox(){
 
       button.textContent =
         '💾 Сохранить';
+
     }
+
   }
+
 }
 
+
+// =====================================================
+// UPDATE BOX
+// =====================================================
 
 async function updateBox(
   id,
@@ -1070,10 +1374,12 @@ async function updateBox(
 ){
 
   const payload = {
+
     ...changes,
 
     updated_at:
       new Date().toISOString()
+
   };
 
 
@@ -1088,8 +1394,13 @@ async function updateBox(
   if (error) {
     throw error;
   }
+
 }
 
+
+// =====================================================
+// RELOAD
+// =====================================================
 
 async function reloadAndRender(){
 
@@ -1108,8 +1419,13 @@ async function reloadAndRender(){
 
 
   render();
+
 }
 
+
+// =====================================================
+// DASHBOARD
+// =====================================================
 
 function dashboard(){
 
@@ -1120,14 +1436,18 @@ function dashboard(){
   const statuses = {};
 
 
-  base.forEach(row => {
+  base.forEach(
+    row => {
 
-    const s =
-      row['Статус'] || '';
+      const s =
+        row['Статус'] || '';
 
-    statuses[s] =
-      (statuses[s] || 0) + 1;
-  });
+
+      statuses[s] =
+        (statuses[s] || 0) + 1;
+
+    }
+  );
 
 
   const directions =
@@ -1139,8 +1459,10 @@ function dashboard(){
             row['Направление'] ||
             'Без направления';
 
+
           result[direction] =
             (result[direction] || 0) + 1;
+
 
           return result;
 
@@ -1150,12 +1472,17 @@ function dashboard(){
 
 
   const top =
-    Object.entries(directions)
+    Object.entries(
+      directions
+    )
       .sort(
         (a,b) =>
           b[1] - a[1]
       )
-      .slice(0,8);
+      .slice(
+        0,
+        8
+      );
 
 
   return `
@@ -1196,11 +1523,13 @@ function dashboard(){
         </div>
 
         <div class="value">
+
           ${
             (
               statuses['На складе'] || 0
             ).toLocaleString('ru-RU')
           }
+
         </div>
 
         <div class="sub">
@@ -1217,11 +1546,13 @@ function dashboard(){
         </div>
 
         <div class="value">
+
           ${
             (
               statuses['Скомплектовано'] || 0
             ).toLocaleString('ru-RU')
           }
+
         </div>
 
         <div class="sub">
@@ -1238,11 +1569,13 @@ function dashboard(){
         </div>
 
         <div class="value">
+
           ${
             (
               statuses['Отгружено'] || 0
             ).toLocaleString('ru-RU')
           }
+
         </div>
 
         <div class="sub">
@@ -1270,7 +1603,11 @@ function dashboard(){
 
         </div>
 
-        ${table('Убыло',10)}
+
+        ${table(
+          'Убыло',
+          10
+        )}
 
       </div>
 
@@ -1290,31 +1627,33 @@ function dashboard(){
         </div>
 
 
-        ${top.map(
-          ([key,value]) => `
+        ${top
+          .map(
+            ([key,value]) => `
 
-            <div
-              style="
-                display:flex;
-                justify-content:space-between;
-                padding:9px 0;
-                border-bottom:1px solid #eee;
-                font-size:11px
-              "
-            >
+              <div
+                style="
+                  display:flex;
+                  justify-content:space-between;
+                  padding:9px 0;
+                  border-bottom:1px solid #eee;
+                  font-size:11px
+                "
+              >
 
-              <span>
-                ${esc(key)}
-              </span>
+                <span>
+                  ${esc(key)}
+                </span>
 
-              <b>
-                ${value}
-              </b>
+                <b>
+                  ${value}
+                </b>
 
-            </div>
+              </div>
 
-          `
-        ).join('')}
+            `
+          )
+          .join('')}
 
       </div>
 
@@ -1377,8 +1716,13 @@ function dashboard(){
     </div>
 
   `;
+
 }
 
+
+// =====================================================
+// SHEET VIEW
+// =====================================================
 
 function sheetView(sheet){
 
@@ -1394,25 +1738,36 @@ function sheetView(sheet){
           placeholder="Поиск по всем колонкам…"
         >
 
+
         <span
           class="muted"
           style="padding:10px 0"
         >
+
           ${count(sheet).toLocaleString('ru-RU')}
           строк
+
         </span>
 
       </div>
 
+
       <div id="sheetTable">
+
         ${table(sheet)}
+
       </div>
 
     </div>
 
   `;
+
 }
 
+
+// =====================================================
+// ASSEMBLY
+// =====================================================
 
 function assembly(){
 
@@ -1479,6 +1834,7 @@ function assembly(){
           <h3>
             Список сборки
           </h3>
+
 
           <div class="route-note">
 
@@ -1562,6 +1918,7 @@ function assembly(){
             Сканирование коробки
           </h2>
 
+
           <button
             class="scan-close"
             id="scanClose"
@@ -1605,6 +1962,7 @@ function assembly(){
     </div>
 
   `;
+
 }
 
 
@@ -1647,61 +2005,71 @@ function assemblyTable(data){
 
         <tbody>
 
-          ${data.map(
-            row => `
+          ${data
+            .map(
+              row => `
 
-              <tr>
+                <tr>
 
-                <td data-label="Штрихкод">
-                  ${esc(
-                    fmt(
-                      row['Штрихкод']
-                    )
-                  )}
-                </td>
+                  <td data-label="Штрихкод">
 
+                    ${esc(
+                      fmt(
+                        row['Штрихкод']
+                      )
+                    )}
 
-                <td data-label="Зона/Ряд">
-                  ${esc(
-                    fmt(
-                      row['Зона/Ряд']
-                    )
-                  )}
-                </td>
+                  </td>
 
 
-                <td data-label="Поддон">
-                  ${esc(
-                    fmt(
-                      row['Поддон']
-                    )
-                  )}
-                </td>
+                  <td data-label="Зона/Ряд">
+
+                    ${esc(
+                      fmt(
+                        row['Зона/Ряд']
+                      )
+                    )}
+
+                  </td>
 
 
-                <td data-label="Коробок">
-                  ${esc(
-                    fmt(
-                      row['Кол-во коробок']
-                    )
-                  )}
-                </td>
+                  <td data-label="Поддон">
+
+                    ${esc(
+                      fmt(
+                        row['Поддон']
+                      )
+                    )}
+
+                  </td>
 
 
-                <td data-label="Отбор">
+                  <td data-label="Коробок">
 
-                  ${
-                    row['Отбор ✔️']
-                      ? '✓'
-                      : ''
-                  }
+                    ${esc(
+                      fmt(
+                        row['Кол-во коробок']
+                      )
+                    )}
 
-                </td>
+                  </td>
 
-              </tr>
 
-            `
-          ).join('')}
+                  <td data-label="Отбор">
+
+                    ${
+                      row['Отбор ✔️']
+                        ? '✓'
+                        : ''
+                    }
+
+                  </td>
+
+                </tr>
+
+              `
+            )
+            .join('')}
 
         </tbody>
 
@@ -1710,16 +2078,23 @@ function assemblyTable(data){
     </div>
 
   `;
+
 }
 
+
+// =====================================================
+// SCANNER
+// =====================================================
 
 function setupScanner(){
 
   const modal =
     $('#scanModal');
 
+
   const input =
     $('#scanInput');
+
 
   const statusElement =
     $('#scanStatus');
@@ -1730,7 +2105,9 @@ function setupScanner(){
     !input ||
     !statusElement
   ) {
+
     return;
+
   }
 
 
@@ -1741,34 +2118,51 @@ function setupScanner(){
     );
 
     input.value = '';
+
   };
 
 
-  $('#scanBtn').onclick = () => {
+  const scanButton =
+    $('#scanBtn');
 
-    modal.classList.add(
-      'show'
-    );
 
-    setTimeout(
-      () => input.focus(),
-      80
-    );
-  };
+  if (scanButton) {
+
+    scanButton.onclick =
+      () => {
+
+        modal.classList.add(
+          'show'
+        );
+
+
+        setTimeout(
+          () =>
+            input.focus(),
+          80
+        );
+
+      };
+
+  }
 
 
   $('#scanClose').onclick =
     close;
 
 
-  modal.onclick = event => {
+  modal.onclick =
+    event => {
 
-    if (
-      event.target === modal
-    ) {
-      close();
-    }
-  };
+      if (
+        event.target === modal
+      ) {
+
+        close();
+
+      }
+
+    };
 
 
   const processScan =
@@ -1802,12 +2196,18 @@ function setupScanner(){
         base
           .map(
             row => ({
-              object: row,
-              index: row.__rowIndex
+
+              object:
+                row,
+
+              index:
+                row.__rowIndex
+
             })
           )
           .filter(
             item =>
+
               normBarcode(
                 item.object['Штрихкод']
               ) === code &&
@@ -1835,6 +2235,7 @@ function setupScanner(){
                 .toLowerCase() ===
               currentPallet
           );
+
       }
 
 
@@ -1850,7 +2251,9 @@ function setupScanner(){
             ✕ Коробка не найдена
           </b>
 
+
           <br>
+
 
           <span style="font-size:12px">
 
@@ -1870,9 +2273,12 @@ function setupScanner(){
 
         input.select();
 
+
         beep(false);
 
+
         return;
+
       }
 
 
@@ -1898,10 +2304,14 @@ function setupScanner(){
             ✕ У коробки нет ID Supabase
           </b>
 
+
           <br>
 
+
           <span style="font-size:12px">
+
             ${esc(code)}
+
           </span>
 
         `;
@@ -1909,7 +2319,9 @@ function setupScanner(){
 
         beep(false);
 
+
         return;
+
       }
 
 
@@ -1918,6 +2330,7 @@ function setupScanner(){
         await updateBox(
           id,
           {
+
             status:
               'Скомплектовано',
 
@@ -1929,6 +2342,7 @@ function setupScanner(){
 
             pick:
               true
+
           }
         );
 
@@ -1950,15 +2364,18 @@ function setupScanner(){
               'Статус'
             );
 
+
           const workerIndex =
             headers.indexOf(
               'Кто работал'
             );
 
+
           const dateIndex =
             headers.indexOf(
               'Дата'
             );
+
 
           const pickIndex =
             headers.indexOf(
@@ -1966,28 +2383,45 @@ function setupScanner(){
             );
 
 
-          if (statusIndex >= 0) {
+          if (
+            statusIndex >= 0
+          ) {
+
             row[statusIndex] =
               'Скомплектовано';
+
           }
 
 
-          if (workerIndex >= 0) {
+          if (
+            workerIndex >= 0
+          ) {
+
             row[workerIndex] =
               'SKLADAPLAN';
+
           }
 
 
-          if (dateIndex >= 0) {
+          if (
+            dateIndex >= 0
+          ) {
+
             row[dateIndex] =
               new Date().toISOString();
+
           }
 
 
-          if (pickIndex >= 0) {
+          if (
+            pickIndex >= 0
+          ) {
+
             row[pickIndex] =
               'ИСТИНА';
+
           }
+
         }
 
 
@@ -2001,23 +2435,28 @@ function setupScanner(){
             ✓ Коробка сохранена
           </b>
 
+
           <br>
+
 
           <span style="font-size:12px">
 
             ${esc(code)}
 
             ·
+
             ${esc(
               hit.object['Артикул'] || ''
             )}
 
             ·
+
             ${esc(
               hit.object['Зона/Ряд'] || ''
             )}
 
             · поддон
+
             ${esc(
               hit.object['Поддон'] || ''
             )}
@@ -2052,7 +2491,9 @@ function setupScanner(){
             ✕ Ошибка сохранения
           </b>
 
+
           <br>
+
 
           <span style="font-size:12px">
 
@@ -2067,7 +2508,9 @@ function setupScanner(){
 
 
         beep(false);
+
       }
+
     };
 
 
@@ -2082,7 +2525,9 @@ function setupScanner(){
         event.preventDefault();
 
         processScan();
+
       }
+
     }
   );
 
@@ -2108,11 +2553,18 @@ function setupScanner(){
             processScan,
             120
           );
+
       }
+
     }
   );
+
 }
 
+
+// =====================================================
+// BEEP
+// =====================================================
 
 function beep(ok){
 
@@ -2172,12 +2624,19 @@ function beep(ok){
         context.close();
 
       },
-      ok ? 130 : 260
+      ok
+        ? 130
+        : 260
     );
 
   } catch(error) {}
+
 }
 
+
+// =====================================================
+// SEARCH
+// =====================================================
 
 function bindSearch(){
 
@@ -2241,25 +2700,45 @@ function bindSearch(){
             );
 
 
-        $('#baseTable').innerHTML =
-          baseTable(
-            filtered,
-            data[0]
-          );
+        const baseTableElement =
+          $('#baseTable');
+
+
+        if (baseTableElement) {
+
+          baseTableElement.innerHTML =
+            baseTable(
+              filtered,
+              data[0]
+            );
+
+        }
 
 
         setupBase();
 
+
         return;
+
       }
 
 
       if (!query) {
 
-        $('#sheetTable').innerHTML =
-          table(sheet);
+        const sheetTableElement =
+          $('#sheetTable');
+
+
+        if (sheetTableElement) {
+
+          sheetTableElement.innerHTML =
+            table(sheet);
+
+        }
+
 
         return;
+
       }
 
 
@@ -2284,6 +2763,7 @@ function bindSearch(){
                     .includes(query)
               )
           )
+
       ];
 
 
@@ -2295,16 +2775,30 @@ function bindSearch(){
         filtered;
 
 
-      $('#sheetTable').innerHTML =
-        table(sheet);
+      const sheetTableElement =
+        $('#sheetTable');
+
+
+      if (sheetTableElement) {
+
+        sheetTableElement.innerHTML =
+          table(sheet);
+
+      }
 
 
       DATA[sheet] =
         old;
+
     }
   );
+
 }
 
+
+// =====================================================
+// ASSEMBLY BADGE
+// =====================================================
 
 function updateAssemblyBadge(){
 
@@ -2312,31 +2806,38 @@ function updateAssemblyBadge(){
     count('Сборка');
 
 
-  if (
-    $('#assemblyBadge')
-  ) {
+  const badge =
+    $('#assemblyBadge');
 
-    $('#assemblyBadge')
-      .textContent =
-        value || '';
+
+  if (badge) {
+
+    badge.textContent =
+      value || '';
+
   }
 
 
-  if (
-    $('#mobileAssemblyBadge')
-  ) {
+  const mobileBadge =
+    $('#mobileAssemblyBadge');
 
-    $('#mobileAssemblyBadge')
-      .textContent =
-        value || '';
+
+  if (mobileBadge) {
+
+    mobileBadge.textContent =
+      value || '';
+
   }
+
 }
 
+
 // =====================================================
-// SKLADAPLAN — ИМПОРТ EXCEL
+// EXCEL IMPORT
 // =====================================================
 
 const EXCEL_HEADERS = [
+
   'Штрихкод',
   'Артикул',
   'Кол-во в коробке',
@@ -2349,73 +2850,136 @@ const EXCEL_HEADERS = [
   'Направление',
   'Отбор ✔️',
   'Кто работал'
+
 ];
+
 
 let pendingExcelImport = null;
 
 
-function normalizeExcelHeader(value) {
-  return String(value ?? '')
+// -----------------------------------------------------
+// Нормализация заголовка
+// -----------------------------------------------------
+
+function normalizeExcelHeader(value){
+
+  return String(
+    value ?? ''
+  )
     .trim()
-    .replace(/\s+/g, ' ')
+    .replace(
+      /\s+/g,
+      ' '
+    )
     .toLowerCase();
+
 }
 
 
-function normalizeImportedBarcode(value) {
+// -----------------------------------------------------
+// Нормализация штрихкода
+// -----------------------------------------------------
+
+function normalizeImportedBarcode(value){
 
   if (
     value === null ||
     value === undefined ||
     value === ''
   ) {
+
     return '';
+
   }
+
 
   return String(value)
     .trim()
-    .replace(/\.0$/, '')
-    .replace(/,0$/, '')
-    .replace(/\D/g, '');
+    .replace(
+      /\.0$/,
+      ''
+    )
+    .replace(
+      /,0$/,
+      ''
+    )
+    .replace(
+      /\D/g,
+      ''
+    );
+
 }
 
 
-function excelBoolean(value) {
+// -----------------------------------------------------
+// Boolean из Excel
+// -----------------------------------------------------
+
+function excelBoolean(value){
 
   const text =
-    String(value ?? '')
+    String(
+      value ?? ''
+    )
       .trim()
       .toLowerCase();
 
+
   return (
+
     text === 'истина' ||
+
     text === 'true' ||
+
     text === 'да' ||
+
     text === '1' ||
+
     text === '✓' ||
+
     text === '✔️'
+
   );
+
 }
 
 
-function excelDate(value) {
+// -----------------------------------------------------
+// Дата из Excel
+// -----------------------------------------------------
+
+function excelDate(value){
 
   if (
     value === null ||
     value === undefined ||
     value === ''
   ) {
+
     return null;
+
   }
 
-  if (value instanceof Date) {
 
-    if (isNaN(value.getTime())) {
+  if (
+    value instanceof Date
+  ) {
+
+    if (
+      isNaN(
+        value.getTime()
+      )
+    ) {
+
       return null;
+
     }
 
+
     return value.toISOString();
+
   }
+
 
   if (
     typeof value === 'number' &&
@@ -2424,7 +2988,10 @@ function excelDate(value) {
   ) {
 
     const d =
-      XLSX.SSF.parse_date_code(value);
+      XLSX.SSF.parse_date_code(
+        value
+      );
+
 
     if (d) {
 
@@ -2435,25 +3002,47 @@ function excelDate(value) {
           d.d,
           d.H || 0,
           d.M || 0,
-          Math.floor(d.S || 0)
+          Math.floor(
+            d.S || 0
+          )
         )
       ).toISOString();
+
     }
+
   }
 
+
   const text =
-    String(value).trim();
+    String(value)
+      .trim();
+
 
   const match =
     text.match(
       /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/
     );
 
+
   if (match) {
 
-    const day = Number(match[1]);
-    const month = Number(match[2]);
-    const year = Number(match[3]);
+    const day =
+      Number(
+        match[1]
+      );
+
+
+    const month =
+      Number(
+        match[2]
+      );
+
+
+    const year =
+      Number(
+        match[3]
+      );
+
 
     return new Date(
       Date.UTC(
@@ -2462,38 +3051,67 @@ function excelDate(value) {
         day
       )
     ).toISOString();
+
   }
+
 
   const parsed =
     new Date(text);
 
-  if (!isNaN(parsed.getTime())) {
+
+  if (
+    !isNaN(
+      parsed.getTime()
+    )
+  ) {
+
     return parsed.toISOString();
+
   }
 
+
   return null;
+
 }
 
 
-function findExcelColumn(headers, name) {
+// -----------------------------------------------------
+// Поиск колонки
+// -----------------------------------------------------
+
+function findExcelColumn(
+  headers,
+  name
+){
 
   const target =
-    normalizeExcelHeader(name);
+    normalizeExcelHeader(
+      name
+    );
+
 
   return headers.findIndex(
     header =>
-      normalizeExcelHeader(header) === target
+      normalizeExcelHeader(
+        header
+      ) === target
   );
+
 }
 
 
-async function readExcel(file) {
+// -----------------------------------------------------
+// Чтение Excel
+// -----------------------------------------------------
+
+async function readExcel(file){
 
   return new Promise(
     (resolve, reject) => {
 
       const reader =
         new FileReader();
+
 
       reader.onload =
         event => {
@@ -2509,18 +3127,23 @@ async function readExcel(file) {
                 }
               );
 
+
             if (
               !workbook.SheetNames.length
             ) {
+
               throw new Error(
                 'В Excel нет листов.'
               );
+
             }
+
 
             const sheet =
               workbook.Sheets[
                 workbook.SheetNames[0]
               ];
+
 
             const data =
               XLSX.utils.sheet_to_json(
@@ -2532,18 +3155,24 @@ async function readExcel(file) {
                 }
               );
 
+
             resolve({
+
               sheetName:
                 workbook.SheetNames[0],
 
               data
+
             });
 
-          } catch (error) {
+          } catch(error) {
 
             reject(error);
+
           }
+
         };
+
 
       reader.onerror =
         () =>
@@ -2553,30 +3182,48 @@ async function readExcel(file) {
             )
           );
 
-      reader.readAsArrayBuffer(file);
+
+      reader.readAsArrayBuffer(
+        file
+      );
+
     }
   );
+
 }
 
 
-function convertExcelData(rawData) {
+// -----------------------------------------------------
+// Конвертация Excel
+// -----------------------------------------------------
+
+function convertExcelData(
+  rawData
+){
 
   if (
     !rawData ||
     rawData.length < 2
   ) {
+
     throw new Error(
       'Excel-файл пустой или содержит только заголовки.'
     );
+
   }
+
 
   const headers =
     rawData[0].map(
       value =>
-        String(value ?? '').trim()
+        String(
+          value ?? ''
+        ).trim()
     );
 
+
   const indexes = {};
+
 
   EXCEL_HEADERS.forEach(
     header => {
@@ -2586,19 +3233,26 @@ function convertExcelData(rawData) {
           headers,
           header
         );
+
     }
   );
+
 
   if (
     indexes['Штрихкод'] === -1
   ) {
+
     throw new Error(
       'Не найдена колонка «Штрихкод».'
     );
+
   }
 
+
   const result = [];
+
   let errors = 0;
+
 
   rawData
     .slice(1)
@@ -2613,9 +3267,11 @@ function convertExcelData(rawData) {
               value === undefined
           );
 
+
         if (empty) {
           return;
         }
+
 
         const barcode =
           normalizeImportedBarcode(
@@ -2624,12 +3280,18 @@ function convertExcelData(rawData) {
             ]
           );
 
+
         if (!barcode) {
+
           errors++;
+
           return;
+
         }
 
+
         let quantity = null;
+
 
         if (
           indexes['Кол-во в коробке'] >= 0
@@ -2640,6 +3302,7 @@ function convertExcelData(rawData) {
               indexes['Кол-во в коробке']
             ];
 
+
           if (
             value !== '' &&
             value !== null &&
@@ -2649,13 +3312,20 @@ function convertExcelData(rawData) {
             const number =
               Number(value);
 
+
             if (
               Number.isFinite(number)
             ) {
-              quantity = number;
+
+              quantity =
+                number;
+
             }
+
           }
+
         }
+
 
         result.push({
 
@@ -2675,8 +3345,10 @@ function convertExcelData(rawData) {
                   ).trim() || null
                 : null,
 
+
             quantity_in_box:
               quantity,
+
 
             zone_row:
               indexes['Зона/Ряд'] >= 0
@@ -2687,6 +3359,7 @@ function convertExcelData(rawData) {
                   ).trim() || null
                 : null,
 
+
             pallet:
               indexes['Поддон'] >= 0
                 ? String(
@@ -2695,6 +3368,7 @@ function convertExcelData(rawData) {
                     ] ?? ''
                   ).trim() || null
                 : null,
+
 
             status:
               indexes['Статус'] >= 0
@@ -2706,6 +3380,7 @@ function convertExcelData(rawData) {
                   'На складе'
                 : 'На складе',
 
+
             date:
               indexes['Дата'] >= 0
                 ? excelDate(
@@ -2714,6 +3389,7 @@ function convertExcelData(rawData) {
                     ]
                   )
                 : null,
+
 
             warehouse:
               indexes['Склад'] >= 0
@@ -2724,6 +3400,7 @@ function convertExcelData(rawData) {
                   ).trim() || null
                 : null,
 
+
             column_9:
               indexes['Столбец 9'] >= 0
                 ? String(
@@ -2732,6 +3409,7 @@ function convertExcelData(rawData) {
                     ] ?? ''
                   ).trim() || null
                 : null,
+
 
             direction:
               indexes['Направление'] >= 0
@@ -2742,6 +3420,7 @@ function convertExcelData(rawData) {
                   ).trim() || null
                 : null,
 
+
             pick:
               indexes['Отбор ✔️'] >= 0
                 ? excelBoolean(
@@ -2751,6 +3430,7 @@ function convertExcelData(rawData) {
                   )
                 : false,
 
+
             worker:
               indexes['Кто работал'] >= 0
                 ? String(
@@ -2759,22 +3439,41 @@ function convertExcelData(rawData) {
                     ] ?? ''
                   ).trim() || null
                 : null
+
           }
+
         });
+
       }
     );
 
+
   return {
-    rows: result,
+
+    rows:
+      result,
+
     errors
+
   };
+
 }
 
 
-function excelPreview(items) {
+// -----------------------------------------------------
+// Preview Excel
+// -----------------------------------------------------
+
+function excelPreview(
+  items
+){
 
   const preview =
-    items.slice(0, 20);
+    items.slice(
+      0,
+      20
+    );
+
 
   return `
 
@@ -2783,58 +3482,101 @@ function excelPreview(items) {
       <table class="data-table">
 
         <thead>
+
           <tr>
 
-            <th>№</th>
-            <th>Штрихкод</th>
-            <th>Артикул</th>
-            <th>Зона/Ряд</th>
-            <th>Поддон</th>
-            <th>Статус</th>
-            <th>Склад</th>
+            <th>
+              №
+            </th>
+
+            <th>
+              Штрихкод
+            </th>
+
+            <th>
+              Артикул
+            </th>
+
+            <th>
+              Зона/Ряд
+            </th>
+
+            <th>
+              Поддон
+            </th>
+
+            <th>
+              Статус
+            </th>
+
+            <th>
+              Склад
+            </th>
 
           </tr>
+
         </thead>
+
 
         <tbody>
 
-          ${preview.map(
-            item => `
+          ${preview
+            .map(
+              item => `
 
-              <tr>
+                <tr>
 
-                <td>
-                  ${item.excelRow}
-                </td>
+                  <td>
+                    ${item.excelRow}
+                  </td>
 
-                <td>
-                  ${esc(item.data.barcode)}
-                </td>
 
-                <td>
-                  ${esc(item.data.article || '')}
-                </td>
+                  <td>
+                    ${esc(
+                      item.data.barcode
+                    )}
+                  </td>
 
-                <td>
-                  ${esc(item.data.zone_row || '')}
-                </td>
 
-                <td>
-                  ${esc(item.data.pallet || '')}
-                </td>
+                  <td>
+                    ${esc(
+                      item.data.article || ''
+                    )}
+                  </td>
 
-                <td>
-                  ${esc(item.data.status || '')}
-                </td>
 
-                <td>
-                  ${esc(item.data.warehouse || '')}
-                </td>
+                  <td>
+                    ${esc(
+                      item.data.zone_row || ''
+                    )}
+                  </td>
 
-              </tr>
 
-            `
-          ).join('')}
+                  <td>
+                    ${esc(
+                      item.data.pallet || ''
+                    )}
+                  </td>
+
+
+                  <td>
+                    ${esc(
+                      item.data.status || ''
+                    )}
+                  </td>
+
+
+                  <td>
+                    ${esc(
+                      item.data.warehouse || ''
+                    )}
+                  </td>
+
+                </tr>
+
+              `
+            )
+            .join('')}
 
         </tbody>
 
@@ -2842,29 +3584,48 @@ function excelPreview(items) {
 
     </div>
 
+
     ${
       items.length > 20
+
         ? `
+
           <div
             class="muted"
             style="margin-top:8px"
           >
+
             Показаны первые 20 строк
-            из ${items.length.toLocaleString('ru-RU')}.
+            из
+            ${items.length.toLocaleString('ru-RU')}.
+
           </div>
+
         `
+
         : ''
     }
 
   `;
+
 }
 
 
-async function importExcelRows(items) {
+// -----------------------------------------------------
+// Импорт в Supabase
+// -----------------------------------------------------
 
-  const chunkSize = 500;
+async function importExcelRows(
+  items
+){
 
-  let imported = 0;
+  const chunkSize =
+    500;
+
+
+  let imported =
+    0;
+
 
   for (
     let i = 0;
@@ -2872,22 +3633,30 @@ async function importExcelRows(items) {
     i += chunkSize
   ) {
 
+    const now =
+      new Date().toISOString();
+
+
     const chunk =
       items
-        .slice(i, i + chunkSize)
+        .slice(
+          i,
+          i + chunkSize
+        )
         .map(
           item => ({
 
             ...item.data,
 
             created_at:
-              new Date().toISOString(),
+              now,
 
             updated_at:
-              new Date().toISOString()
+              now
 
           })
         );
+
 
     const {
       error
@@ -2895,28 +3664,45 @@ async function importExcelRows(items) {
       .from('boxes')
       .insert(chunk);
 
+
     if (error) {
       throw error;
     }
 
+
     imported +=
       chunk.length;
+
 
     const progress =
       $('#importProgress');
 
+
     if (progress) {
 
       progress.textContent =
-        `Загружено ${imported.toLocaleString('ru-RU')} из ${items.length.toLocaleString('ru-RU')} коробок…`;
+
+        `Загружено ${
+          imported.toLocaleString('ru-RU')
+        } из ${
+          items.length.toLocaleString('ru-RU')
+        } коробок…`;
+
     }
+
   }
 
+
   return imported;
+
 }
 
 
-function excelImportView() {
+// =====================================================
+// EXCEL IMPORT VIEW
+// =====================================================
+
+function excelImportView(){
 
   return `
 
@@ -2930,9 +3716,12 @@ function excelImportView() {
             📥 Импорт Excel
           </h3>
 
+
           <div class="muted">
+
             Загрузить готовую таблицу склада
             в Supabase
+
           </div>
 
         </div>
@@ -2957,12 +3746,14 @@ function excelImportView() {
           style="display:none"
         >
 
+
         <button
           class="primary"
           id="chooseExcelBtn"
         >
           📄 Выбрать Excel
         </button>
+
 
         <div
           id="excelFileName"
@@ -3011,6 +3802,7 @@ function excelImportView() {
           🚀 Импортировать в Supabase
         </button>
 
+
         <button
           class="ghost"
           id="cancelExcelImport"
@@ -3032,6 +3824,7 @@ function excelImportView() {
         Правила импорта
       </h3>
 
+
       <div
         class="muted"
         style="
@@ -3044,22 +3837,26 @@ function excelImportView() {
           ✓ 1 строка Excel = 1 физическая коробка
         </div>
 
+
         <div>
           ✓ Одинаковые штрихкоды не объединяются
         </div>
 
+
         <div>
-          ✓ Штрихкод автоматически очищается
-          от .0 и ,0
+          ✓ Штрихкод автоматически очищается от .0 и ,0
         </div>
+
 
         <div>
           ✓ Пустое «Кол-во в коробке» допускается
         </div>
 
+
         <div>
           ✓ Данные загружаются напрямую в Supabase
         </div>
+
 
         <div>
           ⚠️ Существующие записи не удаляются
@@ -3070,27 +3867,37 @@ function excelImportView() {
     </div>
 
   `;
+
 }
 
 
-function setupExcelImport() {
+// =====================================================
+// SETUP EXCEL IMPORT
+// =====================================================
+
+function setupExcelImport(){
 
   const fileInput =
     $('#excelFile');
 
+
   const chooseButton =
     $('#chooseExcelBtn');
+
 
   if (
     !fileInput ||
     !chooseButton
   ) {
+
     return;
+
   }
 
 
   chooseButton.onclick =
-    () => fileInput.click();
+    () =>
+      fileInput.click();
 
 
   fileInput.onchange =
@@ -3099,24 +3906,30 @@ function setupExcelImport() {
       const file =
         event.target.files?.[0];
 
+
       if (!file) {
         return;
       }
+
 
       $('#excelFileName')
         .textContent =
           file.name;
 
+
       $('#excelInfo')
         .innerHTML =
           '<div class="muted">Читаем Excel…</div>';
 
+
       $('#excelPreview')
         .innerHTML = '';
+
 
       $('#importActions')
         .style.display =
           'none';
+
 
       pendingExcelImport =
         null;
@@ -3132,11 +3945,14 @@ function setupExcelImport() {
           throw new Error(
             'Библиотека XLSX не загружена. Проверь index.html.'
           );
+
         }
 
 
         const workbook =
-          await readExcel(file);
+          await readExcel(
+            file
+          );
 
 
         const converted =
@@ -3220,12 +4036,15 @@ function setupExcelImport() {
           $('#importActions')
             .style.display =
               'flex';
-        }
 
+        }
 
       } catch(error) {
 
-        console.error(error);
+        console.error(
+          error
+        );
+
 
         $('#excelInfo')
           .innerHTML = `
@@ -3244,172 +4063,224 @@ function setupExcelImport() {
             </div>
 
           `;
+
       }
+
     };
 
 
-  $('#startExcelImport').onclick =
-    async () => {
-
-      if (
-        !pendingExcelImport ||
-        !pendingExcelImport.length
-      ) {
-
-        alert(
-          'Сначала выберите Excel-файл.'
-        );
-
-        return;
-      }
+  const importButton =
+    $('#startExcelImport');
 
 
-      const total =
-        pendingExcelImport.length;
+  if (importButton) {
+
+    importButton.onclick =
+      async () => {
+
+        if (
+          !pendingExcelImport ||
+          !pendingExcelImport.length
+        ) {
+
+          alert(
+            'Сначала выберите Excel-файл.'
+          );
+
+          return;
+
+        }
 
 
-      const confirmed =
-        confirm(
-          `Импортировать ${total.toLocaleString('ru-RU')} коробок в Supabase?\n\nКаждая строка Excel станет отдельной физической коробкой.\n\nСуществующие коробки удаляться не будут.`
-        );
+        const total =
+          pendingExcelImport.length;
 
 
-      if (!confirmed) {
-        return;
-      }
+        const confirmed =
+          confirm(
 
+            `Импортировать ${
+              total.toLocaleString('ru-RU')
+            } коробок в Supabase?\n\n` +
 
-      const button =
-        $('#startExcelImport');
+            `Каждая строка Excel станет отдельной физической коробкой.\n\n` +
 
+            `Существующие коробки удаляться не будут.`
 
-      button.disabled =
-        true;
-
-      button.textContent =
-        'Импортируем…';
-
-
-      try {
-
-        const imported =
-          await importExcelRows(
-            pendingExcelImport
           );
 
 
-        $('#importProgress')
-          .innerHTML = `
+        if (!confirmed) {
+          return;
+        }
 
-            <div
-              class="notice"
-              style="margin-top:10px"
-            >
 
-              ✅ Импорт завершён.
+        const button =
+          $('#startExcelImport');
 
-              Добавлено:
 
-              <b>
-                ${imported.toLocaleString('ru-RU')}
-              </b>
+        button.disabled =
+          true;
 
-              коробок.
 
-            </div>
+        button.textContent =
+          'Импортируем…';
 
-          `;
 
+        try {
+
+          const imported =
+            await importExcelRows(
+              pendingExcelImport
+            );
+
+
+          $('#importProgress')
+            .innerHTML = `
+
+              <div
+                class="notice"
+                style="margin-top:10px"
+              >
+
+                ✅ Импорт завершён.
+
+                Добавлено:
+
+                <b>
+                  ${imported.toLocaleString('ru-RU')}
+                </b>
+
+                коробок.
+
+              </div>
+
+            `;
+
+
+          pendingExcelImport =
+            null;
+
+
+          $('#importActions')
+            .style.display =
+              'none';
+
+
+          await loadDatabase();
+
+
+          state.page =
+            'base';
+
+
+          render();
+
+
+          alert(
+
+            `Импорт завершён.\n\n` +
+
+            `Добавлено коробок: ${
+              imported.toLocaleString('ru-RU')
+            }`
+
+          );
+
+        } catch(error) {
+
+          console.error(
+            error
+          );
+
+
+          $('#importProgress')
+            .innerHTML = `
+
+              <div
+                class="notice"
+                style="
+                  margin-top:10px;
+                  border-left:4px solid #c00
+                "
+              >
+
+                ❌ Ошибка импорта:
+
+                <br>
+
+                ${esc(
+                  error.message ||
+                  error
+                )}
+
+              </div>
+
+            `;
+
+
+          button.disabled =
+            false;
+
+
+          button.textContent =
+            '🚀 Импортировать в Supabase';
+
+        }
+
+      };
+
+  }
+
+
+  const cancelButton =
+    $('#cancelExcelImport');
+
+
+  if (cancelButton) {
+
+    cancelButton.onclick =
+      () => {
 
         pendingExcelImport =
           null;
+
+
+        fileInput.value =
+          '';
+
+
+        $('#excelFileName')
+          .textContent =
+            'Файл не выбран';
+
+
+        $('#excelInfo')
+          .innerHTML = '';
+
+
+        $('#excelPreview')
+          .innerHTML = '';
+
+
+        $('#importProgress')
+          .innerHTML = '';
 
 
         $('#importActions')
           .style.display =
             'none';
 
+      };
 
-        await loadDatabase();
+  }
 
-
-        state.page =
-          'base';
-
-        render();
-
-
-        alert(
-          `Импорт завершён.\n\nДобавлено коробок: ${imported.toLocaleString('ru-RU')}`
-        );
-
-
-      } catch(error) {
-
-        console.error(error);
-
-
-        $('#importProgress')
-          .innerHTML = `
-
-            <div
-              class="notice"
-              style="
-                margin-top:10px;
-                border-left:4px solid #c00
-              "
-            >
-
-              ❌ Ошибка импорта:
-
-              <br>
-
-              ${esc(
-                error.message ||
-                error
-              )}
-
-            </div>
-
-          `;
-
-
-        button.disabled =
-          false;
-
-        button.textContent =
-          '🚀 Импортировать в Supabase';
-      }
-    };
-
-
-  $('#cancelExcelImport').onclick =
-    () => {
-
-      pendingExcelImport =
-        null;
-
-      fileInput.value =
-        '';
-
-      $('#excelFileName')
-        .textContent =
-          'Файл не выбран';
-
-      $('#excelInfo')
-        .innerHTML = '';
-
-      $('#excelPreview')
-        .innerHTML = '';
-
-      $('#importProgress')
-        .innerHTML = '';
-
-      $('#importActions')
-        .style.display =
-          'none';
-    };
 }
+
+
+// =====================================================
+// TOOLS
+// =====================================================
 
 function tools(){
 
@@ -3429,9 +4300,14 @@ function tools(){
           Экспорт
         </h3>
 
+
         <p class="muted">
-          Скачать текущие данные SKLADAPLAN в JSON.
+
+          Скачать текущие данные
+          SKLADAPLAN в JSON.
+
         </p>
+
 
         <button
           class="big-action"
@@ -3449,9 +4325,13 @@ function tools(){
           Резервная копия
         </h3>
 
+
         <p class="muted">
+
           Создаёт локальный JSON-архив.
+
         </p>
+
 
         <button
           class="big-action"
@@ -3493,13 +4373,16 @@ function tools(){
                 ${esc(key)}
               </span>
 
+
               <b>
+
                 ${
                   Math.max(
                     0,
                     value.length - 1
                   ).toLocaleString('ru-RU')
                 }
+
               </b>
 
             </div>
@@ -3511,7 +4394,13 @@ function tools(){
     </div>
 
   `;
+
 }
+
+
+// =====================================================
+// VIEWS
+// =====================================================
 
 const views = {
 
@@ -3538,8 +4427,13 @@ const views = {
 
   tools:
     tools
+
 };
 
+
+// =====================================================
+// DOWNLOAD
+// =====================================================
 
 function download(
   name,
@@ -3555,7 +4449,9 @@ function download(
     URL.createObjectURL(
       new Blob(
         [text],
-        {type}
+        {
+          type
+        }
       )
     );
 
@@ -3574,8 +4470,13 @@ function download(
       ),
     500
   );
+
 }
 
+
+// =====================================================
+// BACKUP
+// =====================================================
 
 function backup(){
 
@@ -3594,6 +4495,7 @@ function backup(){
 
     JSON.stringify(
       {
+
         createdAt:
           new Date().toISOString(),
 
@@ -3609,14 +4511,23 @@ function backup(){
     )
 
   );
+
 }
 
+
+// =====================================================
+// EXPORT
+// =====================================================
 
 function exportData(){
 
   download(
 
-    `SKLADAPLAN_DATA_${new Date().toISOString().slice(0,10)}.json`,
+    `SKLADAPLAN_DATA_${
+      new Date()
+        .toISOString()
+        .slice(0,10)
+    }.json`,
 
     JSON.stringify(
       DATA,
@@ -3625,8 +4536,13 @@ function exportData(){
     )
 
   );
+
 }
 
+
+// =====================================================
+// RENDER
+// =====================================================
 
 function render(){
 
@@ -3673,6 +4589,7 @@ function render(){
   ) {
 
     bindSearch();
+
   }
 
 
@@ -3681,27 +4598,36 @@ function render(){
   ) {
 
     setupBase();
+
   }
 
 
- if (
-  state.page === 'assembly'
-) {
+  if (
+    state.page === 'assembly'
+  ) {
 
-  setupScanner();
+    setupScanner();
+
+  }
+
+
+  if (
+    state.page === 'tools'
+  ) {
+
+    setupExcelImport();
+
+  }
+
+
+  updateAssemblyBadge();
+
 }
 
 
-if (
-  state.page === 'tools'
-) {
-
-  setupExcelImport();
-}
-
-
-updateAssemblyBadge();
-
+// =====================================================
+// ГЛОБАЛЬНЫЕ КНОПКИ И НАВИГАЦИЯ
+// =====================================================
 
 document.addEventListener(
   'click',
@@ -3718,9 +4644,11 @@ document.addEventListener(
       state.page =
         navigation.dataset.page;
 
+
       render();
 
       return;
+
     }
 
 
@@ -3735,9 +4663,11 @@ document.addEventListener(
       state.page =
         go.dataset.go;
 
+
       render();
 
       return;
+
     }
 
 
@@ -3752,6 +4682,7 @@ document.addEventListener(
       backup();
 
       return;
+
     }
 
 
@@ -3766,6 +4697,7 @@ document.addEventListener(
       exportData();
 
       return;
+
     }
 
 
@@ -3779,6 +4711,7 @@ document.addEventListener(
       );
 
       return;
+
     }
 
 
@@ -3790,12 +4723,18 @@ document.addEventListener(
       state.page =
         'tools';
 
+
       render();
+
     }
 
   }
 );
 
+
+// =====================================================
+// START APP
+// =====================================================
 
 async function startApp(){
 
@@ -3813,6 +4752,7 @@ async function startApp(){
           Не удалось загрузить данные
         </h3>
 
+
         <p class="muted">
 
           Проверь подключение к
@@ -3825,10 +4765,13 @@ async function startApp(){
 
     `;
 
+
     return;
+
   }
 
 
   render();
+
 }
 startApp();
