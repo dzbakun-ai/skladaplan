@@ -10635,7 +10635,8 @@ Excel:
 
     </div>
 
-        <!-- =====================================================
+
+    <!-- =====================================================
          DASHBOARD
          ===================================================== -->
 
@@ -10644,6 +10645,10 @@ Excel:
         margin-bottom:20px;
       "
     >
+
+      <!-- ===================================================
+           DASHBOARD HEADER
+           =================================================== -->
 
       <div
         style="
@@ -10692,6 +10697,7 @@ Excel:
 
         </div>
 
+
         <div
           style="
             font-size:12px;
@@ -10699,6 +10705,7 @@ Excel:
           "
         >
           Всего физических коробок:
+
           <b
             style="
               color:#111;
@@ -10707,6 +10714,7 @@ Excel:
           >
             ${total}
           </b>
+
         </div>
 
       </div>
@@ -10717,6 +10725,7 @@ Excel:
            =================================================== -->
 
       <div
+        class="sp-dashboard-kpi-grid"
         style="
           display:grid;
           grid-template-columns:
@@ -10727,8 +10736,8 @@ Excel:
           gap:12px;
           margin-bottom:12px;
         "
-        class="sp-dashboard-kpi-grid"
       >
+
 
         <!-- НА СКЛАДЕ -->
 
@@ -10772,6 +10781,7 @@ Excel:
 
             </div>
 
+
             <div
               style="
                 width:38px;
@@ -10789,6 +10799,7 @@ Excel:
 
           </div>
 
+
           <div
             style="
               margin-top:12px;
@@ -10798,6 +10809,7 @@ Excel:
               overflow:hidden;
             "
           >
+
             <div
               style="
                 width:${total ? Math.min(100, stock / total * 100) : 0}%;
@@ -10806,6 +10818,7 @@ Excel:
                 border-radius:10px;
               "
             ></div>
+
           </div>
 
         </div>
@@ -10853,6 +10866,7 @@ Excel:
 
             </div>
 
+
             <div
               style="
                 width:38px;
@@ -10870,6 +10884,7 @@ Excel:
 
           </div>
 
+
           <div
             style="
               margin-top:12px;
@@ -10879,6 +10894,7 @@ Excel:
               overflow:hidden;
             "
           >
+
             <div
               style="
                 width:${total ? Math.min(100, picking / total * 100) : 0}%;
@@ -10887,6 +10903,7 @@ Excel:
                 border-radius:10px;
               "
             ></div>
+
           </div>
 
         </div>
@@ -10934,6 +10951,7 @@ Excel:
 
             </div>
 
+
             <div
               style="
                 width:38px;
@@ -10951,6 +10969,7 @@ Excel:
 
           </div>
 
+
           <div
             style="
               margin-top:12px;
@@ -10960,6 +10979,7 @@ Excel:
               overflow:hidden;
             "
           >
+
             <div
               style="
                 width:${total ? Math.min(100, collected / total * 100) : 0}%;
@@ -10968,12 +10988,13 @@ Excel:
                 border-radius:10px;
               "
             ></div>
+
           </div>
 
         </div>
 
 
-        <!-- ОТГРУЖЕНО -->
+        <!-- УБЫЛО -->
 
         <div
           class="sp-card"
@@ -11015,6 +11036,7 @@ Excel:
 
             </div>
 
+
             <div
               style="
                 width:38px;
@@ -11032,6 +11054,7 @@ Excel:
 
           </div>
 
+
           <div
             style="
               margin-top:12px;
@@ -11041,6 +11064,7 @@ Excel:
               overflow:hidden;
             "
           >
+
             <div
               style="
                 width:${total ? Math.min(100, shipped / total * 100) : 0}%;
@@ -11049,6 +11073,7 @@ Excel:
                 border-radius:10px;
               "
             ></div>
+
           </div>
 
         </div>
@@ -11061,6 +11086,7 @@ Excel:
            =================================================== -->
 
       <div
+        class="sp-dashboard-columns"
         style="
           display:grid;
           grid-template-columns:
@@ -11068,10 +11094,10 @@ Excel:
             minmax(280px,.65fr);
           gap:12px;
         "
-        class="sp-dashboard-columns"
       >
 
-        <!-- СОСТОЯНИЕ -->
+
+        <!-- СОСТОЯНИЕ КОРОБОК -->
 
         <div
           class="sp-card"
@@ -11116,7 +11142,7 @@ Excel:
           </div>
 
 
-          <!-- На складе -->
+          <!-- НА СКЛАДЕ -->
 
           <div
             style="
@@ -11144,6 +11170,7 @@ Excel:
 
             </div>
 
+
             <div
               style="
                 height:8px;
@@ -11167,7 +11194,7 @@ Excel:
           </div>
 
 
-          <!-- К сборке -->
+          <!-- К СБОРКЕ -->
 
           <div
             style="
@@ -11195,6 +11222,7 @@ Excel:
 
             </div>
 
+
             <div
               style="
                 height:8px;
@@ -11218,7 +11246,7 @@ Excel:
           </div>
 
 
-          <!-- Скомплектовано -->
+          <!-- СКОМПЛЕКТОВАНО -->
 
           <div
             style="
@@ -11246,6 +11274,7 @@ Excel:
 
             </div>
 
+
             <div
               style="
                 height:8px;
@@ -11269,7 +11298,7 @@ Excel:
           </div>
 
 
-          <!-- Отгружено -->
+          <!-- ОТГРУЖЕНО -->
 
           <div>
 
@@ -11292,6 +11321,7 @@ Excel:
               </b>
 
             </div>
+
 
             <div
               style="
@@ -11358,11 +11388,17 @@ Excel:
                 font-size:13px;
               "
             >
+
               <span class="sp-muted">
                 Всего коробок
               </span>
-              <b>${total}</b>
+
+              <b>
+                ${total}
+              </b>
+
             </div>
+
 
             <div
               style="
@@ -11373,11 +11409,17 @@ Excel:
                 font-size:13px;
               "
             >
+
               <span class="sp-muted">
                 Склады
               </span>
-              <b>${warehouses}</b>
+
+              <b>
+                ${warehouses}
+              </b>
+
             </div>
+
 
             <div
               style="
@@ -11388,11 +11430,17 @@ Excel:
                 font-size:13px;
               "
             >
+
               <span class="sp-muted">
                 Артикулы
               </span>
-              <b>${articles}</b>
+
+              <b>
+                ${articles}
+              </b>
+
             </div>
+
 
             <div
               style="
@@ -11403,11 +11451,17 @@ Excel:
                 font-size:13px;
               "
             >
+
               <span class="sp-muted">
                 Поддоны
               </span>
-              <b>${pallets}</b>
+
+              <b>
+                ${pallets}
+              </b>
+
             </div>
+
 
             <div
               style="
@@ -11418,10 +11472,15 @@ Excel:
                 font-size:13px;
               "
             >
+
               <span class="sp-muted">
                 Зарезервировано
               </span>
-              <b>${reserved}</b>
+
+              <b>
+                ${reserved}
+              </b>
+
             </div>
 
           </div>
@@ -11436,6 +11495,7 @@ Excel:
            =================================================== -->
 
       <div
+        class="sp-dashboard-actions"
         style="
           margin-top:12px;
           display:grid;
@@ -11443,8 +11503,10 @@ Excel:
             repeat(4,minmax(0,1fr));
           gap:10px;
         "
-        class="sp-dashboard-actions"
       >
+
+
+        <!-- ПРИЁМКА -->
 
         <button
           type="button"
@@ -11483,6 +11545,8 @@ Excel:
         </button>
 
 
+        <!-- СБОРКА -->
+
         <button
           type="button"
           class="sp-card"
@@ -11519,6 +11583,8 @@ Excel:
 
         </button>
 
+
+        <!-- СОБРАНО -->
 
         <button
           type="button"
@@ -11557,6 +11623,8 @@ Excel:
         </button>
 
 
+        <!-- УБЫЛО -->
+
         <button
           type="button"
           class="sp-card"
@@ -11592,131 +11660,6 @@ Excel:
           </div>
 
         </button>
-
-      </div>
-
-    </div>
-
-
-    <!-- =====================================================
-         СТАТИСТИКА
-         ===================================================== -->
-
-    <div class="sp-grid">
-
-      <div class="sp-card">
-
-        <div class="sp-card-label">
-          Всего коробок
-        </div>
-
-        <div class="sp-card-value">
-          ${total}
-        </div>
-
-      </div>
-
-
-      <div class="sp-card">
-
-        <div class="sp-card-label">
-          На складе
-        </div>
-
-        <div class="sp-card-value">
-          ${stock}
-        </div>
-
-      </div>
-
-
-      <div class="sp-card">
-
-        <div class="sp-card-label">
-          К подбору
-        </div>
-
-        <div class="sp-card-value">
-          ${picking}
-        </div>
-
-      </div>
-
-
-      <div class="sp-card">
-
-        <div class="sp-card-label">
-          Скомплектовано
-        </div>
-
-        <div class="sp-card-value">
-          ${collected}
-        </div>
-
-      </div>
-
-
-      <div class="sp-card">
-
-        <div class="sp-card-label">
-          Отгружено
-        </div>
-
-        <div class="sp-card-value">
-          ${shipped}
-        </div>
-
-      </div>
-
-
-      <div class="sp-card">
-
-        <div class="sp-card-label">
-          Зарезервировано
-        </div>
-
-        <div class="sp-card-value">
-          ${reserved}
-        </div>
-
-      </div>
-
-
-      <div class="sp-card">
-
-        <div class="sp-card-label">
-          Склады
-        </div>
-
-        <div class="sp-card-value">
-          ${warehouses}
-        </div>
-
-      </div>
-
-
-      <div class="sp-card">
-
-        <div class="sp-card-label">
-          Артикулы
-        </div>
-
-        <div class="sp-card-value">
-          ${articles}
-        </div>
-
-      </div>
-
-
-      <div class="sp-card">
-
-        <div class="sp-card-label">
-          Поддоны
-        </div>
-
-        <div class="sp-card-value">
-          ${pallets}
-        </div>
 
       </div>
 
@@ -11830,7 +11773,6 @@ Excel:
   `;
 
 }
-
 
 /* =========================================================
    REQUEST PREVIEW
