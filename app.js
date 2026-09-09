@@ -4653,7 +4653,6 @@ const EXCEL_MAP = {
 
 };
 
-
 /*
   Находим колонки один раз.
 
@@ -4746,9 +4745,7 @@ function convertExcelRow(
   columnMap
 ) {
 
-  function valueFor(
-    field
-  ) {
+  function valueFor(field) {
 
     const column =
       columnMap[field];
