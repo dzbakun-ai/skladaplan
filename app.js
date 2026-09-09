@@ -5357,6 +5357,10 @@ function focusScanner() {
 
 async function completeSelectedAssembly() {
 
+  /*
+    Выбранные группы.
+  */
+
   if (!state.assemblySelectedGroups) {
     state.assemblySelectedGroups =
       new Set();
@@ -5364,7 +5368,9 @@ async function completeSelectedAssembly() {
 
 
   const selectedGroupKeys =
-    [...state.assemblySelectedGroups];
+    [
+      ...state.assemblySelectedGroups
+    ];
 
 
   if (!selectedGroupKeys.length) {
@@ -5380,7 +5386,8 @@ async function completeSelectedAssembly() {
 
 
   /*
-    Получаем актуальные группы.
+    Получаем актуальные группы
+    из текущего локального состояния.
   */
 
   const groups =
@@ -5388,9 +5395,7 @@ async function completeSelectedAssembly() {
 
 
   /*
-    Находим выбранные группы
-    и собираем ID всех физических
-    коробок внутри них.
+    Находим выбранные группы.
   */
 
   const selectedGroups =
@@ -5402,6 +5407,14 @@ async function completeSelectedAssembly() {
     );
 
 
+  /*
+    Собираем ID всех физических
+    коробок выбранных групп.
+
+    ID используется только внутри
+    системы и пользователю НЕ показывается.
+  */
+
   const ids = [];
 
 
@@ -5409,32 +5422,33 @@ async function completeSelectedAssembly() {
     group => {
 
       if (
-        Array.isArray(group.ids)
+        !Array.isArray(group.ids)
       ) {
+        return;
+      }
 
-        group.ids.forEach(
-          id => {
 
-            if (
-              id !== undefined &&
-              id !== null
-            ) {
+      group.ids.forEach(
+        id => {
 
-              ids.push(id);
+          if (
+            id !== undefined &&
+            id !== null
+          ) {
 
-            }
+            ids.push(id);
 
           }
-        );
 
-      }
+        }
+      );
 
     }
   );
 
 
   /*
-    Убираем возможные дубликаты ID.
+    Убираем возможные дубликаты.
   */
 
   const uniqueIds =
@@ -5464,9 +5478,9 @@ async function completeSelectedAssembly() {
   /*
     Дополнительная защита.
 
-    Берём только реальные коробки,
-    которые прямо сейчас находятся
-    в статусе КПодбору.
+    Проверяем локальное состояние:
+    коробка должна действительно
+    находиться в КПодбору.
   */
 
   const validIds =
@@ -5478,6 +5492,7 @@ async function completeSelectedAssembly() {
             box =>
               box.id === id
           );
+
 
         return (
           row &&
@@ -5508,8 +5523,9 @@ async function completeSelectedAssembly() {
 
 
   /*
-    Переводим ВСЕ физические коробки
-    выбранных групп в Скомплектовано.
+    Переводим выбранные физические
+    коробки из КПодбору
+    в Скомплектовано.
   */
 
   const {
@@ -5567,6 +5583,7 @@ async function completeSelectedAssembly() {
       error?.code
     );
 
+
     toast(
       error.message ||
       'Ошибка комплектации',
@@ -5582,7 +5599,9 @@ async function completeSelectedAssembly() {
     Обновляем локальное состояние.
   */
 
-  if (Array.isArray(data)) {
+  if (
+    Array.isArray(data)
+  ) {
 
     data.forEach(
       row => {
@@ -5599,7 +5618,7 @@ async function completeSelectedAssembly() {
 
 
   /*
-    Очищаем выбранные группы.
+    Полностью очищаем выбор групп.
   */
 
   state
@@ -5609,6 +5628,11 @@ async function completeSelectedAssembly() {
 
   render();
 
+
+  /*
+    Количество реально переведённых
+    физических коробок.
+  */
 
   const completedCount =
     Array.isArray(data)
@@ -5622,6 +5646,58 @@ async function completeSelectedAssembly() {
 
 }
 
+function updateAssemblySelectedCount() {
+
+  const element =
+    $('#assemblySelectedCount');
+
+
+  if (!element) {
+    return;
+  }
+
+
+  const selectedGroups =
+    state.assemblySelectedGroups
+      ? state.assemblySelectedGroups
+      : new Set();
+
+
+  const groups =
+    getGroupedPickingBoxes();
+
+
+  const selected =
+    groups.filter(
+      group =>
+        selectedGroups.has(
+          group.key
+        )
+    );
+
+
+  const groupCount =
+    selected.length;
+
+
+  const boxCount =
+    selected.reduce(
+      (
+        total,
+        group
+      ) =>
+        total +
+        (
+          Number(group.count) || 0
+        ),
+      0
+    );
+
+
+  element.textContent =
+    `Выбрано: ${groupCount} групп · ${boxCount} коробок`;
+
+}
 
 /*
   Счётчик ручного выбора.
