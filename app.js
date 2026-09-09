@@ -3415,25 +3415,23 @@ function tools(){
 
   return `
 
-    <div class="grid2">
+    ${excelImportView()}
+
+
+    <div
+      class="grid2"
+      style="margin-top:14px"
+    >
 
       <div class="panel">
 
         <h3>
-          Импорт / экспорт
+          Экспорт
         </h3>
 
         <p class="muted">
-
-          «База» теперь хранится
-          в Supabase.
-
-          Остальные листы пока
-          загружаются из
-          database.json.
-
+          Скачать текущие данные SKLADAPLAN в JSON.
         </p>
-
 
         <button
           class="big-action"
@@ -3452,12 +3450,8 @@ function tools(){
         </h3>
 
         <p class="muted">
-
-          Создаёт локальный JSON-архив
-          текущих данных.
-
+          Создаёт локальный JSON-архив.
         </p>
-
 
         <button
           class="big-action"
@@ -3518,7 +3512,6 @@ function tools(){
 
   `;
 }
-
 
 const views = {
 
