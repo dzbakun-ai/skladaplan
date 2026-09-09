@@ -1648,135 +1648,213 @@ main {
   }
 
 
-  /* ===============================================
-     BOTTOM NAV
-     =============================================== */
+ /* ===============================================
+   BOTTOM NAV
+   =============================================== */
 
-  .mobile-nav {
+.mobile-nav {
 
-    position: fixed;
+  position: fixed;
 
-    left: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 
-    right: 0;
+  height: 74px;
 
-    bottom: 0;
+  display: grid;
 
-    height: 74px;
+  grid-template-columns:
+    repeat(5, minmax(0, 1fr));
 
-    display: grid;
+  align-items: stretch;
 
-    grid-template-columns:
-      repeat(7, minmax(0, 1fr));
+  background:
+    rgba(255,255,255,.96);
 
-    align-items: stretch;
+  border-top:
+    1px solid var(--line);
 
-    background:
-      rgba(255,255,255,.96);
+  backdrop-filter:
+    blur(15px);
 
-    border-top: 1px solid var(--line);
+  -webkit-backdrop-filter:
+    blur(15px);
 
-    backdrop-filter: blur(15px);
+  z-index: 500;
 
-    z-index: 500;
+  padding:
+    5px 6px
+    env(safe-area-inset-bottom);
 
-    padding:
-      5px 4px
-      env(safe-area-inset-bottom);
+}
 
-  }
 
+/* =====================================================
+   MOBILE NAV BUTTON
+   ===================================================== */
 
-  .mobile-nav-btn {
+.mobile-nav-btn {
 
-    position: relative;
+  position: relative;
 
-    border: 0;
+  border: 0;
 
-    background: transparent;
+  background: transparent;
 
-    color: #888;
+  color: #888;
 
-    display: flex;
+  display: flex;
 
-    flex-direction: column;
+  flex-direction: column;
 
-    align-items: center;
+  align-items: center;
 
-    justify-content: center;
+  justify-content: center;
 
-    gap: 3px;
+  gap: 4px;
 
-    min-width: 0;
+  min-width: 0;
 
-    cursor: pointer;
+  min-height: 58px;
 
-  }
+  padding:
+    6px 2px;
 
+  border-radius: 12px;
 
-  .mobile-nav-btn span {
+  cursor: pointer;
 
-    font-size: 18px;
+  -webkit-tap-highlight-color:
+    transparent;
 
-    line-height: 1;
+  transition:
+    background .15s ease,
+    color .15s ease,
+    transform .15s ease;
 
-  }
+}
 
 
-  .mobile-nav-btn small {
+/* =====================================================
+   ICON
+   ===================================================== */
 
-    font-size: 8px;
+.mobile-nav-btn span {
 
-    line-height: 1;
+  width: 26px;
+  height: 26px;
 
-    white-space: nowrap;
+  display: grid;
 
-  }
+  place-items: center;
 
+  font-size: 19px;
 
-  .mobile-nav-btn.active {
+  line-height: 1;
 
-    color: #111;
+}
 
-  }
 
+/* =====================================================
+   LABEL
+   ===================================================== */
 
-  .mobile-nav-btn.active span {
+.mobile-nav-btn small {
 
-    font-weight: 800;
+  max-width: 100%;
 
-  }
+  font-size: 9px;
 
+  line-height: 1;
 
-  .mobile-nav-btn em {
+  font-weight: 600;
 
-    position: absolute;
+  white-space: nowrap;
 
-    top: 5px;
+  overflow: hidden;
 
-    right: 20%;
+  text-overflow: ellipsis;
 
-    min-width: 16px;
+}
 
-    height: 16px;
 
-    padding: 0 4px;
+/* =====================================================
+   ACTIVE
+   ===================================================== */
 
-    border-radius: 999px;
+.mobile-nav-btn.active {
 
-    background: #111;
+  color: #111;
 
-    color: #fff;
+  background:
+    #f3f3f3;
 
-    font-size: 8px;
+}
 
-    font-style: normal;
 
-    display: grid;
+.mobile-nav-btn.active span {
 
-    place-items: center;
+  font-weight: 800;
 
-  }
+}
+
+
+/* =====================================================
+   MORE
+   ===================================================== */
+
+.mobile-more-btn {
+
+  color: #666;
+
+}
+
+
+.mobile-more-btn span {
+
+  font-size: 23px;
+
+  letter-spacing: 1px;
+
+}
+
+
+/* =====================================================
+   BADGE
+   ===================================================== */
+
+.mobile-nav-btn em {
+
+  position: absolute;
+
+  top: 4px;
+  right: 22%;
+
+  min-width: 17px;
+
+  height: 17px;
+
+  padding:
+    0 4px;
+
+  border-radius: 999px;
+
+  background: #111;
+
+  color: #fff;
+
+  font-size: 8px;
+
+  font-weight: 700;
+
+  font-style: normal;
+
+  display: grid;
+
+  place-items: center;
+
+  line-height: 1;
 
 }
 
