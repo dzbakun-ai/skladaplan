@@ -1,4 +1,3 @@
-```javascript
 let DATA = {};
 
 async function loadDatabase() {
@@ -1626,4 +1625,3 @@ async function startApp() {
 }
 
 startApp();
-```
