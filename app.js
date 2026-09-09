@@ -4582,115 +4582,64 @@ function backupDatabase() {
 
 const EXCEL_MAP = {
 
-  barcode: [
+const EXCEL_MAP = {
 
+  barcode: [
     'штрихкод',
     'barcode',
     'баркод',
     'код',
     'штрих код'
-
   ],
 
-
   article: [
-
     'артикул',
     'article',
     'sku'
-
   ],
-
 
   quantity_in_box: [
-
     'колвокоробке',
     'количествовкоробке',
-    'колвокоробке',
-    'quantityinbox',
-    'количество'
-
+    'количество',
+    'quantityinbox'
   ],
 
-
   zone_row: [
-
     'зонаряд',
     'зона',
     'ряд',
     'zonerow',
     'location',
     'место'
-
   ],
 
-
   pallet: [
-
     'поддон',
     'паллета',
     'pallet'
-
   ],
-
 
   status: [
-
     'статус',
     'status'
-
   ],
 
-
   date: [
-
-    'датаразмещения',
     'датаразмещения',
     'дата',
     'date'
-
   ],
-
 
   warehouse: [
-
     'склад',
     'warehouse'
-
   ],
-
-
-  column_9: [
-
-    'столбец9',
-    'column9'
-
-  ],
-
-
-  direction: [
-
-    'направление',
-    'direction'
-
-  ],
-
-
-  pick: [
-
-    'отбор',
-    'отбор',
-    'pick'
-
-  ],
-
 
   worker: [
-
-    'ктоработал',
+    'изменил',
     'ктоработал',
     'worker'
-
   ]
 
 };
@@ -5906,16 +5855,11 @@ async function insertExcelChunk(
   chunk
 ) {
 
-  if (
-    !chunk.length
-  ) {
+  if (!chunk.length) {
 
     return {
-
       imported: 0,
-
       failed: 0
-
     };
 
   }
@@ -5926,18 +5870,12 @@ async function insertExcelChunk(
     не начинаем новую пачку.
   */
 
-  if (
-    state.excelImportCancelled
-  ) {
+  if (state.excelImportCancelled) {
 
     return {
-
       imported: 0,
-
       failed: 0,
-
       cancelled: true
-
     };
 
   }
@@ -5945,7 +5883,21 @@ async function insertExcelChunk(
 
   /*
     Основная попытка:
-    одна большая INSERT-операция.
+    отправляем всю пачку одним INSERT.
+
+    ВАЖНО:
+    convertExcelRow() уже должен возвращать
+    русские названия колонок Supabase:
+
+    Штрихкод
+    Артикул
+    Кол-во в коробке
+    Зона/ряд
+    Поддон
+    Статус
+    ДатаРазмещения
+    Склад
+    Изменил
   */
 
   const {
@@ -5956,32 +5908,62 @@ async function insertExcelChunk(
       .insert(chunk);
 
 
+  /*
+    Если всё прошло успешно.
+  */
+
   if (!error) {
 
     return {
-
-      imported:
-        chunk.length,
-
+      imported: chunk.length,
       failed: 0
-
     };
 
   }
 
 
-  console.warn(
-    `Excel chunk failed (${chunk.length}).`,
+  /*
+    Печатаем ПОЛНУЮ информацию об ошибке
+    в консоль браузера.
+  */
+
+  console.error(
+    '❌ Ошибка INSERT Excel chunk:',
     error
+  );
+
+  console.error(
+    'Message:',
+    error?.message
+  );
+
+  console.error(
+    'Details:',
+    error?.details
+  );
+
+  console.error(
+    'Hint:',
+    error?.hint
+  );
+
+  console.error(
+    'Code:',
+    error?.code
+  );
+
+  console.error(
+    'Chunk:',
+    chunk
   );
 
 
   /*
     Если большая пачка не прошла,
-    не отправляем сразу 1000 строк
-    по одной.
+    делим её пополам.
 
-    Сначала делим пополам.
+    Это позволяет обнаружить отдельные
+    проблемные строки.
   */
 
   if (
@@ -6059,13 +6041,9 @@ async function insertExcelChunk(
 
 
   /*
-    Совсем маленькая проблемная пачка.
+    Маленькая проблемная пачка.
 
-    Теперь действительно проверяем
-    строки по одной.
-
-    Это крайний fallback,
-    а не обычный режим.
+    Теперь проверяем каждую строку отдельно.
   */
 
   let imported =
@@ -6089,6 +6067,10 @@ async function insertExcelChunk(
     }
 
 
+    /*
+      Вставляем одну строку.
+    */
+
     const {
       error: rowError
     } =
@@ -6100,8 +6082,32 @@ async function insertExcelChunk(
     if (rowError) {
 
       console.error(
-        'Excel row import error:',
-        rowError,
+        '❌ Ошибка импорта строки:',
+        rowError
+      );
+
+      console.error(
+        'Message:',
+        rowError?.message
+      );
+
+      console.error(
+        'Details:',
+        rowError?.details
+      );
+
+      console.error(
+        'Hint:',
+        rowError?.hint
+      );
+
+      console.error(
+        'Code:',
+        rowError?.code
+      );
+
+      console.error(
+        'Проблемная строка:',
         row
       );
 
@@ -6116,8 +6122,7 @@ async function insertExcelChunk(
 
 
     /*
-      Обновляем общий прогресс
-      и во время построчного fallback.
+      Обновляем общий прогресс.
     */
 
     state.excelImportProcessed++;
@@ -6142,15 +6147,7 @@ async function insertExcelChunk(
 
 
   /*
-    ВАЖНО:
-
-    Здесь строки уже были учтены
-    в processed.
-
-    Поэтому возвращаем только
-    imported/failed для статистики,
-    но вызывающий код не должен
-    увеличивать processed повторно.
+    Возвращаем результат.
   */
 
   return {
