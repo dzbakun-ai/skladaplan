@@ -4349,6 +4349,135 @@ function getPickingBoxes() {
 
 }
 
+function getGroupedPickingBoxes() {
+
+  const boxes =
+    getPickingBoxes();
+
+  const groups =
+    new Map();
+
+
+  for (const box of boxes) {
+
+    const barcode =
+      normalizeBarcode(
+        box.barcode
+      );
+
+    const article =
+      String(
+        box.article || ''
+      ).trim();
+
+    const zone =
+      String(
+        box.zone_row || ''
+      ).trim();
+
+    const pallet =
+      String(
+        box.pallet || ''
+      ).trim();
+
+    const warehouse =
+      String(
+        box.warehouse || ''
+      ).trim();
+
+
+    /*
+      Одна группа =
+      штрихкод + артикул + зона/ряд +
+      поддон + склад.
+
+      Поэтому одинаковый штрихкод
+      в разных зонах или на разных
+      поддонах НЕ объединяется.
+    */
+
+    const key =
+      [
+        barcode,
+        article,
+        zone,
+        pallet,
+        warehouse
+      ].join('|');
+
+
+    if (!groups.has(key)) {
+
+      groups.set(
+        key,
+        {
+          key: key,
+
+          barcode: barcode,
+
+          article: article,
+
+          zone_row: zone,
+
+          pallet: pallet,
+
+          warehouse: warehouse,
+
+          status:
+            box.status || '',
+
+          count: 0,
+
+          boxes: [],
+
+          ids: []
+
+        }
+      );
+
+    }
+
+
+    const group =
+      groups.get(key);
+
+
+    group.count++;
+
+
+    group.boxes.push(
+      box
+    );
+
+
+    /*
+      ID используется только
+      внутри системы.
+
+      Пользователю его
+      не показываем.
+    */
+
+    if (
+      box.id !== undefined &&
+      box.id !== null
+    ) {
+
+      group.ids.push(
+        box.id
+      );
+
+    }
+
+  }
+
+
+  return [
+    ...groups.values()
+  ];
+
+}
+
 function assemblyView() {
 
   const picking =
@@ -4709,10 +4838,10 @@ function assemblyView() {
 }
 
 
-function pickingRow(row) {
+function pickingRow(group) {
 
   const checked =
-    state.assemblySelectedIds?.has(row.id)
+    state.assemblySelectedGroups?.has(group.key)
       ? 'checked'
       : '';
 
@@ -4720,56 +4849,113 @@ function pickingRow(row) {
 
     <tr>
 
+      <!-- ВЫБОР ГРУППЫ -->
+
       <td
         style="
           width:50px;
           text-align:center;
         "
+        data-label="Выбор"
       >
 
         <input
           type="checkbox"
-          class="assembly-box-checkbox"
-          data-id="${row.id}"
+          class="assembly-group-checkbox"
+          data-group-key="${escapeHtml(
+            encodeURIComponent(group.key)
+          )}"
           ${checked}
         >
 
       </td>
 
 
-      <td>
+      <!-- ШТРИХКОД -->
+
+      <td
+        data-label="Штрихкод"
+      >
 
         <b>
-          ${escapeHtml(row.barcode)}
+          ${escapeHtml(group.barcode)}
         </b>
 
       </td>
 
 
-      <td>
-        ${escapeHtml(row.article)}
+      <!-- АРТИКУЛ -->
+
+      <td
+        data-label="Артикул"
+      >
+
+        ${escapeHtml(group.article)}
+
       </td>
 
 
-      <td>
-        ${escapeHtml(row.zone_row)}
+      <!-- ЗОНА / РЯД -->
+
+      <td
+        data-label="Зона/ряд"
+      >
+
+        ${escapeHtml(group.zone_row)}
+
       </td>
 
 
-      <td>
-        ${escapeHtml(row.pallet)}
+      <!-- ПОДДОН -->
+
+      <td
+        data-label="Поддон"
+      >
+
+        <b>
+          ${escapeHtml(group.pallet)}
+        </b>
+
       </td>
 
 
-      <td>
-        ${escapeHtml(row.warehouse)}
+      <!-- СКЛАД -->
+
+      <td
+        data-label="Склад"
+      >
+
+        ${escapeHtml(group.warehouse)}
+
       </td>
 
 
-      <td>
+      <!-- КОЛИЧЕСТВО КОРОБОК -->
 
-        <span class="sp-status">
-          ${escapeHtml(row.status)}
+      <td
+        data-label="Коробок"
+      >
+
+        <span
+          style="
+            font-weight:700;
+            font-size:14px;
+          "
+        >
+          ${group.count}
+        </span>
+
+      </td>
+
+
+      <!-- СТАТУС -->
+
+      <td
+        data-label="Статус"
+      >
+
+        <span class="status yellow">
+          ${escapeHtml(group.status)}
         </span>
 
       </td>
@@ -4783,15 +4969,23 @@ function pickingRow(row) {
 function setupAssembly() {
 
   /*
-    Отдельное множество для ручного выбора
-    коробок на странице "Сборка".
+    Отдельное множество выбранных ГРУПП
+    на странице "Сборка".
+
+    Внутри группы может быть несколько
+    физических коробок с одинаковым
+    штрихкодом / зоной / поддоном.
   */
 
-  if (!state.assemblySelectedIds) {
-    state.assemblySelectedIds =
+  if (!state.assemblySelectedGroups) {
+    state.assemblySelectedGroups =
       new Set();
   }
 
+
+  /*
+    ТЕКУЩИЙ ПОДДОН
+  */
 
   const pallet =
     $('#currentPallet');
@@ -4826,6 +5020,8 @@ function setupAssembly() {
 
   /*
     SCANNER
+    Сканер продолжает работать
+    с отдельными физическими коробками.
   */
 
   const scanner =
@@ -4835,11 +5031,6 @@ function setupAssembly() {
   scanner?.addEventListener(
     'keydown',
     async event => {
-
-      /*
-        Большинство Bluetooth-сканеров
-        заканчивают скан Enter.
-      */
 
       if (
         event.key === 'Enter'
@@ -4871,9 +5062,8 @@ function setupAssembly() {
     () => {
 
       /*
-        Не возвращаем фокус сразу,
-        чтобы пользователь мог нажать
-        кнопки интерфейса.
+        Фокус специально не возвращаем.
+        Это позволяет пользоваться кнопками.
       */
 
     }
@@ -4881,12 +5071,12 @@ function setupAssembly() {
 
 
   /*
-    РУЧНОЙ ВЫБОР КОРОБОК
+    РУЧНОЙ ВЫБОР ГРУПП
   */
 
   document
     .querySelectorAll(
-      '.assembly-box-checkbox'
+      '.assembly-group-checkbox'
     )
     .forEach(
       checkbox => {
@@ -4895,12 +5085,37 @@ function setupAssembly() {
           'change',
           event => {
 
-            const id =
-              Number(
-                event.target.dataset.id
+            const encodedKey =
+              event.target.dataset.groupKey;
+
+
+            if (!encodedKey) {
+              return;
+            }
+
+
+            let groupKey = '';
+
+            try {
+
+              groupKey =
+                decodeURIComponent(
+                  encodedKey
+                );
+
+            } catch (error) {
+
+              console.error(
+                'Ошибка чтения ключа группы:',
+                error
               );
 
-            if (!Number.isFinite(id)) {
+              return;
+
+            }
+
+
+            if (!groupKey) {
               return;
             }
 
@@ -4910,14 +5125,14 @@ function setupAssembly() {
             ) {
 
               state
-                .assemblySelectedIds
-                .add(id);
+                .assemblySelectedGroups
+                .add(groupKey);
 
             } else {
 
               state
-                .assemblySelectedIds
-                .delete(id);
+                .assemblySelectedGroups
+                .delete(groupKey);
 
             }
 
@@ -4932,7 +5147,7 @@ function setupAssembly() {
 
 
   /*
-    ВЫБРАТЬ ВСЕ
+    ВЫБРАТЬ ВСЕ ГРУППЫ
   */
 
   const selectAll =
@@ -4943,20 +5158,20 @@ function setupAssembly() {
     $('#selectAllAssemblyCheckbox');
 
 
-  const selectAllBoxes =
+  const selectAllGroups =
     () => {
 
-      const rows =
-        getPickingBoxes()
+      const groups =
+        getGroupedPickingBoxes()
           .slice(0, 300);
 
 
-      rows.forEach(
-        row => {
+      groups.forEach(
+        group => {
 
           state
-            .assemblySelectedIds
-            .add(row.id);
+            .assemblySelectedGroups
+            .add(group.key);
 
         }
       );
@@ -4964,7 +5179,7 @@ function setupAssembly() {
 
       document
         .querySelectorAll(
-          '.assembly-box-checkbox'
+          '.assembly-group-checkbox'
         )
         .forEach(
           checkbox => {
@@ -4977,8 +5192,10 @@ function setupAssembly() {
 
 
       if (selectAllCheckbox) {
+
         selectAllCheckbox.checked =
           true;
+
       }
 
 
@@ -4987,17 +5204,21 @@ function setupAssembly() {
     };
 
 
-  const clearAllBoxes =
+  /*
+    СНЯТЬ ВЫБОР СО ВСЕХ ГРУПП
+  */
+
+  const clearAllGroups =
     () => {
 
       state
-        .assemblySelectedIds
+        .assemblySelectedGroups
         .clear();
 
 
       document
         .querySelectorAll(
-          '.assembly-box-checkbox'
+          '.assembly-group-checkbox'
         )
         .forEach(
           checkbox => {
@@ -5010,8 +5231,10 @@ function setupAssembly() {
 
 
       if (selectAllCheckbox) {
+
         selectAllCheckbox.checked =
           false;
+
       }
 
 
@@ -5020,14 +5243,19 @@ function setupAssembly() {
     };
 
 
+  /*
+    КНОПКА "ВЫБРАТЬ ВСЕ"
+  */
+
   selectAll?.addEventListener(
     'click',
     () => {
 
       const checkboxes =
         document.querySelectorAll(
-          '.assembly-box-checkbox'
+          '.assembly-group-checkbox'
         );
+
 
       const allChecked =
         checkboxes.length > 0 &&
@@ -5038,23 +5266,13 @@ function setupAssembly() {
 
 
       if (allChecked) {
-        clearAllBoxes();
+
+        clearAllGroups();
+
       } else {
-        selectAllBoxes();
-      }
 
-    }
-  );
+        selectAllGroups();
 
-
-  selectAllCheckbox?.addEventListener(
-    'change',
-    event => {
-
-      if (event.target.checked) {
-        selectAllBoxes();
-      } else {
-        clearAllBoxes();
       }
 
     }
@@ -5062,7 +5280,31 @@ function setupAssembly() {
 
 
   /*
-    СКОМПЛЕКТОВАТЬ ВЫБРАННЫЕ
+    ГАЛОЧКА "ВЫБРАТЬ ВСЕ"
+  */
+
+  selectAllCheckbox?.addEventListener(
+    'change',
+    event => {
+
+      if (
+        event.target.checked
+      ) {
+
+        selectAllGroups();
+
+      } else {
+
+        clearAllGroups();
+
+      }
+
+    }
+  );
+
+
+  /*
+    СКОМПЛЕКТОВАТЬ ВЫБРАННЫЕ ГРУППЫ
   */
 
   $('#completeSelectedAssembly')
@@ -5076,11 +5318,15 @@ function setupAssembly() {
     );
 
 
+  /*
+    ОБНОВЛЯЕМ СЧЁТЧИК
+  */
+
   updateAssemblySelectedCount();
 
 
   /*
-    Фокус сканера
+    ФОКУС СКАНЕРА
   */
 
   setTimeout(
@@ -5111,20 +5357,20 @@ function focusScanner() {
 
 async function completeSelectedAssembly() {
 
-  if (!state.assemblySelectedIds) {
-    state.assemblySelectedIds =
+  if (!state.assemblySelectedGroups) {
+    state.assemblySelectedGroups =
       new Set();
   }
 
 
-  const ids =
-    [...state.assemblySelectedIds];
+  const selectedGroupKeys =
+    [...state.assemblySelectedGroups];
 
 
-  if (!ids.length) {
+  if (!selectedGroupKeys.length) {
 
     toast(
-      'Выберите хотя бы одну коробку',
+      'Выберите хотя бы одну группу коробок',
       'error'
     );
 
@@ -5134,13 +5380,97 @@ async function completeSelectedAssembly() {
 
 
   /*
-    Дополнительная защита:
-    берём только реальные коробки,
-    которые сейчас находятся в К подбору.
+    Получаем актуальные группы.
+  */
+
+  const groups =
+    getGroupedPickingBoxes();
+
+
+  /*
+    Находим выбранные группы
+    и собираем ID всех физических
+    коробок внутри них.
+  */
+
+  const selectedGroups =
+    groups.filter(
+      group =>
+        state
+          .assemblySelectedGroups
+          .has(group.key)
+    );
+
+
+  const ids = [];
+
+
+  selectedGroups.forEach(
+    group => {
+
+      if (
+        Array.isArray(group.ids)
+      ) {
+
+        group.ids.forEach(
+          id => {
+
+            if (
+              id !== undefined &&
+              id !== null
+            ) {
+
+              ids.push(id);
+
+            }
+
+          }
+        );
+
+      }
+
+    }
+  );
+
+
+  /*
+    Убираем возможные дубликаты ID.
+  */
+
+  const uniqueIds =
+    [
+      ...new Set(ids)
+    ];
+
+
+  if (!uniqueIds.length) {
+
+    state
+      .assemblySelectedGroups
+      .clear();
+
+    render();
+
+    toast(
+      'В выбранных группах нет коробок',
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  /*
+    Дополнительная защита.
+
+    Берём только реальные коробки,
+    которые прямо сейчас находятся
+    в статусе КПодбору.
   */
 
   const validIds =
-    ids.filter(
+    uniqueIds.filter(
       id => {
 
         const row =
@@ -5162,7 +5492,7 @@ async function completeSelectedAssembly() {
   if (!validIds.length) {
 
     state
-      .assemblySelectedIds
+      .assemblySelectedGroups
       .clear();
 
     render();
@@ -5176,6 +5506,11 @@ async function completeSelectedAssembly() {
 
   }
 
+
+  /*
+    Переводим ВСЕ физические коробки
+    выбранных групп в Скомплектовано.
+  */
 
   const {
     data,
@@ -5264,11 +5599,11 @@ async function completeSelectedAssembly() {
 
 
   /*
-    Очищаем ручной выбор.
+    Очищаем выбранные группы.
   */
 
   state
-    .assemblySelectedIds
+    .assemblySelectedGroups
     .clear();
 
 
@@ -5284,6 +5619,130 @@ async function completeSelectedAssembly() {
   toast(
     `Скомплектовано коробок: ${completedCount}`
   );
+
+}
+
+
+/*
+  Счётчик ручного выбора.
+
+  Показываем одновременно:
+  - количество выбранных групп;
+  - количество физических коробок.
+*/
+
+function updateAssemblySelectedCount() {
+
+  const element =
+    $('#assemblySelectedCount');
+
+
+  if (!element) {
+    return;
+  }
+
+
+  const selectedGroups =
+    state.assemblySelectedGroups
+      ? state.assemblySelectedGroups
+      : new Set();
+
+
+  const groups =
+    getGroupedPickingBoxes();
+
+
+  const selected =
+    groups.filter(
+      group =>
+        selectedGroups.has(
+          group.key
+        )
+    );
+
+
+  const groupCount =
+    selected.length;
+
+
+  const boxCount =
+    selected.reduce(
+      (
+        total,
+        group
+      ) =>
+        total +
+        (
+          Number(group.count) || 0
+        ),
+      0
+    );
+
+
+  element.textContent =
+    `Выбрано: ${groupCount} групп · ${boxCount} коробок`;
+
+}
+
+
+/*
+  Счётчик ручного выбора.
+
+  Показываем одновременно:
+  - количество выбранных групп;
+  - количество физических коробок.
+*/
+
+function updateAssemblySelectedCount() {
+
+  const element =
+    $('#assemblySelectedCount');
+
+
+  if (!element) {
+    return;
+  }
+
+
+  const selectedGroups =
+    state.assemblySelectedGroups
+      ? state.assemblySelectedGroups
+      : new Set();
+
+
+  const groups =
+    getGroupedPickingBoxes();
+
+
+  const selected =
+    groups.filter(
+      group =>
+        selectedGroups.has(
+          group.key
+        )
+    );
+
+
+  const groupCount =
+    selected.length;
+
+
+  const boxCount =
+    selected.reduce(
+      (
+        total,
+        group
+      ) =>
+        total +
+        (
+          Number(group.count) || 0
+        ),
+      0
+    );
+
+
+  element.textContent =
+    `Выбрано: ${groupCount} групп · ${boxCount} коробок`;
 
 }
 
