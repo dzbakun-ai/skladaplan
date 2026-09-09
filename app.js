@@ -4354,14 +4354,12 @@ function assemblyView() {
   const picking =
     getPickingBoxes();
 
-
   const collected =
     state.boxes.filter(
       row =>
         row.status ===
         STATUSES.COLLECTED
     ).length;
-
 
   return `
 
@@ -4403,7 +4401,6 @@ function assemblyView() {
           Текущий поддон
         </b>
 
-
         <div
           class="sp-toolbar"
           style="margin-top:10px"
@@ -4417,7 +4414,6 @@ function assemblyView() {
             )}"
           >
 
-
           <button
             class="sp-btn secondary"
             id="clearPallet"
@@ -4426,7 +4422,6 @@ function assemblyView() {
           </button>
 
         </div>
-
 
         <div class="sp-muted">
 
@@ -4462,6 +4457,45 @@ function assemblyView() {
       </div>
 
 
+      <!-- ПАНЕЛЬ РУЧНОЙ КОМПЛЕКТАЦИИ -->
+
+      <div
+        class="sp-toolbar"
+        style="
+          margin: 15px 0;
+          display:flex;
+          gap:10px;
+          align-items:center;
+          flex-wrap:wrap;
+        "
+      >
+
+        <button
+          class="sp-btn"
+          id="selectAllAssembly"
+          type="button"
+        >
+          ☑ Выбрать все
+        </button>
+
+        <button
+          class="sp-btn"
+          id="completeSelectedAssembly"
+          type="button"
+        >
+          ✓ Скомплектовать выбранные
+        </button>
+
+        <span
+          id="assemblySelectedCount"
+          class="sp-muted"
+        >
+          Выбрано: 0
+        </span>
+
+      </div>
+
+
       <div class="sp-table-wrap">
 
         <table class="sp-table">
@@ -4469,6 +4503,14 @@ function assemblyView() {
           <thead>
 
             <tr>
+
+              <th style="width:50px; text-align:center;">
+                <input
+                  type="checkbox"
+                  id="selectAllAssemblyCheckbox"
+                  title="Выбрать все"
+                >
+              </th>
 
               <th>Штрихкод</th>
               <th>Артикул</th>
@@ -4494,7 +4536,7 @@ function assemblyView() {
 
                   <tr>
 
-                    <td colspan="6">
+                    <td colspan="7">
 
                       <div class="sp-empty">
                         В подборе пока ничего нет
@@ -4522,31 +4564,60 @@ function assemblyView() {
 
 function pickingRow(row) {
 
+  const checked =
+    state.assemblySelectedIds?.has(row.id)
+      ? 'checked'
+      : '';
+
   return `
 
     <tr>
 
+      <td
+        style="
+          width:50px;
+          text-align:center;
+        "
+      >
+
+        <input
+          type="checkbox"
+          class="assembly-box-checkbox"
+          data-id="${row.id}"
+          ${checked}
+        >
+
+      </td>
+
+
       <td>
+
         <b>
           ${escapeHtml(row.barcode)}
         </b>
+
       </td>
+
 
       <td>
         ${escapeHtml(row.article)}
       </td>
 
+
       <td>
         ${escapeHtml(row.zone_row)}
       </td>
+
 
       <td>
         ${escapeHtml(row.pallet)}
       </td>
 
+
       <td>
         ${escapeHtml(row.warehouse)}
       </td>
+
 
       <td>
 
@@ -4562,8 +4633,18 @@ function pickingRow(row) {
 
 }
 
-
 function setupAssembly() {
+
+  /*
+    Отдельное множество для ручного выбора
+    коробок на странице "Сборка".
+  */
+
+  if (!state.assemblySelectedIds) {
+    state.assemblySelectedIds =
+      new Set();
+  }
+
 
   const pallet =
     $('#currentPallet');
@@ -4595,6 +4676,10 @@ function setupAssembly() {
       }
     );
 
+
+  /*
+    SCANNER
+  */
 
   const scanner =
     $('#scannerInput');
@@ -4648,13 +4733,215 @@ function setupAssembly() {
   );
 
 
+  /*
+    РУЧНОЙ ВЫБОР КОРОБОК
+  */
+
+  document
+    .querySelectorAll(
+      '.assembly-box-checkbox'
+    )
+    .forEach(
+      checkbox => {
+
+        checkbox.addEventListener(
+          'change',
+          event => {
+
+            const id =
+              Number(
+                event.target.dataset.id
+              );
+
+            if (!Number.isFinite(id)) {
+              return;
+            }
+
+
+            if (
+              event.target.checked
+            ) {
+
+              state
+                .assemblySelectedIds
+                .add(id);
+
+            } else {
+
+              state
+                .assemblySelectedIds
+                .delete(id);
+
+            }
+
+
+            updateAssemblySelectedCount();
+
+          }
+        );
+
+      }
+    );
+
+
+  /*
+    ВЫБРАТЬ ВСЕ
+  */
+
+  const selectAll =
+    $('#selectAllAssembly');
+
+
+  const selectAllCheckbox =
+    $('#selectAllAssemblyCheckbox');
+
+
+  const selectAllBoxes =
+    () => {
+
+      const rows =
+        getPickingBoxes()
+          .slice(0, 300);
+
+
+      rows.forEach(
+        row => {
+
+          state
+            .assemblySelectedIds
+            .add(row.id);
+
+        }
+      );
+
+
+      document
+        .querySelectorAll(
+          '.assembly-box-checkbox'
+        )
+        .forEach(
+          checkbox => {
+
+            checkbox.checked =
+              true;
+
+          }
+        );
+
+
+      if (selectAllCheckbox) {
+        selectAllCheckbox.checked =
+          true;
+      }
+
+
+      updateAssemblySelectedCount();
+
+    };
+
+
+  const clearAllBoxes =
+    () => {
+
+      state
+        .assemblySelectedIds
+        .clear();
+
+
+      document
+        .querySelectorAll(
+          '.assembly-box-checkbox'
+        )
+        .forEach(
+          checkbox => {
+
+            checkbox.checked =
+              false;
+
+          }
+        );
+
+
+      if (selectAllCheckbox) {
+        selectAllCheckbox.checked =
+          false;
+      }
+
+
+      updateAssemblySelectedCount();
+
+    };
+
+
+  selectAll?.addEventListener(
+    'click',
+    () => {
+
+      const checkboxes =
+        document.querySelectorAll(
+          '.assembly-box-checkbox'
+        );
+
+      const allChecked =
+        checkboxes.length > 0 &&
+        [...checkboxes].every(
+          checkbox =>
+            checkbox.checked
+        );
+
+
+      if (allChecked) {
+        clearAllBoxes();
+      } else {
+        selectAllBoxes();
+      }
+
+    }
+  );
+
+
+  selectAllCheckbox?.addEventListener(
+    'change',
+    event => {
+
+      if (event.target.checked) {
+        selectAllBoxes();
+      } else {
+        clearAllBoxes();
+      }
+
+    }
+  );
+
+
+  /*
+    СКОМПЛЕКТОВАТЬ ВЫБРАННЫЕ
+  */
+
+  $('#completeSelectedAssembly')
+    ?.addEventListener(
+      'click',
+      async () => {
+
+        await completeSelectedAssembly();
+
+      }
+    );
+
+
+  updateAssemblySelectedCount();
+
+
+  /*
+    Фокус сканера
+  */
+
   setTimeout(
     focusScanner,
     100
   );
 
 }
-
 
 function focusScanner() {
 
@@ -4675,6 +4962,205 @@ function focusScanner() {
 
 }
 
+async function completeSelectedAssembly() {
+
+  if (!state.assemblySelectedIds) {
+    state.assemblySelectedIds =
+      new Set();
+  }
+
+
+  const ids =
+    [...state.assemblySelectedIds];
+
+
+  if (!ids.length) {
+
+    toast(
+      'Выберите хотя бы одну коробку',
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  /*
+    Дополнительная защита:
+    берём только реальные коробки,
+    которые сейчас находятся в К подбору.
+  */
+
+  const validIds =
+    ids.filter(
+      id => {
+
+        const row =
+          state.boxes.find(
+            box =>
+              box.id === id
+          );
+
+        return (
+          row &&
+          row.status ===
+            STATUSES.PICK
+        );
+
+      }
+    );
+
+
+  if (!validIds.length) {
+
+    state
+      .assemblySelectedIds
+      .clear();
+
+    render();
+
+    toast(
+      'Выбранные коробки уже не находятся в подборе',
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+      .from('boxes')
+      .update({
+
+        "Статус":
+          STATUSES.COLLECTED,
+
+        "Изменил":
+          state.user?.email || null
+
+      })
+      .in(
+        'id',
+        validIds
+      )
+      .eq(
+        'Статус',
+        STATUSES.PICK
+      )
+      .select(
+        BOX_SELECT
+      );
+
+
+  if (error) {
+
+    console.error(
+      'Ошибка ручной комплектации:',
+      error
+    );
+
+    console.error(
+      'Message:',
+      error?.message
+    );
+
+    console.error(
+      'Details:',
+      error?.details
+    );
+
+    console.error(
+      'Hint:',
+      error?.hint
+    );
+
+    console.error(
+      'Code:',
+      error?.code
+    );
+
+    toast(
+      error.message ||
+      'Ошибка комплектации',
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  /*
+    Обновляем локальное состояние.
+  */
+
+  if (Array.isArray(data)) {
+
+    data.forEach(
+      row => {
+
+        updateLocalBox(
+          row.id,
+          row
+        );
+
+      }
+    );
+
+  }
+
+
+  /*
+    Очищаем ручной выбор.
+  */
+
+  state
+    .assemblySelectedIds
+    .clear();
+
+
+  render();
+
+
+  const completedCount =
+    Array.isArray(data)
+      ? data.length
+      : validIds.length;
+
+
+  toast(
+    `Скомплектовано коробок: ${completedCount}`
+  );
+
+}
+
+function updateAssemblySelectedCount() {
+
+  const element =
+    $('#assemblySelectedCount');
+
+
+  if (!element) {
+    return;
+  }
+
+
+  const count =
+    state.assemblySelectedIds
+      ? state.assemblySelectedIds.size
+      : 0;
+
+
+  element.textContent =
+    `Выбрано: ${count}`;
+
+}
 
 async function processScan(
   barcode
