@@ -6,198 +6,418 @@ const supabaseClient = window.supabase.createClient(
   SUPABASE_KEY
 );
 
-let DATA={};
+let DATA = {};
+let BOX_IDS = [];
 
 async function loadDatabase(){
   try {
-    const r = await fetch('database.json', { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const r = await fetch('database.json', {
+      cache: 'no-store'
+    });
+
+    if (!r.ok) {
+      throw new Error('HTTP ' + r.status);
+    }
+
     DATA = await r.json();
+
+    const {
+      data,
+      error
+    } = await supabaseClient
+      .from('boxes')
+      .select('*')
+      .order('id', {
+        ascending: true
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    BOX_IDS = data.map(row => row.id);
+
+    DATA['База'] = [
+      [
+        'Штрихкод',
+        'Артикул',
+        'Кол-во в коробке',
+        'Зона/Ряд',
+        'Поддон',
+        'Статус',
+        'Дата',
+        'Склад',
+        'Столбец 9',
+        'Направление',
+        'Отбор ✔️',
+        'Кто работал'
+      ],
+
+      ...data.map(row => [
+        row.barcode ?? '',
+        row.article ?? '',
+        row.quantity_in_box ?? '',
+        row.zone_row ?? '',
+        row.pallet ?? '',
+        row.status ?? '',
+        row.date ?? '',
+        row.warehouse ?? '',
+        row.column_9 ?? '',
+        row.direction ?? '',
+        row.pick ? 'ИСТИНА' : 'ЛОЖЬ',
+        row.worker ?? ''
+      ])
+    ];
+
+    console.log(
+      'SKLADAPLAN: База загружена из Supabase:',
+      data.length,
+      'коробок'
+    );
+
     return true;
+
   } catch (err) {
-    console.warn('Не удалось автоматически загрузить database.json:', err);
-    return false;
+
+    console.error(
+      'Ошибка подключения к Supabase:',
+      err
+    );
+
+    try {
+
+      const r = await fetch(
+        'database.json',
+        {
+          cache: 'no-store'
+        }
+      );
+
+      if (!r.ok) {
+        throw new Error('HTTP ' + r.status);
+      }
+
+      DATA = await r.json();
+      BOX_IDS = [];
+
+      console.warn(
+        'Supabase недоступен. Используется database.json.'
+      );
+
+      return true;
+
+    } catch (fallbackError) {
+
+      console.error(
+        'Не удалось загрузить database.json:',
+        fallbackError
+      );
+
+      return false;
+    }
   }
 }
+
 
 const state = {
   page: 'dashboard',
   editingRow: null
 };
 
+
 const pages = {
-  dashboard: ['Главная', 'Главный экран склада'],
-  base: ['База', 'Все коробки и остатки'],
-  assembly: ['Сборка', 'Заказы к комплектации'],
-  received: ['Принято', 'Поступления на склад'],
-  collected: ['Собрано', 'Скомплектованные коробки'],
-  shipped: ['Убыло', 'История отгрузок'],
-  tools: ['Инструменты', 'Сервисные операции']
+  dashboard: [
+    'Главная',
+    'Главный экран склада'
+  ],
+
+  base: [
+    'База',
+    'Все коробки и остатки'
+  ],
+
+  assembly: [
+    'Сборка',
+    'Заказы к комплектации'
+  ],
+
+  received: [
+    'Принято',
+    'Поступления на склад'
+  ],
+
+  collected: [
+    'Собрано',
+    'Скомплектованные коробки'
+  ],
+
+  shipped: [
+    'Убыло',
+    'История отгрузок'
+  ],
+
+  tools: [
+    'Инструменты',
+    'Сервисные операции'
+  ]
 };
 
-const $ = s => document.querySelector(s);
 
-const esc = v =>
-  String(v ?? '').replace(
+const $ = selector =>
+  document.querySelector(selector);
+
+
+const esc = value =>
+  String(value ?? '').replace(
     /[&<>"']/g,
-    m => ({
+    char => ({
       '&': '&amp;',
       '<': '&lt;',
       '>': '&gt;',
       '"': '&quot;',
       "'": '&#39;'
-    }[m])
+    }[char])
   );
 
-function rows(sheet) {
+
+function rows(sheet){
   return DATA[sheet] || [];
 }
 
-function headerRows(sheet) {
-  const r = rows(sheet);
-  return r.length ? r[0].map(x => x ?? '') : [];
+
+function headerRows(sheet){
+  const data = rows(sheet);
+
+  return data.length
+    ? data[0].map(x => x ?? '')
+    : [];
 }
 
-function objects(sheet) {
-  const r = rows(sheet);
 
-  if (!r.length) return [];
+function objects(sheet){
 
-  const h = r[0];
+  const data = rows(sheet);
 
-  return r
+  if (!data.length) {
+    return [];
+  }
+
+  const headers = data[0];
+
+  return data
     .slice(1)
-    .filter(x =>
-      x.some(v => v !== null && v !== '' && v !== undefined)
+    .filter(row =>
+      row.some(
+        value =>
+          value !== null &&
+          value !== '' &&
+          value !== undefined
+      )
     )
-    .map((x, rowIndex) => ({
-      __rowIndex: rowIndex + 1,
+    .map((row, index) => ({
+      __rowIndex: index + 1,
+
       ...Object.fromEntries(
-        h.map((k, i) => [
-          k || `col_${i + 1}`,
-          x[i] ?? ''
-        ])
+        headers.map(
+          (key, i) => [
+            key || `col_${i + 1}`,
+            row[i] ?? ''
+          ]
+        )
       )
     }));
 }
 
-function count(sheet) {
+
+function count(sheet){
   return objects(sheet).length;
 }
 
-function findVal(sheet, key, val) {
-  return objects(sheet).filter(o =>
-    String(o[key] ?? '')
-      .toLowerCase()
-      .includes(String(val).toLowerCase())
-  );
-}
 
-function fmt(v) {
-  if (v === null || v === undefined) return '';
+function fmt(value){
 
   if (
-    typeof v === 'string' &&
-    /^\d{4}-\d\d-\d\d/.test(v)
+    value === null ||
+    value === undefined
   ) {
-    return v.slice(0, 10);
+    return '';
   }
 
-  return typeof v === 'number'
-    ? v.toLocaleString('ru-RU')
-    : String(v);
-}
-
-function status(v) {
-  let c = '';
-
-  if (String(v).includes('Скомплект')) c = 'green';
   if (
-    String(v).includes('Взять') ||
-    String(v).includes('КПодбору')
-  ) c = 'yellow';
-  if (String(v).includes('Отгруж')) c = 'red';
+    typeof value === 'string' &&
+    /^\d{4}-\d\d-\d\d/.test(value)
+  ) {
+    return value.slice(0, 10);
+  }
 
-  return `<span class="status ${c}">${esc(v)}</span>`;
+  if (typeof value === 'number') {
+    return value.toLocaleString('ru-RU');
+  }
+
+  return String(value);
 }
 
-/* =========================================================
-   ОБЫЧНАЯ ТАБЛИЦА
-========================================================= */
 
-function table(sheet, limit = 500) {
+function status(value){
+
+  let className = '';
+
+  if (
+    String(value).includes('Скомплект')
+  ) {
+    className = 'green';
+  }
+
+  if (
+    String(value).includes('Взять') ||
+    String(value).includes('КПодбору')
+  ) {
+    className = 'yellow';
+  }
+
+  if (
+    String(value).includes('Отгруж')
+  ) {
+    className = 'red';
+  }
+
+  return `
+    <span class="status ${className}">
+      ${esc(value)}
+    </span>
+  `;
+}
+
+
+function table(sheet, limit = 500){
+
   const data = rows(sheet);
 
   if (!data.length) {
-    return '<div class="empty">Нет данных</div>';
+    return `
+      <div class="empty">
+        Нет данных
+      </div>
+    `;
   }
 
-  const h = data[0];
+  const headers = data[0];
 
   const body = data
     .slice(1)
-    .filter(r =>
-      r.some(v => v !== null && v !== '' && v !== undefined)
+    .filter(row =>
+      row.some(
+        value =>
+          value !== null &&
+          value !== '' &&
+          value !== undefined
+      )
     )
     .slice(0, limit);
 
   return `
     <div class="table-wrap">
+
       <table class="data-table">
+
         <thead>
+
           <tr>
-            ${h.map(x => `<th>${esc(x ?? '')}</th>`).join('')}
+            ${headers
+              .map(
+                header =>
+                  `<th>${esc(header ?? '')}</th>`
+              )
+              .join('')
+            }
           </tr>
+
         </thead>
 
         <tbody>
-          ${body.map(r => `
+
+          ${body.map(row => `
+
             <tr>
-              ${h.map((label, i) => `
-                <td data-label="${esc(label ?? '')}">
-                  ${
-                    i === 5 && sheet !== 'Сборка'
-                      ? status(r[i])
-                      : esc(fmt(r[i]))
-                  }
-                </td>
-              `).join('')}
+
+              ${headers
+                .map(
+                  (header, i) => `
+
+                    <td data-label="${esc(header ?? '')}">
+
+                      ${
+                        i === 5 &&
+                        sheet !== 'Сборка'
+                          ? status(row[i])
+                          : esc(fmt(row[i]))
+                      }
+
+                    </td>
+
+                  `
+                )
+                .join('')
+              }
+
             </tr>
+
           `).join('')}
+
         </tbody>
+
       </table>
+
     </div>
   `;
 }
 
-/* =========================================================
-   РЕДАКТИРУЕМАЯ БАЗА
-========================================================= */
 
-function baseView() {
+function baseView(){
+
   const data = rows('База');
 
   if (!data.length) {
+
     return `
       <div class="panel">
-        <div class="empty">Лист «База» отсутствует</div>
+
+        <div class="empty">
+          Лист «База» отсутствует
+        </div>
+
       </div>
     `;
   }
 
-  const h = data[0];
+  const headers = data[0];
 
   const body = data
     .slice(1)
-    .map((r, index) => ({ r, index }))
-    .filter(({ r }) =>
-      r.some(v => v !== null && v !== '' && v !== undefined)
+    .map(
+      (row, index) => ({
+        row,
+        index
+      })
+    )
+    .filter(
+      ({row}) =>
+        row.some(
+          value =>
+            value !== null &&
+            value !== '' &&
+            value !== undefined
+        )
     );
 
   return `
+
     <div class="panel">
 
-      <div class="toolbar" style="gap:8px;flex-wrap:wrap">
+      <div
+        class="toolbar"
+        style="gap:8px;flex-wrap:wrap"
+      >
 
         <input
           id="search"
@@ -205,11 +425,18 @@ function baseView() {
           placeholder="Поиск штрихкода, артикула, зоны, поддона…"
         >
 
-        <span class="muted" style="padding:10px 0">
-          ${count('База').toLocaleString('ru-RU')} коробок
+        <span
+          class="muted"
+          style="padding:10px 0"
+        >
+          ${count('База').toLocaleString('ru-RU')}
+          коробок
         </span>
 
-        <button class="primary" id="addBoxBtn">
+        <button
+          class="primary"
+          id="addBoxBtn"
+        >
           ＋ Добавить коробку
         </button>
 
@@ -219,7 +446,7 @@ function baseView() {
         id="baseTable"
         style="margin-top:12px"
       >
-        ${baseTable(body, h)}
+        ${baseTable(body, headers)}
       </div>
 
     </div>
@@ -228,102 +455,164 @@ function baseView() {
   `;
 }
 
-function baseTable(body, h) {
+
+function baseTable(body, headers){
+
   return `
+
     <div class="table-wrap">
+
       <table class="data-table">
 
         <thead>
+
           <tr>
-            ${h.map(x => `<th>${esc(x ?? '')}</th>`).join('')}
-            <th>Действия</th>
+
+            ${headers
+              .map(
+                header =>
+                  `<th>${esc(header ?? '')}</th>`
+              )
+              .join('')
+            }
+
+            <th>
+              Действия
+            </th>
+
           </tr>
+
         </thead>
 
         <tbody>
 
-          ${body.map(({ r, index }) => `
-            <tr>
+          ${body.map(
+            ({row, index}) => `
 
-              ${h.map((label, i) => `
-                <td data-label="${esc(label ?? '')}">
-                  ${
-                    i === 5
-                      ? status(r[i])
-                      : esc(fmt(r[i]))
-                  }
+              <tr>
+
+                ${headers
+                  .map(
+                    (header, i) => `
+
+                      <td
+                        data-label="${esc(header ?? '')}"
+                      >
+
+                        ${
+                          i === 5
+                            ? status(row[i])
+                            : esc(fmt(row[i]))
+                        }
+
+                      </td>
+
+                    `
+                  )
+                  .join('')
+                }
+
+                <td data-label="Действия">
+
+                  <div
+                    style="
+                      display:flex;
+                      gap:6px;
+                      flex-wrap:wrap
+                    "
+                  >
+
+                    <button
+                      class="ghost edit-box"
+                      data-row="${index}"
+                      style="padding:7px 10px"
+                    >
+                      ✏️
+                    </button>
+
+                    <button
+                      class="ghost delete-box"
+                      data-row="${index}"
+                      style="padding:7px 10px"
+                    >
+                      🗑️
+                    </button>
+
+                  </div>
+
                 </td>
-              `).join('')}
 
-              <td data-label="Действия">
-                <div style="display:flex;gap:6px;flex-wrap:wrap">
+              </tr>
 
-                  <button
-                    class="ghost edit-box"
-                    data-row="${index}"
-                    style="padding:7px 10px"
-                  >
-                    ✏️
-                  </button>
-
-                  <button
-                    class="ghost delete-box"
-                    data-row="${index}"
-                    style="padding:7px 10px"
-                  >
-                    🗑️
-                  </button>
-
-                </div>
-              </td>
-
-            </tr>
-          `).join('')}
+            `
+          ).join('')}
 
         </tbody>
 
       </table>
+
     </div>
   `;
 }
 
-function boxModal() {
-  const h = headerRows('База');
 
-  const row =
-    state.editingRow !== null
-      ? rows('База')[state.editingRow + 1] || []
-      : [];
+function boxModal(){
 
-  const fields = h.map((label, i) => {
-    const value = row[i] ?? '';
+  const headers = headerRows('База');
 
-    return `
-      <label style="display:block;margin-bottom:12px">
+  let row = [];
 
-        <span
-          style="
-            display:block;
-            font-size:11px;
-            font-weight:700;
-            margin-bottom:5px
-          "
-        >
-          ${esc(label)}
-        </span>
+  if (state.editingRow !== null) {
 
-        <input
-          class="box-field"
-          data-index="${i}"
-          value="${esc(value)}"
-          autocomplete="off"
-        >
+    row =
+      rows('База')[
+        state.editingRow + 1
+      ] || [];
+  }
 
-      </label>
-    `;
-  }).join('');
+  const fields = headers
+    .map(
+      (header, i) => {
+
+        const value =
+          row[i] ?? '';
+
+        return `
+
+          <label
+            style="
+              display:block;
+              margin-bottom:12px
+            "
+          >
+
+            <span
+              style="
+                display:block;
+                font-size:11px;
+                font-weight:700;
+                margin-bottom:5px
+              "
+            >
+              ${esc(header)}
+            </span>
+
+            <input
+              class="box-field"
+              data-index="${i}"
+              value="${esc(value)}"
+              autocomplete="off"
+            >
+
+          </label>
+
+        `;
+      }
+    )
+    .join('');
 
   return `
+
     <div
       id="boxModal"
       class="scan-modal"
@@ -331,7 +620,11 @@ function boxModal() {
 
       <div
         class="scan-box"
-        style="max-width:620px;max-height:90vh;overflow:auto"
+        style="
+          max-width:620px;
+          max-height:90vh;
+          overflow:auto
+        "
       >
 
         <div class="scan-head">
@@ -389,15 +682,24 @@ function boxModal() {
   `;
 }
 
-function setupBase() {
-  const addBtn = $('#addBoxBtn');
 
-  if (addBtn) {
-    addBtn.onclick = () => {
+function setupBase(){
+
+  const addButton =
+    $('#addBoxBtn');
+
+  if (addButton) {
+
+    addButton.onclick = () => {
+
       state.editingRow = null;
 
-      const old = $('#boxModal');
-      if (old) old.remove();
+      const oldModal =
+        $('#boxModal');
+
+      if (oldModal) {
+        oldModal.remove();
+      }
 
       document.body.insertAdjacentHTML(
         'beforeend',
@@ -408,218 +710,470 @@ function setupBase() {
     };
   }
 
-  document.querySelectorAll('.edit-box').forEach(btn => {
-    btn.onclick = () => {
-      state.editingRow = Number(btn.dataset.row);
 
-      const old = $('#boxModal');
-      if (old) old.remove();
+  document
+    .querySelectorAll('.edit-box')
+    .forEach(button => {
 
-      document.body.insertAdjacentHTML(
-        'beforeend',
-        boxModal()
-      );
+      button.onclick = () => {
 
-      openBoxModal();
-    };
-  });
+        state.editingRow =
+          Number(button.dataset.row);
 
-  document.querySelectorAll('.delete-box').forEach(btn => {
-    btn.onclick = () => {
-      const index = Number(btn.dataset.row);
+        const oldModal =
+          $('#boxModal');
 
-      const row = rows('База')[index + 1];
+        if (oldModal) {
+          oldModal.remove();
+        }
 
-      if (!row) return;
+        document.body.insertAdjacentHTML(
+          'beforeend',
+          boxModal()
+        );
 
-      const barcode = row[0] || '';
+        openBoxModal();
+      };
+    });
 
-      if (
-        !confirm(
-          `Удалить коробку ${barcode}?\n\nЭто действие изменит данные только в текущем браузере.`
-        )
-      ) {
-        return;
-      }
 
-      rows('База').splice(index + 1, 1);
+  document
+    .querySelectorAll('.delete-box')
+    .forEach(button => {
 
-      render();
-    };
-  });
+      button.onclick = async () => {
+
+        const index =
+          Number(button.dataset.row);
+
+        const row =
+          rows('База')[index + 1];
+
+        if (!row) {
+          return;
+        }
+
+        const barcode =
+          row[0] || '';
+
+        const id =
+          BOX_IDS[index];
+
+        if (!id) {
+
+          alert(
+            'Для этой строки не найден ID Supabase.\n\n' +
+            'Обновите страницу и попробуйте ещё раз.'
+          );
+
+          return;
+        }
+
+        const confirmed =
+          confirm(
+            `Удалить коробку ${barcode}?\n\n` +
+            'Она будет удалена из общей базы Supabase.'
+          );
+
+        if (!confirmed) {
+          return;
+        }
+
+        button.disabled = true;
+
+        const {
+          error
+        } = await supabaseClient
+          .from('boxes')
+          .delete()
+          .eq('id', id);
+
+        if (error) {
+
+          console.error(error);
+
+          alert(
+            'Не удалось удалить коробку:\n' +
+            error.message
+          );
+
+          button.disabled = false;
+
+          return;
+        }
+
+        await reloadAndRender();
+      };
+    });
 }
 
-function openBoxModal() {
-  const modal = $('#boxModal');
 
-  if (!modal) return;
+function openBoxModal(){
+
+  const modal =
+    $('#boxModal');
+
+  if (!modal) {
+    return;
+  }
 
   modal.classList.add('show');
 
+
   const close = () => {
+
     modal.classList.remove('show');
+
     state.editingRow = null;
 
     setTimeout(() => {
-      if ($('#boxModal')) {
-        $('#boxModal').remove();
+
+      const current =
+        $('#boxModal');
+
+      if (current) {
+        current.remove();
       }
+
     }, 150);
   };
 
-  $('#boxModalClose').onclick = close;
-  $('#boxCancel').onclick = close;
 
-  modal.onclick = e => {
-    if (e.target === modal) {
+  $('#boxModalClose').onclick =
+    close;
+
+  $('#boxCancel').onclick =
+    close;
+
+
+  modal.onclick = event => {
+
+    if (event.target === modal) {
       close();
     }
   };
 
-  $('#boxSave').onclick = () => {
-    saveBox();
+
+  $('#boxSave').onclick =
+    saveBox;
+}
+
+
+function normBarcode(value){
+
+  return String(value ?? '')
+    .replace(/\.0$|,0$/, '')
+    .replace(/\D/g, '');
+}
+
+
+function rowToSupabase(row){
+
+  let quantity = null;
+
+  if (
+    row[2] !== '' &&
+    row[2] !== null &&
+    row[2] !== undefined
+  ) {
+
+    const parsed =
+      Number(row[2]);
+
+    quantity =
+      Number.isFinite(parsed)
+        ? parsed
+        : null;
+  }
+
+  return {
+
+    barcode:
+      normBarcode(row[0]),
+
+    article:
+      row[1] || null,
+
+    quantity_in_box:
+      quantity,
+
+    zone_row:
+      row[3] || null,
+
+    pallet:
+      row[4] || null,
+
+    status:
+      row[5] || 'На складе',
+
+    date:
+      row[6] || null,
+
+    warehouse:
+      row[7] || null,
+
+    column_9:
+      row[8] || null,
+
+    direction:
+      row[9] || null,
+
+    pick:
+      String(row[10] || '')
+        .toLowerCase() === 'истина' ||
+      String(row[10] || '')
+        .toLowerCase() === 'true',
+
+    worker:
+      row[11] || null,
+
+    updated_at:
+      new Date().toISOString()
   };
 }
 
-function saveBox() {
-  const fields =
-    document.querySelectorAll('.box-field');
 
-  const headers = headerRows('База');
+async function saveBox(){
 
-  const newRow = headers.map((_, i) => {
-    const input =
-      document.querySelector(
-        `.box-field[data-index="${i}"]`
-      );
+  const headers =
+    headerRows('База');
 
-    return input ? input.value.trim() : '';
-  });
+  const newRow =
+    headers.map((_, i) => {
 
-  const barcode = normBarcode(newRow[0]);
+      const input =
+        document.querySelector(
+          `.box-field[data-index="${i}"]`
+        );
+
+      return input
+        ? input.value.trim()
+        : '';
+    });
+
+
+  const barcode =
+    normBarcode(newRow[0]);
+
 
   if (!barcode) {
-    alert('Введите штрихкод.');
+
+    alert(
+      'Введите штрихкод.'
+    );
+
     return;
   }
 
-  /*
-   * Нормализуем штрихкод.
-   */
-  newRow[0] = barcode;
 
-  /*
-   * 1 строка = 1 физическая коробка.
-   * Дубликаты штрихкодов НЕ удаляем.
-   */
+  newRow[0] =
+    barcode;
 
-  if (state.editingRow === null) {
-    DATA['База'].push(newRow);
-  } else {
-    DATA['База'][state.editingRow + 1] = newRow;
+
+  const button =
+    $('#boxSave');
+
+
+  if (button) {
+
+    button.disabled =
+      true;
+
+    button.textContent =
+      'Сохранение…';
   }
 
-  state.editingRow = null;
 
-  const modal = $('#boxModal');
+  try {
 
-  if (modal) {
-    modal.classList.remove('show');
-    setTimeout(() => modal.remove(), 150);
+    if (
+      state.editingRow === null
+    ) {
+
+      const payload =
+        rowToSupabase(newRow);
+
+      delete payload.updated_at;
+
+      const {
+        error
+      } = await supabaseClient
+        .from('boxes')
+        .insert(payload);
+
+      if (error) {
+        throw error;
+      }
+
+    } else {
+
+      const id =
+        BOX_IDS[
+          state.editingRow
+        ];
+
+      if (!id) {
+
+        throw new Error(
+          'Не найден ID коробки в Supabase.'
+        );
+      }
+
+
+      const payload =
+        rowToSupabase(newRow);
+
+
+      const {
+        error
+      } = await supabaseClient
+        .from('boxes')
+        .update(payload)
+        .eq('id', id);
+
+
+      if (error) {
+        throw error;
+      }
+    }
+
+
+    state.editingRow =
+      null;
+
+    await reloadAndRender();
+
+  } catch (error) {
+
+    console.error(error);
+
+    alert(
+      'Не удалось сохранить коробку:\n' +
+      (error.message || error)
+    );
+
+    if (button) {
+
+      button.disabled =
+        false;
+
+      button.textContent =
+        '💾 Сохранить';
+    }
   }
+}
+
+
+async function updateBox(
+  id,
+  changes
+){
+
+  const payload = {
+    ...changes,
+
+    updated_at:
+      new Date().toISOString()
+  };
+
+
+  const {
+    error
+  } = await supabaseClient
+    .from('boxes')
+    .update(payload)
+    .eq('id', id);
+
+
+  if (error) {
+    throw error;
+  }
+}
+
+
+async function reloadAndRender(){
+
+  const loaded =
+    await loadDatabase();
+
+
+  if (!loaded) {
+
+    alert(
+      'Не удалось обновить данные.'
+    );
+
+    return;
+  }
+
 
   render();
 }
 
-/* =========================================================
-   DASHBOARD
-========================================================= */
 
-function render() {
-  const [pt, h] = pages[state.page];
+function dashboard(){
 
-  $('#pageTitle').textContent = pt;
-  $('#heading').textContent = h;
+  const base =
+    objects('База');
 
-  document
-    .querySelectorAll('.nav,.mobile-nav-btn')
-    .forEach(b =>
-      b.classList.toggle(
-        'active',
-        b.dataset.page === state.page
-      )
-    );
-
-  $('#content').innerHTML =
-    views[state.page]();
-
-  if (
-    state.page === 'base' ||
-    state.page === 'received' ||
-    state.page === 'collected' ||
-    state.page === 'shipped'
-  ) {
-    bindSearch();
-  }
-
-  if (state.page === 'base') {
-    setupBase();
-  }
-
-  if (state.page === 'assembly') {
-    setupScanner();
-  }
-
-  const badge = count('Сборка');
-
-  if ($('#assemblyBadge')) {
-    $('#assemblyBadge').textContent =
-      badge || '';
-  }
-
-  if ($('#mobileAssemblyBadge')) {
-    $('#mobileAssemblyBadge').textContent =
-      badge || '';
-  }
-}
-
-function dashboard() {
-  const base = objects('База');
 
   const statuses = {};
 
-  base.forEach(o => {
-    const s = o['Статус'] || '';
-    statuses[s] = (statuses[s] || 0) + 1;
+
+  base.forEach(row => {
+
+    const s =
+      row['Статус'] || '';
+
+    statuses[s] =
+      (statuses[s] || 0) + 1;
   });
 
-  const dirs = objects('Убыло').reduce(
-    (a, o) => {
-      const d =
-        o['Направление'] ||
-        'Без направления';
 
-      a[d] = (a[d] || 0) + 1;
+  const directions =
+    objects('Убыло')
+      .reduce(
+        (result, row) => {
 
-      return a;
-    },
-    {}
-  );
+          const direction =
+            row['Направление'] ||
+            'Без направления';
 
-  const top = Object.entries(dirs)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8);
+          result[direction] =
+            (result[direction] || 0) + 1;
+
+          return result;
+
+        },
+        {}
+      );
+
+
+  const top =
+    Object.entries(directions)
+      .sort(
+        (a,b) =>
+          b[1] - a[1]
+      )
+      .slice(0,8);
+
 
   return `
+
     <div class="notice">
-      Локальная версия SKLADAPLAN работает
-      без сервера. Изменения, сделанные здесь,
-      сохраняются только в браузере устройства.
+
+      SKLADAPLAN подключён к Supabase.
+
+      Изменения в «Базе»
+      сохраняются в общей базе данных.
+
     </div>
+
 
     <div class="cards">
 
       <div class="card">
+
         <div class="label">
           Всего записей в Базе
         </div>
@@ -631,81 +1185,114 @@ function dashboard() {
         <div class="sub">
           коробок / строк
         </div>
+
       </div>
 
+
       <div class="card">
+
         <div class="label">
           На складе
         </div>
 
         <div class="value">
-          ${(statuses['На складе'] || 0)
-            .toLocaleString('ru-RU')}
+          ${
+            (
+              statuses['На складе'] || 0
+            ).toLocaleString('ru-RU')
+          }
         </div>
 
         <div class="sub">
           текущий остаток
         </div>
+
       </div>
 
+
       <div class="card">
+
         <div class="label">
           Скомплектовано
         </div>
 
         <div class="value">
-          ${(statuses['Скомплектовано'] || 0)
-            .toLocaleString('ru-RU')}
+          ${
+            (
+              statuses['Скомплектовано'] || 0
+            ).toLocaleString('ru-RU')
+          }
         </div>
 
         <div class="sub">
           готово к отгрузке
         </div>
+
       </div>
 
+
       <div class="card">
+
         <div class="label">
           Отгружено
         </div>
 
         <div class="value">
-          ${(statuses['Отгружено'] || 0)
-            .toLocaleString('ru-RU')}
+          ${
+            (
+              statuses['Отгружено'] || 0
+            ).toLocaleString('ru-RU')
+          }
         </div>
 
         <div class="sub">
           по данным Базы
         </div>
+
       </div>
 
     </div>
+
 
     <div class="grid2">
 
       <div class="panel">
 
         <div class="section-title">
-          <h3>Последние операции</h3>
+
+          <h3>
+            Последние операции
+          </h3>
+
           <span class="muted">
             лист «Убыло»
           </span>
+
         </div>
 
-        ${table('Убыло', 10)}
+        ${table('Убыло',10)}
 
       </div>
+
 
       <div class="panel">
 
         <div class="section-title">
-          <h3>По направлениям</h3>
+
+          <h3>
+            По направлениям
+          </h3>
+
           <span class="muted">
             отгрузки
           </span>
+
         </div>
 
-        ${
-          top.map(([k, v]) => `
+
+        ${top.map(
+          ([key,value]) => `
+
             <div
               style="
                 display:flex;
@@ -715,58 +1302,88 @@ function dashboard() {
                 font-size:11px
               "
             >
-              <span>${esc(k)}</span>
-              <b>${v}</b>
+
+              <span>
+                ${esc(key)}
+              </span>
+
+              <b>
+                ${value}
+              </b>
+
             </div>
-          `).join('')
-        }
+
+          `
+        ).join('')}
 
       </div>
 
     </div>
+
 
     <div
       class="panel"
       style="margin-top:14px"
     >
 
-      <h3>Быстрые действия</h3>
+      <h3>
+        Быстрые действия
+      </h3>
+
 
       <div class="quick">
 
         <button data-go="base">
-          <b>▦ Открыть базу</b>
+
+          <b>
+            ▦ Открыть базу
+          </b>
+
           <span>
-            Поиск, добавление и редактирование коробок
+            Поиск, добавление и
+            редактирование коробок
           </span>
+
         </button>
 
+
         <button data-go="assembly">
-          <b>✓ Сборка</b>
+
+          <b>
+            ✓ Сборка
+          </b>
+
           <span>
             Перейти к комплектации
           </span>
+
         </button>
 
+
         <button id="calcBoxes">
-          <b>＋ Рассчитать коробки</b>
+
+          <b>
+            ＋ Рассчитать коробки
+          </b>
+
           <span>
             Для будущего модуля заказов
           </span>
+
         </button>
 
       </div>
 
     </div>
+
   `;
 }
 
-/* =========================================================
-   ОСТАЛЬНЫЕ ЛИСТЫ
-========================================================= */
 
-function sheetView(sheet) {
+function sheetView(sheet){
+
   return `
+
     <div class="panel">
 
       <div class="toolbar">
@@ -781,7 +1398,8 @@ function sheetView(sheet) {
           class="muted"
           style="padding:10px 0"
         >
-          ${count(sheet).toLocaleString('ru-RU')} строк
+          ${count(sheet).toLocaleString('ru-RU')}
+          строк
         </span>
 
       </div>
@@ -791,40 +1409,67 @@ function sheetView(sheet) {
       </div>
 
     </div>
+
   `;
 }
 
-/* =========================================================
-   СБОРКА
-========================================================= */
 
-function assembly() {
-  const d = objects('Сборка')
-    .filter(o => o['Штрихкод'] != null);
+function assembly(){
 
-  d.sort(
-    (a, b) =>
-      String(a['Зона/Ряд'] || '')
-        .localeCompare(
-          String(b['Зона/Ряд'] || ''),
-          'ru',
-          { numeric: true }
-        ) ||
-      String(a['Поддон'] || '')
-        .localeCompare(
-          String(b['Поддон'] || ''),
-          'ru',
-          { numeric: true }
-        )
+  const data =
+    objects('Сборка')
+      .filter(
+        row =>
+          row['Штрихкод'] != null
+      );
+
+
+  data.sort(
+    (a,b) =>
+
+      String(
+        a['Зона/Ряд'] || ''
+      ).localeCompare(
+        String(
+          b['Зона/Ряд'] || ''
+        ),
+        'ru',
+        {
+          numeric:true
+        }
+      )
+
+      ||
+
+      String(
+        a['Поддон'] || ''
+      ).localeCompare(
+        String(
+          b['Поддон'] || ''
+        ),
+        'ru',
+        {
+          numeric:true
+        }
+      )
   );
 
-  const total = d.reduce(
-    (n, o) =>
-      n + (Number(o['Кол-во коробок']) || 0),
-    0
-  );
+
+  const total =
+    data.reduce(
+      (sum,row) =>
+        sum +
+        (
+          Number(
+            row['Кол-во коробок']
+          ) || 0
+        ),
+      0
+    );
+
 
   return `
+
     <div class="panel">
 
       <div class="section-title">
@@ -836,19 +1481,29 @@ function assembly() {
           </h3>
 
           <div class="route-note">
+
             Маршрут отсортирован
             по зоне/ряду → поддону.
+
             Всего к подбору:
-            <b>${total}</b> коробок.
+
+            <b>
+              ${total}
+            </b>
+
+            коробок.
+
           </div>
 
         </div>
 
+
         <span class="muted">
-          ${d.length} позиции
+          ${data.length} позиции
         </span>
 
       </div>
+
 
       <div class="assembly-tools">
 
@@ -857,10 +1512,12 @@ function assembly() {
           placeholder="Штрихкод, зона, поддон…"
         >
 
+
         <input
           id="currentPallet"
           placeholder="Текущий поддон (необязательно)"
         >
+
 
         <button
           class="primary"
@@ -871,18 +1528,26 @@ function assembly() {
 
       </div>
 
+
       <div
         class="muted"
-        style="font-size:11px;margin-bottom:10px"
+        style="
+          font-size:11px;
+          margin-bottom:10px
+        "
       >
+
         Если указан текущий поддон,
         сканер будет принимать коробки
         только с него.
+
       </div>
 
-      ${assemblyTable(d)}
+
+      ${assemblyTable(data)}
 
     </div>
+
 
     <div
       id="scanModal"
@@ -906,6 +1571,7 @@ function assembly() {
 
         </div>
 
+
         <input
           id="scanInput"
           class="scan-input"
@@ -914,6 +1580,7 @@ function assembly() {
           placeholder="Сканируйте штрихкод…"
         >
 
+
         <div
           id="scanStatus"
           class="scan-status"
@@ -921,322 +1588,609 @@ function assembly() {
           Готов к сканированию.
         </div>
 
+
         <div class="scan-hint">
-          Bluetooth-сканер должен работать
-          как клавиатура.
-          После сканирования нажмите Enter
-          или дождитесь автоматической обработки.
+
+          Bluetooth-сканер должен
+          работать как клавиатура.
+
+          После сканирования нажмите
+          Enter или дождитесь
+          автоматической обработки.
+
         </div>
 
       </div>
 
     </div>
+
   `;
 }
 
-function normBarcode(v) {
-  return String(v ?? '')
-    .replace(/\.0$|,0$/, '')
-    .replace(/\D/g, '');
-}
 
-function assemblyTable(d) {
+function assemblyTable(data){
+
   return `
+
     <div class="table-wrap">
 
       <table class="data-table">
 
         <thead>
+
           <tr>
-            <th>Штрихкод</th>
-            <th>Зона/Ряд</th>
-            <th>Поддон</th>
-            <th>Коробок</th>
-            <th>Отбор</th>
+
+            <th>
+              Штрихкод
+            </th>
+
+            <th>
+              Зона/Ряд
+            </th>
+
+            <th>
+              Поддон
+            </th>
+
+            <th>
+              Коробок
+            </th>
+
+            <th>
+              Отбор
+            </th>
+
           </tr>
+
         </thead>
+
 
         <tbody>
 
-          ${d.map(o => `
-            <tr>
+          ${data.map(
+            row => `
 
-              <td data-label="Штрихкод">
-                ${esc(fmt(o['Штрихкод']))}
-              </td>
+              <tr>
 
-              <td data-label="Зона/Ряд">
-                ${esc(fmt(o['Зона/Ряд']))}
-              </td>
+                <td data-label="Штрихкод">
+                  ${esc(
+                    fmt(
+                      row['Штрихкод']
+                    )
+                  )}
+                </td>
 
-              <td data-label="Поддон">
-                ${esc(fmt(o['Поддон']))}
-              </td>
 
-              <td data-label="Коробок">
-                ${esc(fmt(o['Кол-во коробок']))}
-              </td>
+                <td data-label="Зона/Ряд">
+                  ${esc(
+                    fmt(
+                      row['Зона/Ряд']
+                    )
+                  )}
+                </td>
 
-              <td data-label="Отбор">
-                ${o['Отбор ✔️'] ? '✓' : ''}
-              </td>
 
-            </tr>
-          `).join('')}
+                <td data-label="Поддон">
+                  ${esc(
+                    fmt(
+                      row['Поддон']
+                    )
+                  )}
+                </td>
+
+
+                <td data-label="Коробок">
+                  ${esc(
+                    fmt(
+                      row['Кол-во коробок']
+                    )
+                  )}
+                </td>
+
+
+                <td data-label="Отбор">
+
+                  ${
+                    row['Отбор ✔️']
+                      ? '✓'
+                      : ''
+                  }
+
+                </td>
+
+              </tr>
+
+            `
+          ).join('')}
 
         </tbody>
 
       </table>
 
     </div>
+
   `;
 }
 
-/* =========================================================
-   СКАНЕР
-========================================================= */
 
-function setupScanner() {
-  const modal = $('#scanModal');
-  const input = $('#scanInput');
-  const statusEl = $('#scanStatus');
+function setupScanner(){
 
-  if (!modal || !input || !statusEl) {
+  const modal =
+    $('#scanModal');
+
+  const input =
+    $('#scanInput');
+
+  const statusElement =
+    $('#scanStatus');
+
+
+  if (
+    !modal ||
+    !input ||
+    !statusElement
+  ) {
     return;
   }
 
+
   const close = () => {
-    modal.classList.remove('show');
+
+    modal.classList.remove(
+      'show'
+    );
+
     input.value = '';
   };
 
-  $('#scanBtn').onclick = () => {
-    modal.classList.add('show');
 
-    setTimeout(() => {
-      input.focus();
-    }, 80);
+  $('#scanBtn').onclick = () => {
+
+    modal.classList.add(
+      'show'
+    );
+
+    setTimeout(
+      () => input.focus(),
+      80
+    );
   };
 
-  $('#scanClose').onclick = close;
 
-  modal.onclick = e => {
-    if (e.target === modal) {
+  $('#scanClose').onclick =
+    close;
+
+
+  modal.onclick = event => {
+
+    if (
+      event.target === modal
+    ) {
       close();
     }
   };
 
-  const process = () => {
-    const code = normBarcode(input.value);
 
-    if (!code) return;
+  const processScan =
+    async () => {
 
-    const pallet =
-      String(
-        $('#currentPallet')?.value || ''
-      )
-        .trim()
-        .toLowerCase();
-
-    const base = objects('База');
-
-    let candidates = base
-      .map(x => ({
-        o: x,
-        i: x.__rowIndex
-      }))
-      .filter(
-        x =>
-          normBarcode(x.o['Штрихкод']) === code &&
-          String(x.o['Статус'] || '')
-            .toLowerCase()
-            .includes('на складе')
-      );
-
-    if (pallet) {
-      candidates =
-        candidates.filter(
-          x =>
-            String(
-              x.o['Поддон'] ?? ''
-            ).toLowerCase() === pallet
+      const code =
+        normBarcode(
+          input.value
         );
-    }
 
-    if (!candidates.length) {
-      statusEl.className =
-        'scan-status bad';
 
-      statusEl.innerHTML = `
-        <b>✕ Коробка не найдена</b>
-        <br>
-        <span style="font-size:12px">
-          ${esc(code)}
-          ${
-            pallet
-              ? ' · поддон ' + esc(pallet)
-              : ''
+      if (!code) {
+        return;
+      }
+
+
+      const currentPallet =
+        String(
+          $('#currentPallet')?.value ||
+          ''
+        )
+          .trim()
+          .toLowerCase();
+
+
+      const base =
+        objects('База');
+
+
+      let candidates =
+        base
+          .map(
+            row => ({
+              object: row,
+              index: row.__rowIndex
+            })
+          )
+          .filter(
+            item =>
+              normBarcode(
+                item.object['Штрихкод']
+              ) === code &&
+
+              String(
+                item.object['Статус'] ||
+                ''
+              )
+                .toLowerCase()
+                .includes(
+                  'на складе'
+                )
+          );
+
+
+      if (currentPallet) {
+
+        candidates =
+          candidates.filter(
+            item =>
+              String(
+                item.object['Поддон'] ??
+                ''
+              )
+                .toLowerCase() ===
+              currentPallet
+          );
+      }
+
+
+      if (!candidates.length) {
+
+        statusElement.className =
+          'scan-status bad';
+
+
+        statusElement.innerHTML = `
+
+          <b>
+            ✕ Коробка не найдена
+          </b>
+
+          <br>
+
+          <span style="font-size:12px">
+
+            ${esc(code)}
+
+            ${
+              currentPallet
+                ? ' · поддон ' +
+                  esc(currentPallet)
+                : ''
+            }
+
+          </span>
+
+        `;
+
+
+        input.select();
+
+        beep(false);
+
+        return;
+      }
+
+
+      const hit =
+        candidates[0];
+
+
+      const id =
+        BOX_IDS[
+          hit.index - 1
+        ];
+
+
+      if (!id) {
+
+        statusElement.className =
+          'scan-status bad';
+
+
+        statusElement.innerHTML = `
+
+          <b>
+            ✕ У коробки нет ID Supabase
+          </b>
+
+          <br>
+
+          <span style="font-size:12px">
+            ${esc(code)}
+          </span>
+
+        `;
+
+
+        beep(false);
+
+        return;
+      }
+
+
+      try {
+
+        await updateBox(
+          id,
+          {
+            status:
+              'Скомплектовано',
+
+            worker:
+              'SKLADAPLAN',
+
+            date:
+              new Date().toISOString(),
+
+            pick:
+              true
           }
-        </span>
-      `;
+        );
 
-      input.select();
-      beep(false);
 
-      return;
-    }
+        const row =
+          DATA['База'][
+            hit.index
+          ];
 
-    const hit = candidates[0];
 
-    /*
-     * Меняем непосредственно строку
-     * в DATA['База'].
-     *
-     * __rowIndex начинается с 1,
-     * потому что DATA[0] = заголовки.
-     */
-    const row =
-      DATA['База'][hit.i];
+        const headers =
+          headerRows('База');
 
-    if (row) {
-      const headers =
-        headerRows('База');
 
-      const statusIndex =
-        headers.indexOf('Статус');
+        if (row) {
 
-      const workerIndex =
-        headers.indexOf('Кто работал');
+          const statusIndex =
+            headers.indexOf(
+              'Статус'
+            );
 
-      const dateIndex =
-        headers.indexOf('Дата');
+          const workerIndex =
+            headers.indexOf(
+              'Кто работал'
+            );
 
-      if (statusIndex >= 0) {
-        row[statusIndex] =
-          'Скомплектовано';
+          const dateIndex =
+            headers.indexOf(
+              'Дата'
+            );
+
+          const pickIndex =
+            headers.indexOf(
+              'Отбор ✔️'
+            );
+
+
+          if (statusIndex >= 0) {
+            row[statusIndex] =
+              'Скомплектовано';
+          }
+
+
+          if (workerIndex >= 0) {
+            row[workerIndex] =
+              'SKLADAPLAN';
+          }
+
+
+          if (dateIndex >= 0) {
+            row[dateIndex] =
+              new Date().toISOString();
+          }
+
+
+          if (pickIndex >= 0) {
+            row[pickIndex] =
+              'ИСТИНА';
+          }
+        }
+
+
+        statusElement.className =
+          'scan-status ok';
+
+
+        statusElement.innerHTML = `
+
+          <b>
+            ✓ Коробка сохранена
+          </b>
+
+          <br>
+
+          <span style="font-size:12px">
+
+            ${esc(code)}
+
+            ·
+            ${esc(
+              hit.object['Артикул'] || ''
+            )}
+
+            ·
+            ${esc(
+              hit.object['Зона/Ряд'] || ''
+            )}
+
+            · поддон
+            ${esc(
+              hit.object['Поддон'] || ''
+            )}
+
+          </span>
+
+        `;
+
+
+        beep(true);
+
+
+        input.value = '';
+
+        input.focus();
+
+
+        updateAssemblyBadge();
+
+      } catch(error) {
+
+        console.error(error);
+
+
+        statusElement.className =
+          'scan-status bad';
+
+
+        statusElement.innerHTML = `
+
+          <b>
+            ✕ Ошибка сохранения
+          </b>
+
+          <br>
+
+          <span style="font-size:12px">
+
+            ${esc(
+              error.message ||
+              error
+            )}
+
+          </span>
+
+        `;
+
+
+        beep(false);
       }
+    };
 
-      if (workerIndex >= 0) {
-        row[workerIndex] =
-          'SKLADAPLAN';
-      }
-
-      if (dateIndex >= 0) {
-        row[dateIndex] =
-          new Date().toISOString();
-      }
-    }
-
-    statusEl.className =
-      'scan-status ok';
-
-    statusEl.innerHTML = `
-      <b>✓ Коробка принята</b>
-      <br>
-      <span style="font-size:12px">
-        ${esc(code)}
-        · ${esc(hit.o['Артикул'] || '')}
-        · ${esc(hit.o['Зона/Ряд'] || '')}
-        · поддон ${esc(hit.o['Поддон'] || '')}
-      </span>
-    `;
-
-    beep(true);
-
-    input.value = '';
-    input.focus();
-
-    /*
-     * ВАЖНО:
-     * Раньше здесь был render(),
-     * из-за которого модальное окно
-     * уничтожалось сразу после сканирования.
-     *
-     * Теперь интерфейс не перерисовываем.
-     * Сканирование продолжается.
-     */
-
-    updateAssemblyBadge();
-  };
 
   input.addEventListener(
     'keydown',
-    e => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        process();
+    event => {
+
+      if (
+        event.key === 'Enter'
+      ) {
+
+        event.preventDefault();
+
+        processScan();
       }
     }
   );
 
+
   let timer;
+
 
   input.addEventListener(
     'input',
     () => {
+
       clearTimeout(timer);
 
+
       if (
-        normBarcode(input.value).length >= 12
+        normBarcode(
+          input.value
+        ).length >= 12
       ) {
-        timer = setTimeout(
-          process,
-          120
-        );
+
+        timer =
+          setTimeout(
+            processScan,
+            120
+          );
       }
     }
   );
 }
 
-/* =========================================================
-   ЗВУК
-========================================================= */
 
-function beep(ok) {
+function beep(ok){
+
   try {
-    const C =
+
+    const AudioContext =
       window.AudioContext ||
       window.webkitAudioContext;
 
-    if (!C) return;
 
-    const c = new C();
-    const o = c.createOscillator();
-    const g = c.createGain();
+    if (!AudioContext) {
+      return;
+    }
 
-    o.frequency.value =
-      ok ? 880 : 180;
 
-    o.type = 'sine';
+    const context =
+      new AudioContext();
 
-    g.gain.value = 0.06;
 
-    o.connect(g);
-    g.connect(c.destination);
+    const oscillator =
+      context.createOscillator();
 
-    o.start();
+
+    const gain =
+      context.createGain();
+
+
+    oscillator.frequency.value =
+      ok
+        ? 880
+        : 180;
+
+
+    oscillator.type =
+      'sine';
+
+
+    gain.gain.value =
+      0.06;
+
+
+    oscillator.connect(gain);
+
+    gain.connect(
+      context.destination
+    );
+
+
+    oscillator.start();
+
 
     setTimeout(
       () => {
-        o.stop();
-        c.close();
+
+        oscillator.stop();
+
+        context.close();
+
       },
       ok ? 130 : 260
     );
 
-  } catch (e) {}
+  } catch(error) {}
 }
 
-/* =========================================================
-   ПОИСК В БАЗЕ
-========================================================= */
 
-function bindSearch() {
-  const inp = $('#search');
+function bindSearch(){
 
-  if (!inp) return;
+  const input =
+    $('#search');
 
-  inp.addEventListener(
+
+  if (!input) {
+    return;
+  }
+
+
+  input.addEventListener(
     'input',
     () => {
 
@@ -1246,110 +2200,143 @@ function bindSearch() {
           received: 'Принято',
           collected: 'Собрано',
           shipped: 'Убыло'
-        }[state.page];
+        }[
+          state.page
+        ];
 
-      const q =
-        inp.value
+
+      const query =
+        input.value
           .trim()
           .toLowerCase();
 
-      /*
-       * Для Базы используем
-       * специальную таблицу,
-       * чтобы кнопки редактирования
-       * продолжали работать.
-       */
 
-      if (sheet === 'База') {
+      if (
+        sheet === 'База'
+      ) {
 
-        const r = rows(sheet);
+        const data =
+          rows(sheet);
+
 
         const filtered =
-          r
+          data
             .slice(1)
-            .map((row, index) => ({
-              r: row,
-              index
-            }))
-            .filter(({ r }) =>
-              r.some(v =>
-                String(v ?? '')
-                  .toLowerCase()
-                  .includes(q)
-              )
+            .map(
+              (row,index) => ({
+                row,
+                index
+              })
+            )
+            .filter(
+              ({row}) =>
+                row.some(
+                  value =>
+                    String(
+                      value ?? ''
+                    )
+                      .toLowerCase()
+                      .includes(query)
+                )
             );
+
 
         $('#baseTable').innerHTML =
           baseTable(
             filtered,
-            r[0]
+            data[0]
           );
+
 
         setupBase();
 
         return;
       }
 
-      if (!q) {
-        $(
-          '#sheetTable'
-        ).innerHTML =
+
+      if (!query) {
+
+        $('#sheetTable').innerHTML =
           table(sheet);
 
         return;
       }
 
-      const r = rows(sheet);
+
+      const data =
+        rows(sheet);
+
 
       const filtered = [
-        r[0],
-        ...r
+
+        data[0],
+
+        ...data
           .slice(1)
-          .filter(x =>
-            x.some(v =>
-              String(v ?? '')
-                .toLowerCase()
-                .includes(q)
-            )
+          .filter(
+            row =>
+              row.some(
+                value =>
+                  String(
+                    value ?? ''
+                  )
+                    .toLowerCase()
+                    .includes(query)
+              )
           )
       ];
 
-      const old = DATA[sheet];
 
-      DATA[sheet] = filtered;
+      const old =
+        DATA[sheet];
+
+
+      DATA[sheet] =
+        filtered;
+
 
       $('#sheetTable').innerHTML =
         table(sheet);
 
-      DATA[sheet] = old;
+
+      DATA[sheet] =
+        old;
     }
   );
 }
 
-/* =========================================================
-   BADGE
-========================================================= */
 
-function updateAssemblyBadge() {
-  const badge = count('Сборка');
+function updateAssemblyBadge(){
 
-  if ($('#assemblyBadge')) {
-    $('#assemblyBadge').textContent =
-      badge || '';
+  const value =
+    count('Сборка');
+
+
+  if (
+    $('#assemblyBadge')
+  ) {
+
+    $('#assemblyBadge')
+      .textContent =
+        value || '';
   }
 
-  if ($('#mobileAssemblyBadge')) {
-    $('#mobileAssemblyBadge').textContent =
-      badge || '';
+
+  if (
+    $('#mobileAssemblyBadge')
+  ) {
+
+    $('#mobileAssemblyBadge')
+      .textContent =
+        value || '';
   }
 }
 
-/* =========================================================
-   TOOLS
-========================================================= */
 
-function tools() {
+function tools(){
+
   return `
+
     <div class="grid2">
 
       <div class="panel">
@@ -1359,12 +2346,16 @@ function tools() {
         </h3>
 
         <p class="muted">
-          Данные загружаются из
+
+          «База» теперь хранится
+          в Supabase.
+
+          Остальные листы пока
+          загружаются из
           database.json.
-          Изменения текущей версии
-          можно выгрузить обратно
-          в JSON.
+
         </p>
+
 
         <button
           class="big-action"
@@ -1375,6 +2366,7 @@ function tools() {
 
       </div>
 
+
       <div class="panel">
 
         <h3>
@@ -1382,9 +2374,12 @@ function tools() {
         </h3>
 
         <p class="muted">
+
           Создаёт локальный JSON-архив
-          всех листов.
+          текущих данных.
+
         </p>
+
 
         <button
           class="big-action"
@@ -1397,18 +2392,21 @@ function tools() {
 
     </div>
 
+
     <div
       class="panel"
       style="margin-top:14px"
     >
 
       <h3>
-        Структура исходного файла
+        Структура данных
       </h3>
 
-      ${
-        Object.entries(DATA)
-          .map(([k, v]) => `
+
+      ${Object.entries(DATA)
+        .map(
+          ([key,value]) => `
+
             <div
               style="
                 display:flex;
@@ -1418,75 +2416,111 @@ function tools() {
                 font-size:11px
               "
             >
-              <span>${esc(k)}</span>
+
+              <span>
+                ${esc(key)}
+              </span>
+
               <b>
-                ${Math.max(
-                  0,
-                  v.length - 1
-                ).toLocaleString('ru-RU')}
+                ${
+                  Math.max(
+                    0,
+                    value.length - 1
+                  ).toLocaleString('ru-RU')
+                }
               </b>
+
             </div>
-          `)
-          .join('')
-      }
+
+          `
+        )
+        .join('')}
 
     </div>
+
   `;
 }
 
-/* =========================================================
-   VIEWS
-========================================================= */
 
 const views = {
-  dashboard: dashboard,
-  base: baseView,
-  assembly: assembly,
-  received: () => sheetView('Принято'),
-  collected: () => sheetView('Собрано'),
-  shipped: () => sheetView('Убыло'),
-  tools: tools
+
+  dashboard:
+    dashboard,
+
+  base:
+    baseView,
+
+  assembly:
+    assembly,
+
+  received:
+    () =>
+      sheetView('Принято'),
+
+  collected:
+    () =>
+      sheetView('Собрано'),
+
+  shipped:
+    () =>
+      sheetView('Убыло'),
+
+  tools:
+    tools
 };
 
-/* =========================================================
-   DOWNLOAD
-========================================================= */
 
 function download(
   name,
   text,
   type = 'application/json'
-) {
-  const a =
+){
+
+  const link =
     document.createElement('a');
 
-  a.href =
+
+  link.href =
     URL.createObjectURL(
       new Blob(
         [text],
-        { type }
+        {type}
       )
     );
 
-  a.download = name;
 
-  a.click();
+  link.download =
+    name;
+
+
+  link.click();
+
 
   setTimeout(
     () =>
-      URL.revokeObjectURL(a.href),
+      URL.revokeObjectURL(
+        link.href
+      ),
     500
   );
 }
 
-function backup() {
+
+function backup(){
+
   const stamp =
     new Date()
       .toISOString()
-      .replace(/[:.]/g, '-');
+      .replace(
+        /[:.]/g,
+        '-'
+      );
+
 
   download(
+
     `SKLADAPLAN_BACKUP_${stamp}.json`,
+
     JSON.stringify(
       {
         createdAt:
@@ -1497,90 +2531,171 @@ function backup() {
 
         data:
           DATA
+
       },
       null,
       2
     )
+
   );
 }
 
-function exportData() {
+
+function exportData(){
+
   download(
-    `SKLADAPLAN_DATA_${
-      new Date()
-        .toISOString()
-        .slice(0, 10)
-    }.json`,
+
+    `SKLADAPLAN_DATA_${new Date().toISOString().slice(0,10)}.json`,
+
     JSON.stringify(
       DATA,
       null,
       2
     )
+
   );
 }
 
-/* =========================================================
-   НАВИГАЦИЯ
-========================================================= */
+
+function render(){
+
+  const [
+    pageTitle,
+    heading
+  ] =
+    pages[state.page];
+
+
+  $('#pageTitle')
+    .textContent =
+      pageTitle;
+
+
+  $('#heading')
+    .textContent =
+      heading;
+
+
+  document
+    .querySelectorAll(
+      '.nav,.mobile-nav-btn'
+    )
+    .forEach(
+      button =>
+        button.classList.toggle(
+          'active',
+          button.dataset.page ===
+          state.page
+        )
+    );
+
+
+  $('#content').innerHTML =
+    views[state.page]();
+
+
+  if (
+    state.page === 'base' ||
+    state.page === 'received' ||
+    state.page === 'collected' ||
+    state.page === 'shipped'
+  ) {
+
+    bindSearch();
+  }
+
+
+  if (
+    state.page === 'base'
+  ) {
+
+    setupBase();
+  }
+
+
+  if (
+    state.page === 'assembly'
+  ) {
+
+    setupScanner();
+  }
+
+
+  updateAssemblyBadge();
+}
+
 
 document.addEventListener(
   'click',
-  e => {
+  event => {
 
-    const n =
-      e.target.closest(
+    const navigation =
+      event.target.closest(
         '.nav,.mobile-nav-btn'
       );
 
-    if (n) {
+
+    if (navigation) {
+
       state.page =
-        n.dataset.page;
+        navigation.dataset.page;
 
       render();
 
       return;
     }
 
-    const g =
-      e.target.closest(
+
+    const go =
+      event.target.closest(
         '[data-go]'
       );
 
-    if (g) {
+
+    if (go) {
+
       state.page =
-        g.dataset.go;
+        go.dataset.go;
 
       render();
 
       return;
     }
 
+
     if (
-      e.target.id ===
+      event.target.id ===
         'backupBtn' ||
-      e.target.id ===
+
+      event.target.id ===
         'backupBtn2'
     ) {
+
       backup();
 
       return;
     }
 
+
     if (
-      e.target.id ===
+      event.target.id ===
         'exportBtn' ||
-      e.target.id ===
+
+      event.target.id ===
         'exportBtn2'
     ) {
+
       exportData();
 
       return;
     }
 
+
     if (
-      e.target.id ===
+      event.target.id ===
       'calcBoxes'
     ) {
+
       alert(
         'Модуль расчёта коробок будет добавлен на этапе работы с заказами.'
       );
@@ -1588,48 +2703,54 @@ document.addEventListener(
       return;
     }
 
-    /*
-     * Кнопка сканирования
-     * теперь обрабатывается
-     * внутри setupScanner().
-     */
 
     if (
-      e.target.id ===
+      event.target.id ===
       'mobileMenu'
     ) {
-      state.page = 'tools';
+
+      state.page =
+        'tools';
+
       render();
     }
+
   }
 );
 
-/* =========================================================
-   ЗАПУСК
-========================================================= */
 
-async function startApp() {
+async function startApp(){
+
   const loaded =
     await loadDatabase();
 
+
   if (!loaded) {
+
     $('#content').innerHTML = `
+
       <div class="panel">
+
         <h3>
-          Не удалось загрузить database.json
+          Не удалось загрузить данные
         </h3>
 
         <p class="muted">
-          Проверь, что файл database.json
-          находится рядом с index.html.
+
+          Проверь подключение к
+          Supabase и наличие
+          database.json.
+
         </p>
+
       </div>
+
     `;
 
     return;
   }
 
+
   render();
 }
-
 startApp();
