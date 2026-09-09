@@ -1,41 +1,227 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
 <title>SKLADAPLAN — Local WMS</title>
-
-
 
 <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
+
 <div class="app">
+
 <aside class="sidebar">
-  <div class="brand"><div class="logo">S</div><div><b>SKLADAPLAN</b><span>LOCAL WMS</span></div></div>
+
+  <div class="brand">
+    <div class="logo">S</div>
+
+    <div>
+      <b>SKLADAPLAN</b>
+      <span>LOCAL WMS</span>
+    </div>
+  </div>
+
+
   <nav>
-    <button class="nav active" data-page="dashboard">⌂ <span>Главная</span></button>
-    <button class="nav" data-page="base">▦ <span>База</span></button>
-    <button class="nav" data-page="assembly">✓ <span>Сборка</span><em id="assemblyBadge"></em></button>
-    <button class="nav" data-page="received">↓ <span>Принято</span></button>
-    <button class="nav" data-page="collected">✓ <span>Собрано</span></button>
-    <button class="nav" data-page="shipped">↑ <span>Убыло</span></button>
-    <button class="nav" data-page="tools">⚙ <span>Инструменты</span></button>
+
+    <button
+      class="nav active"
+      data-page="dashboard"
+    >
+      ⌂ <span>Главная</span>
+    </button>
+
+
+    <button
+      class="nav"
+      data-page="base"
+    >
+      ▦ <span>База</span>
+    </button>
+
+
+    <button
+      class="nav"
+      data-page="assembly"
+    >
+      ✓ <span>Сборка</span>
+      <em id="assemblyBadge"></em>
+    </button>
+
+
+    <button
+      class="nav"
+      data-page="received"
+    >
+      ↓ <span>Принято</span>
+    </button>
+
+
+    <button
+      class="nav"
+      data-page="collected"
+    >
+      ✓ <span>Собрано</span>
+    </button>
+
+
+    <button
+      class="nav"
+      data-page="shipped"
+    >
+      ↑ <span>Убыло</span>
+    </button>
+
+
+    <button
+      class="nav"
+      data-page="tools"
+    >
+      ⚙ <span>Инструменты</span>
+    </button>
+
   </nav>
-  <div class="sidebar-foot"><div class="offline"><i></i> Онлайн-режим</div><small>Автор проекта<br>Дмитрий Бакун @dmitribakun</small></div>
+
+
+  <div class="sidebar-foot">
+
+    <div class="offline">
+      <i></i>
+      Онлайн-режим
+    </div>
+
+    <small>
+      Автор проекта<br>
+      Дмитрий Бакун @dmitribakun
+    </small>
+
+  </div>
+
 </aside>
+
+
 <main>
-<header class="topbar"><button class="mobile-menu" id="mobileMenu" aria-label="Меню">☰</button><div><div class="crumb">SKLADAPLAN / <span id="pageTitle">Главная</span></div><h1 id="heading">Главный экран склада</h1></div><div class="top-actions"><button class="ghost" id="exportBtn">Экспорт JSON</button><button class="primary" id="backupBtn">Создать backup</button></div></header>
+
+<header class="topbar">
+
+  <button
+    class="mobile-menu"
+    id="mobileMenu"
+    aria-label="Меню"
+  >
+    ☰
+  </button>
+
+
+  <div>
+
+    <div class="crumb">
+      SKLADAPLAN /
+      <span id="pageTitle">
+        Главная
+      </span>
+    </div>
+
+    <h1 id="heading">
+      Главный экран склада
+    </h1>
+
+  </div>
+
+
+  <div class="top-actions">
+
+    <button
+      class="ghost"
+      id="exportBtn"
+    >
+      Экспорт JSON
+    </button>
+
+
+    <button
+      class="primary"
+      id="backupBtn"
+    >
+      Создать backup
+    </button>
+
+  </div>
+
+</header>
+
+
 <section id="content"></section>
+
 </main>
+
 </div>
-<nav class="mobile-nav" id="mobileNav">
-  <button class="mobile-nav-btn active" data-page="dashboard">⌂<span>Главная</span></button>
-  <button class="mobile-nav-btn" data-page="base">▦<span>База</span></button>
-  <button class="mobile-nav-btn" data-page="assembly">✓<span>Сборка</span><em id="mobileAssemblyBadge"></em></button>
-  <button class="mobile-nav-btn" data-page="collected">✓<span>Собрано</span></button>
-  <button class="mobile-nav-btn" data-page="tools">⚙<span>Ещё</span></button>
+
+
+<nav
+  class="mobile-nav"
+  id="mobileNav"
+>
+
+  <button
+    class="mobile-nav-btn active"
+    data-page="dashboard"
+  >
+    ⌂
+    <span>Главная</span>
+  </button>
+
+
+  <button
+    class="mobile-nav-btn"
+    data-page="base"
+  >
+    ▦
+    <span>База</span>
+  </button>
+
+
+  <button
+    class="mobile-nav-btn"
+    data-page="assembly"
+  >
+    ✓
+    <span>Сборка</span>
+    <em id="mobileAssemblyBadge"></em>
+  </button>
+
+
+  <button
+    class="mobile-nav-btn"
+    data-page="collected"
+  >
+    ✓
+    <span>Собрано</span>
+  </button>
+
+
+  <button
+    class="mobile-nav-btn"
+    data-page="tools"
+  >
+    ⚙
+    <span>Ещё</span>
+  </button>
+
 </nav>
 
+
+<!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- Excel XLSX -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<!-- SKLADAPLAN -->
 <script src="app.js"></script>
-</body></html>
+
+</body>
+</html>
