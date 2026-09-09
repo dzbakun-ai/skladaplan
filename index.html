@@ -24,11 +24,17 @@
   <div class="sidebar-foot"><div class="offline"><i></i> Офлайн-режим</div><small>Данные загружены из<br>Копия SKLADAPLAN WMS.xlsx</small></div>
 </aside>
 <main>
-<header class="topbar"><div><div class="crumb">SKLADAPLAN / <span id="pageTitle">Дашборд</span></div><h1 id="heading">Главный экран склада</h1></div><div class="top-actions"><button class="ghost" id="exportBtn">Экспорт JSON</button><button class="primary" id="backupBtn">Создать backup</button></div></header>
+<header class="topbar"><button class="mobile-menu" id="mobileMenu" aria-label="Меню">☰</button><div><div class="crumb">SKLADAPLAN / <span id="pageTitle">Дашборд</span></div><h1 id="heading">Главный экран склада</h1></div><div class="top-actions"><button class="ghost" id="exportBtn">Экспорт JSON</button><button class="primary" id="backupBtn">Создать backup</button></div></header>
 <section id="content"></section>
 </main>
 </div>
-
+<nav class="mobile-nav" id="mobileNav">
+  <button class="mobile-nav-btn active" data-page="dashboard">⌂<span>Главная</span></button>
+  <button class="mobile-nav-btn" data-page="base">▦<span>База</span></button>
+  <button class="mobile-nav-btn" data-page="assembly">✓<span>Сборка</span><em id="mobileAssemblyBadge"></em></button>
+  <button class="mobile-nav-btn" data-page="collected">✓<span>Собрано</span></button>
+  <button class="mobile-nav-btn" data-page="tools">⚙<span>Ещё</span></button>
+</nav>
 
 <script src="app.js"></script>
 </body></html>
