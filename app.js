@@ -2962,67 +2962,428 @@ async function deleteSelectedBoxes() {
 /* =========================================================
    PICKING
    ========================================================= */
+/* =========================================================
+   REQUEST → PICKING
+   ========================================================= */
 
-async function markSelectedForPicking() {
+/*
+  Вставка заявки:
 
-  const selected =
-    getSelectedBoxes();
+  Пользователь вставляет список штрихкодов.
+  Каждый штрихкод может повторяться.
 
-  if (!selected.length) {
+  Например:
 
-    alert(
-      'Выберите хотя бы одну коробку.'
+  4810122595003
+  4810122595003
+  4810122595003
+  4810122659354
+
+  Система понимает:
+
+  4810122595003 → нужно 3 коробки
+  4810122659354 → нужно 1 коробку
+
+  Затем ищет физические коробки
+  со статусом "На складе" и переводит
+  нужное количество в "КПодбору".
+*/
+async function createPickingFromRequest() {
+
+  const input =
+    document.querySelector(
+      '#requestBarcodes'
+    );
+
+  if (!input) {
+    toast(
+      'Поле заявки не найдено',
+      'error'
     );
 
     return;
+  }
 
+  const raw =
+    input.value || '';
+
+  if (!raw.trim()) {
+    toast(
+      'Вставьте штрихкоды заявки',
+      'error'
+    );
+
+    return;
   }
 
 
-  const ids =
-    selected
+  /*
+    Разбираем текст.
+
+    Поддерживаются:
+
+    1234567890123
+    1234567890123
+    1234567890124
+
+    а также строки,
+    где штрихкоды разделены
+    пробелами / табуляцией / запятыми / ;
+  */
+  const tokens =
+    raw
+      .split(/[\s,;]+/)
       .map(
-        box => box.id
+        value =>
+          normalizeBarcode(value)
       )
       .filter(Boolean);
 
 
-  if (!ids.length) {
+  if (!tokens.length) {
 
-    alert(
-      'Не удалось определить выбранные коробки.'
+    toast(
+      'Не найдено ни одного штрихкода',
+      'error'
     );
 
     return;
+  }
+
+
+  /*
+    Считаем количество каждой
+    позиции в заявке.
+  */
+  const requested =
+    new Map();
+
+
+  for (
+    const barcode of tokens
+  ) {
+
+    requested.set(
+      barcode,
+      (
+        requested.get(barcode) ||
+        0
+      ) + 1
+    );
 
   }
 
 
+  /*
+    Кандидаты:
+
+    Только реальные физические коробки,
+    которые сейчас находятся
+    "На складе".
+
+    Зарезервированные,
+    уже подобранные,
+    собранные и отгруженные
+    сюда НЕ попадают.
+  */
+  const available =
+    state.boxes.filter(
+      row =>
+        row.status ===
+          STATUSES.STOCK &&
+        normalizeBarcode(
+          row.barcode
+        )
+    );
+
+
+  /*
+    Здесь будем хранить
+    конкретные физические ID коробок,
+    которые необходимо отправить
+    в подбор.
+  */
+  const selectedIds =
+    [];
+
+  /*
+    Для отчёта о нехватке.
+  */
+  const missing =
+    [];
+
+
+  /*
+    Не даём одной и той же
+    физической коробке попасть
+    в заявку дважды.
+  */
+  const usedIds =
+    new Set();
+
+
+  /*
+    Обрабатываем каждую позицию заявки.
+  */
+  for (
+    const [
+      barcode,
+      requiredCount
+    ] of requested
+  ) {
+
+    const candidates =
+      available.filter(
+        row =>
+          normalizeBarcode(
+            row.barcode
+          ) === barcode &&
+          !usedIds.has(
+            row.id
+          )
+      );
+
+
+    /*
+      Сколько физических коробок
+      реально нашли.
+    */
+    const foundCount =
+      Math.min(
+        requiredCount,
+        candidates.length
+      );
+
+
+    /*
+      Берём только необходимое
+      количество физических коробок.
+    */
+    for (
+      let i = 0;
+      i < foundCount;
+      i++
+    ) {
+
+      const box =
+        candidates[i];
+
+      selectedIds.push(
+        box.id
+      );
+
+      usedIds.add(
+        box.id
+      );
+
+    }
+
+
+    /*
+      Если коробок не хватило —
+      запоминаем.
+    */
+    if (
+      foundCount <
+      requiredCount
+    ) {
+
+      missing.push({
+        barcode,
+        required:
+          requiredCount,
+        found:
+          foundCount,
+        missing:
+          requiredCount -
+          foundCount
+      });
+
+    }
+
+  }
+
+
+  /*
+    Если вообще ничего подобрать
+    не удалось — ничего в БД
+    не меняем.
+  */
+  if (!selectedIds.length) {
+
+    toast(
+      'Не удалось найти ни одной подходящей коробки',
+      'error'
+    );
+
+    return;
+  }
+
+
+  /*
+    Переводим найденные физические
+    коробки в КПодбору.
+
+    Используем ID, а не штрихкод.
+
+    Это КРИТИЧЕСКИ важно,
+    потому что один штрихкод может
+    встречаться у нескольких коробок.
+  */
   const {
+    data,
     error
   } =
     await supabaseClient
       .from('boxes')
       .update({
         "Статус":
-          STATUSES.PICK
+          STATUSES.PICK,
+
+        "Изменил":
+          state.user?.email ||
+          null
       })
       .in(
         'id',
-        ids
+        selectedIds
+      )
+      .select(
+        BOX_SELECT
       );
 
 
   if (error) {
 
     console.error(
-      'Ошибка отправки коробок в подбор:',
+      'Ошибка формирования подбора:',
       error
     );
 
+    console.error(
+      'Message:',
+      error?.message
+    );
+
+    console.error(
+      'Details:',
+      error?.details
+    );
+
+    console.error(
+      'Hint:',
+      error?.hint
+    );
+
+    console.error(
+      'Code:',
+      error?.code
+    );
+
+    toast(
+      error.message ||
+      'Ошибка формирования подбора',
+      'error'
+    );
+
+    return;
+  }
+
+
+  /*
+    Обновляем локальную базу.
+  */
+  if (
+    Array.isArray(data)
+  ) {
+
+    data.forEach(
+      row => {
+
+        updateLocalBox(
+          row.id,
+          row
+        );
+
+      }
+    );
+
+  }
+
+
+  /*
+    Очищаем заявку.
+  */
+  input.value = '';
+
+
+  /*
+    Обновляем интерфейс.
+  */
+  render();
+
+
+  /*
+    Формируем красивый результат.
+  */
+  const requestedTotal =
+    tokens.length;
+
+  const pickedTotal =
+    selectedIds.length;
+
+  let message =
+    `В подбор добавлено: ${pickedTotal} из ${requestedTotal}`;
+
+
+  /*
+    Если чего-то не хватило —
+    показываем список.
+  */
+  if (
+    missing.length
+  ) {
+
+    const missingText =
+      missing
+        .map(
+          item =>
+            `${item.barcode}: нужно ${item.required}, найдено ${item.found}`
+        )
+        .join('\n');
+
+    console.warn(
+      'Недостаток коробок:',
+      missing
+    );
+
     alert(
-      'Ошибка при отправке коробок в подбор:\n' +
-      error.message
+      message +
+      '\n\nНе хватило:\n' +
+      missingText
+    );
+
+  } else {
+
+    toast(
+      `Заявка сформирована. В подбор добавлено: ${pickedTotal}`
+    );
+
+  }
+
+}
+
+async function markSelectedForPicking() {
+
+  const ids =
+    [...state.selectedIds];
+
+
+  if (!ids.length) {
+
+    toast(
+      'Выберите хотя бы одну коробку',
+      'error'
     );
 
     return;
@@ -3030,39 +3391,64 @@ async function markSelectedForPicking() {
   }
 
 
-  /*
-    Обновляем локальное состояние.
-  */
+  let done = 0;
 
-  selected.forEach(
-    box => {
 
-      box.status =
-        STATUSES.PICK;
+  for (
+    const id of ids
+  ) {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from('boxes')
+        .update({
+          "Статус":
+            STATUSES.PICK
+        })
+        .eq(
+          'id',
+          id
+        )
+        .select(
+          BOX_SELECT
+        )
+        .single();
+
+
+    if (error) {
+
+      console.error(
+        'Ошибка отправки коробки в подбор:',
+        error
+      );
+
+      continue;
 
     }
-  );
 
 
-  await loadBoxes();
+    updateLocalBox(
+      id,
+      data
+    );
 
 
-  /*
-    Снимаем выделение.
-  */
+    done++;
 
-  clearSelectedBoxes();
+  }
 
 
-  /*
-    Обновляем интерфейс.
-  */
+  state.selectedIds.clear();
+
 
   render();
 
 
-  alert(
-    `В подбор отправлено: ${ids.length}`
+  toast(
+    `Добавлено в подбор: ${done}`
   );
 
 }
