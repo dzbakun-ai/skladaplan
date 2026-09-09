@@ -4480,8 +4480,31 @@ function getGroupedPickingBoxes() {
 
 function assemblyView() {
 
-  const picking =
+  /*
+    Все физические коробки в подборе.
+    Используем для общей статистики.
+  */
+
+  const pickingBoxes =
     getPickingBoxes();
+
+
+  /*
+    Сгруппированные коробки.
+
+    Одна строка =
+    штрихкод + артикул + зона/ряд +
+    поддон + склад.
+  */
+
+  const pickingGroups =
+    getGroupedPickingBoxes();
+
+
+  /*
+    Количество уже скомплектованных
+    физических коробок.
+  */
 
   const collected =
     state.boxes.filter(
@@ -4490,18 +4513,56 @@ function assemblyView() {
         STATUSES.COLLECTED
     ).length;
 
-  const selectedCount =
-    state.assemblySelectedIds
-      ? state.assemblySelectedIds.size
-      : 0;
+
+  /*
+    Выбранные группы.
+  */
+
+  const selectedGroupSet =
+    state.assemblySelectedGroups
+      ? state.assemblySelectedGroups
+      : new Set();
+
+
+  const selectedGroups =
+    pickingGroups.filter(
+      group =>
+        selectedGroupSet.has(
+          group.key
+        )
+    );
+
+
+  /*
+    Сколько физических коробок
+    находится внутри выбранных групп.
+  */
+
+  const selectedBoxesCount =
+    selectedGroups.reduce(
+      (
+        total,
+        group
+      ) =>
+        total +
+        (
+          Number(group.count) || 0
+        ),
+      0
+    );
+
 
   return `
 
     <div>
 
+
+      <!-- ========================= -->
       <!-- СТАТИСТИКА -->
+      <!-- ========================= -->
 
       <div class="cards">
+
 
         <div class="card">
 
@@ -4510,11 +4571,28 @@ function assemblyView() {
           </div>
 
           <div class="value">
-            ${picking.length}
+            ${pickingBoxes.length}
           </div>
 
           <div class="sub">
-            Коробок ожидает комплектации
+            Физических коробок
+          </div>
+
+        </div>
+
+
+        <div class="card">
+
+          <div class="label">
+            Групп
+          </div>
+
+          <div class="value">
+            ${pickingGroups.length}
+          </div>
+
+          <div class="sub">
+            Штрихкод · зона · поддон
           </div>
 
         </div>
@@ -4531,15 +4609,19 @@ function assemblyView() {
           </div>
 
           <div class="sub">
-            Коробок скомплектовано
+            Физических коробок
           </div>
 
         </div>
 
+
       </div>
 
 
-      <!-- ПОДДОН -->
+
+      <!-- ========================= -->
+      <!-- ТЕКУЩИЙ ПОДДОН -->
+      <!-- ========================= -->
 
       <div
         class="panel"
@@ -4571,9 +4653,9 @@ function assemblyView() {
             id="currentPallet"
             class="search"
             style="max-width:300px"
-            placeholder="Например: А"
+            placeholder="Например: 1"
             value="${escapeHtml(
-              state.currentPallet
+              state.currentPallet || ''
             )}"
           >
 
@@ -4591,7 +4673,10 @@ function assemblyView() {
       </div>
 
 
-      <!-- СКАНЕР -->
+
+      <!-- ========================= -->
+      <!-- СКАНИРОВАНИЕ -->
+      <!-- ========================= -->
 
       <div
         class="panel"
@@ -4618,7 +4703,10 @@ function assemblyView() {
         <input
           id="scannerInput"
           class="search"
-          style="width:100%; font-size:16px"
+          style="
+            width:100%;
+            font-size:16px;
+          "
           inputmode="none"
           autocomplete="off"
           autocorrect="off"
@@ -4630,7 +4718,10 @@ function assemblyView() {
         <div
           id="scannerResult"
           class="notice"
-          style="margin-top:12px; margin-bottom:0"
+          style="
+            margin-top:12px;
+            margin-bottom:0;
+          "
         >
           Готов к сканированию.
         </div>
@@ -4638,7 +4729,10 @@ function assemblyView() {
       </div>
 
 
+
+      <!-- ========================= -->
       <!-- РУЧНАЯ КОМПЛЕКТАЦИЯ -->
+      <!-- ========================= -->
 
       <div
         class="panel"
@@ -4654,8 +4748,9 @@ function assemblyView() {
             </h3>
 
             <div class="muted">
-              Можно поставить галочки и
-              скомплектовать коробки без сканера.
+              Одна галочка выбирает всю группу
+              одинаковых коробок в одной зоне
+              и на одном поддоне.
             </div>
 
           </div>
@@ -4665,13 +4760,20 @@ function assemblyView() {
             id="assemblySelectedCount"
             class="muted"
           >
-            Выбрано: ${selectedCount}
+
+            Выбрано:
+            ${selectedGroups.length}
+            групп ·
+            ${selectedBoxesCount}
+            коробок
+
           </div>
 
         </div>
 
 
         <div class="toolbar">
+
 
           <button
             class="ghost"
@@ -4690,12 +4792,16 @@ function assemblyView() {
             ✓ Скомплектовать выбранные
           </button>
 
+
         </div>
 
       </div>
 
 
-      <!-- ТАБЛИЦА -->
+
+      <!-- ========================= -->
+      <!-- КОРОБКИ В ПОДБОРЕ -->
+      <!-- ========================= -->
 
       <div
         class="panel"
@@ -4711,7 +4817,12 @@ function assemblyView() {
             </h3>
 
             <div class="muted">
-              Всего: ${picking.length}
+
+              ${pickingGroups.length}
+              групп ·
+              ${pickingBoxes.length}
+              коробок
+
             </div>
 
           </div>
@@ -4723,9 +4834,11 @@ function assemblyView() {
 
           <table class="data-table">
 
+
             <thead>
 
               <tr>
+
 
                 <th
                   style="
@@ -4737,34 +4850,46 @@ function assemblyView() {
                   <input
                     type="checkbox"
                     id="selectAllAssemblyCheckbox"
-                    title="Выбрать все"
+                    title="Выбрать все группы"
                   >
 
                 </th>
+
 
                 <th>
                   Штрихкод
                 </th>
 
+
                 <th>
                   Артикул
                 </th>
+
 
                 <th>
                   Зона/ряд
                 </th>
 
+
                 <th>
                   Поддон
                 </th>
+
 
                 <th>
                   Склад
                 </th>
 
+
+                <th>
+                  Коробок
+                </th>
+
+
                 <th>
                   Статус
                 </th>
+
 
               </tr>
 
@@ -4773,10 +4898,11 @@ function assemblyView() {
 
             <tbody>
 
-              ${
-                picking.length
 
-                  ? picking
+              ${
+                pickingGroups.length
+
+                  ? pickingGroups
                       .slice(0, 300)
                       .map(pickingRow)
                       .join('')
@@ -4786,7 +4912,7 @@ function assemblyView() {
                     <tr>
 
                       <td
-                        colspan="7"
+                        colspan="8"
                       >
 
                         <div class="empty">
@@ -4803,7 +4929,9 @@ function assemblyView() {
                   `
               }
 
+
             </tbody>
+
 
           </table>
 
@@ -4811,7 +4939,7 @@ function assemblyView() {
 
 
         ${
-          picking.length > 300
+          pickingGroups.length > 300
 
             ? `
 
@@ -4821,7 +4949,13 @@ function assemblyView() {
                   margin-top:10px;
                 "
               >
-                Показаны первые 300 коробок.
+
+                Показаны первые
+                300 групп.
+
+                Всего групп:
+                ${pickingGroups.length}
+
               </div>
 
             `
@@ -4829,7 +4963,9 @@ function assemblyView() {
             : ''
         }
 
+
       </div>
+
 
     </div>
 
