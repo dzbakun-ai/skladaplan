@@ -2332,6 +2332,1084 @@ function updateAssemblyBadge(){
   }
 }
 
+// =====================================================
+// SKLADAPLAN — ИМПОРТ EXCEL
+// =====================================================
+
+const EXCEL_HEADERS = [
+  'Штрихкод',
+  'Артикул',
+  'Кол-во в коробке',
+  'Зона/Ряд',
+  'Поддон',
+  'Статус',
+  'Дата',
+  'Склад',
+  'Столбец 9',
+  'Направление',
+  'Отбор ✔️',
+  'Кто работал'
+];
+
+let pendingExcelImport = null;
+
+
+function normalizeExcelHeader(value) {
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+
+function normalizeImportedBarcode(value) {
+
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+    return '';
+  }
+
+  return String(value)
+    .trim()
+    .replace(/\.0$/, '')
+    .replace(/,0$/, '')
+    .replace(/\D/g, '');
+}
+
+
+function excelBoolean(value) {
+
+  const text =
+    String(value ?? '')
+      .trim()
+      .toLowerCase();
+
+  return (
+    text === 'истина' ||
+    text === 'true' ||
+    text === 'да' ||
+    text === '1' ||
+    text === '✓' ||
+    text === '✔️'
+  );
+}
+
+
+function excelDate(value) {
+
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+
+    if (isNaN(value.getTime())) {
+      return null;
+    }
+
+    return value.toISOString();
+  }
+
+  if (
+    typeof value === 'number' &&
+    value > 20000 &&
+    value < 60000
+  ) {
+
+    const d =
+      XLSX.SSF.parse_date_code(value);
+
+    if (d) {
+
+      return new Date(
+        Date.UTC(
+          d.y,
+          d.m - 1,
+          d.d,
+          d.H || 0,
+          d.M || 0,
+          Math.floor(d.S || 0)
+        )
+      ).toISOString();
+    }
+  }
+
+  const text =
+    String(value).trim();
+
+  const match =
+    text.match(
+      /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/
+    );
+
+  if (match) {
+
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3]);
+
+    return new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day
+      )
+    ).toISOString();
+  }
+
+  const parsed =
+    new Date(text);
+
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString();
+  }
+
+  return null;
+}
+
+
+function findExcelColumn(headers, name) {
+
+  const target =
+    normalizeExcelHeader(name);
+
+  return headers.findIndex(
+    header =>
+      normalizeExcelHeader(header) === target
+  );
+}
+
+
+async function readExcel(file) {
+
+  return new Promise(
+    (resolve, reject) => {
+
+      const reader =
+        new FileReader();
+
+      reader.onload =
+        event => {
+
+          try {
+
+            const workbook =
+              XLSX.read(
+                event.target.result,
+                {
+                  type: 'array',
+                  cellDates: true
+                }
+              );
+
+            if (
+              !workbook.SheetNames.length
+            ) {
+              throw new Error(
+                'В Excel нет листов.'
+              );
+            }
+
+            const sheet =
+              workbook.Sheets[
+                workbook.SheetNames[0]
+              ];
+
+            const data =
+              XLSX.utils.sheet_to_json(
+                sheet,
+                {
+                  header: 1,
+                  defval: '',
+                  raw: true
+                }
+              );
+
+            resolve({
+              sheetName:
+                workbook.SheetNames[0],
+
+              data
+            });
+
+          } catch (error) {
+
+            reject(error);
+          }
+        };
+
+      reader.onerror =
+        () =>
+          reject(
+            new Error(
+              'Не удалось прочитать Excel.'
+            )
+          );
+
+      reader.readAsArrayBuffer(file);
+    }
+  );
+}
+
+
+function convertExcelData(rawData) {
+
+  if (
+    !rawData ||
+    rawData.length < 2
+  ) {
+    throw new Error(
+      'Excel-файл пустой или содержит только заголовки.'
+    );
+  }
+
+  const headers =
+    rawData[0].map(
+      value =>
+        String(value ?? '').trim()
+    );
+
+  const indexes = {};
+
+  EXCEL_HEADERS.forEach(
+    header => {
+
+      indexes[header] =
+        findExcelColumn(
+          headers,
+          header
+        );
+    }
+  );
+
+  if (
+    indexes['Штрихкод'] === -1
+  ) {
+    throw new Error(
+      'Не найдена колонка «Штрихкод».'
+    );
+  }
+
+  const result = [];
+  let errors = 0;
+
+  rawData
+    .slice(1)
+    .forEach(
+      (sourceRow, index) => {
+
+        const empty =
+          sourceRow.every(
+            value =>
+              value === '' ||
+              value === null ||
+              value === undefined
+          );
+
+        if (empty) {
+          return;
+        }
+
+        const barcode =
+          normalizeImportedBarcode(
+            sourceRow[
+              indexes['Штрихкод']
+            ]
+          );
+
+        if (!barcode) {
+          errors++;
+          return;
+        }
+
+        let quantity = null;
+
+        if (
+          indexes['Кол-во в коробке'] >= 0
+        ) {
+
+          const value =
+            sourceRow[
+              indexes['Кол-во в коробке']
+            ];
+
+          if (
+            value !== '' &&
+            value !== null &&
+            value !== undefined
+          ) {
+
+            const number =
+              Number(value);
+
+            if (
+              Number.isFinite(number)
+            ) {
+              quantity = number;
+            }
+          }
+        }
+
+        result.push({
+
+          excelRow:
+            index + 2,
+
+          data: {
+
+            barcode,
+
+            article:
+              indexes['Артикул'] >= 0
+                ? String(
+                    sourceRow[
+                      indexes['Артикул']
+                    ] ?? ''
+                  ).trim() || null
+                : null,
+
+            quantity_in_box:
+              quantity,
+
+            zone_row:
+              indexes['Зона/Ряд'] >= 0
+                ? String(
+                    sourceRow[
+                      indexes['Зона/Ряд']
+                    ] ?? ''
+                  ).trim() || null
+                : null,
+
+            pallet:
+              indexes['Поддон'] >= 0
+                ? String(
+                    sourceRow[
+                      indexes['Поддон']
+                    ] ?? ''
+                  ).trim() || null
+                : null,
+
+            status:
+              indexes['Статус'] >= 0
+                ? String(
+                    sourceRow[
+                      indexes['Статус']
+                    ] ?? ''
+                  ).trim() ||
+                  'На складе'
+                : 'На складе',
+
+            date:
+              indexes['Дата'] >= 0
+                ? excelDate(
+                    sourceRow[
+                      indexes['Дата']
+                    ]
+                  )
+                : null,
+
+            warehouse:
+              indexes['Склад'] >= 0
+                ? String(
+                    sourceRow[
+                      indexes['Склад']
+                    ] ?? ''
+                  ).trim() || null
+                : null,
+
+            column_9:
+              indexes['Столбец 9'] >= 0
+                ? String(
+                    sourceRow[
+                      indexes['Столбец 9']
+                    ] ?? ''
+                  ).trim() || null
+                : null,
+
+            direction:
+              indexes['Направление'] >= 0
+                ? String(
+                    sourceRow[
+                      indexes['Направление']
+                    ] ?? ''
+                  ).trim() || null
+                : null,
+
+            pick:
+              indexes['Отбор ✔️'] >= 0
+                ? excelBoolean(
+                    sourceRow[
+                      indexes['Отбор ✔️']
+                    ]
+                  )
+                : false,
+
+            worker:
+              indexes['Кто работал'] >= 0
+                ? String(
+                    sourceRow[
+                      indexes['Кто работал']
+                    ] ?? ''
+                  ).trim() || null
+                : null
+          }
+        });
+      }
+    );
+
+  return {
+    rows: result,
+    errors
+  };
+}
+
+
+function excelPreview(items) {
+
+  const preview =
+    items.slice(0, 20);
+
+  return `
+
+    <div class="table-wrap">
+
+      <table class="data-table">
+
+        <thead>
+          <tr>
+
+            <th>№</th>
+            <th>Штрихкод</th>
+            <th>Артикул</th>
+            <th>Зона/Ряд</th>
+            <th>Поддон</th>
+            <th>Статус</th>
+            <th>Склад</th>
+
+          </tr>
+        </thead>
+
+        <tbody>
+
+          ${preview.map(
+            item => `
+
+              <tr>
+
+                <td>
+                  ${item.excelRow}
+                </td>
+
+                <td>
+                  ${esc(item.data.barcode)}
+                </td>
+
+                <td>
+                  ${esc(item.data.article || '')}
+                </td>
+
+                <td>
+                  ${esc(item.data.zone_row || '')}
+                </td>
+
+                <td>
+                  ${esc(item.data.pallet || '')}
+                </td>
+
+                <td>
+                  ${esc(item.data.status || '')}
+                </td>
+
+                <td>
+                  ${esc(item.data.warehouse || '')}
+                </td>
+
+              </tr>
+
+            `
+          ).join('')}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+    ${
+      items.length > 20
+        ? `
+          <div
+            class="muted"
+            style="margin-top:8px"
+          >
+            Показаны первые 20 строк
+            из ${items.length.toLocaleString('ru-RU')}.
+          </div>
+        `
+        : ''
+    }
+
+  `;
+}
+
+
+async function importExcelRows(items) {
+
+  const chunkSize = 500;
+
+  let imported = 0;
+
+  for (
+    let i = 0;
+    i < items.length;
+    i += chunkSize
+  ) {
+
+    const chunk =
+      items
+        .slice(i, i + chunkSize)
+        .map(
+          item => ({
+
+            ...item.data,
+
+            created_at:
+              new Date().toISOString(),
+
+            updated_at:
+              new Date().toISOString()
+
+          })
+        );
+
+    const {
+      error
+    } = await supabaseClient
+      .from('boxes')
+      .insert(chunk);
+
+    if (error) {
+      throw error;
+    }
+
+    imported +=
+      chunk.length;
+
+    const progress =
+      $('#importProgress');
+
+    if (progress) {
+
+      progress.textContent =
+        `Загружено ${imported.toLocaleString('ru-RU')} из ${items.length.toLocaleString('ru-RU')} коробок…`;
+    }
+  }
+
+  return imported;
+}
+
+
+function excelImportView() {
+
+  return `
+
+    <div class="panel">
+
+      <div class="section-title">
+
+        <div>
+
+          <h3>
+            📥 Импорт Excel
+          </h3>
+
+          <div class="muted">
+            Загрузить готовую таблицу склада
+            в Supabase
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div
+        style="
+          border:2px dashed #ccc;
+          border-radius:12px;
+          padding:25px;
+          text-align:center;
+          margin-top:15px
+        "
+      >
+
+        <input
+          type="file"
+          id="excelFile"
+          accept=".xlsx,.xls"
+          style="display:none"
+        >
+
+        <button
+          class="primary"
+          id="chooseExcelBtn"
+        >
+          📄 Выбрать Excel
+        </button>
+
+        <div
+          id="excelFileName"
+          class="muted"
+          style="margin-top:10px"
+        >
+          Файл не выбран
+        </div>
+
+      </div>
+
+
+      <div
+        id="excelInfo"
+        style="margin-top:15px"
+      ></div>
+
+
+      <div
+        id="excelPreview"
+        style="margin-top:15px"
+      ></div>
+
+
+      <div
+        id="importProgress"
+        class="muted"
+        style="margin-top:12px"
+      ></div>
+
+
+      <div
+        id="importActions"
+        style="
+          display:none;
+          gap:8px;
+          margin-top:15px;
+          flex-wrap:wrap
+        "
+      >
+
+        <button
+          class="primary"
+          id="startExcelImport"
+        >
+          🚀 Импортировать в Supabase
+        </button>
+
+        <button
+          class="ghost"
+          id="cancelExcelImport"
+        >
+          Отмена
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <div
+      class="panel"
+      style="margin-top:14px"
+    >
+
+      <h3>
+        Правила импорта
+      </h3>
+
+      <div
+        class="muted"
+        style="
+          line-height:1.8;
+          font-size:12px
+        "
+      >
+
+        <div>
+          ✓ 1 строка Excel = 1 физическая коробка
+        </div>
+
+        <div>
+          ✓ Одинаковые штрихкоды не объединяются
+        </div>
+
+        <div>
+          ✓ Штрихкод автоматически очищается
+          от .0 и ,0
+        </div>
+
+        <div>
+          ✓ Пустое «Кол-во в коробке» допускается
+        </div>
+
+        <div>
+          ✓ Данные загружаются напрямую в Supabase
+        </div>
+
+        <div>
+          ⚠️ Существующие записи не удаляются
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+}
+
+
+function setupExcelImport() {
+
+  const fileInput =
+    $('#excelFile');
+
+  const chooseButton =
+    $('#chooseExcelBtn');
+
+  if (
+    !fileInput ||
+    !chooseButton
+  ) {
+    return;
+  }
+
+
+  chooseButton.onclick =
+    () => fileInput.click();
+
+
+  fileInput.onchange =
+    async event => {
+
+      const file =
+        event.target.files?.[0];
+
+      if (!file) {
+        return;
+      }
+
+      $('#excelFileName')
+        .textContent =
+          file.name;
+
+      $('#excelInfo')
+        .innerHTML =
+          '<div class="muted">Читаем Excel…</div>';
+
+      $('#excelPreview')
+        .innerHTML = '';
+
+      $('#importActions')
+        .style.display =
+          'none';
+
+      pendingExcelImport =
+        null;
+
+
+      try {
+
+        if (
+          typeof XLSX ===
+          'undefined'
+        ) {
+
+          throw new Error(
+            'Библиотека XLSX не загружена. Проверь index.html.'
+          );
+        }
+
+
+        const workbook =
+          await readExcel(file);
+
+
+        const converted =
+          convertExcelData(
+            workbook.data
+          );
+
+
+        pendingExcelImport =
+          converted.rows;
+
+
+        $('#excelInfo')
+          .innerHTML = `
+
+            <div
+              style="
+                display:grid;
+                grid-template-columns:
+                repeat(auto-fit,minmax(150px,1fr));
+                gap:8px
+              "
+            >
+
+              <div class="card">
+
+                <div class="label">
+                  Лист
+                </div>
+
+                <div class="value">
+                  ${esc(
+                    workbook.sheetName
+                  )}
+                </div>
+
+              </div>
+
+
+              <div class="card">
+
+                <div class="label">
+                  Коробок
+                </div>
+
+                <div class="value">
+                  ${converted.rows.length.toLocaleString('ru-RU')}
+                </div>
+
+              </div>
+
+
+              <div class="card">
+
+                <div class="label">
+                  Ошибки
+                </div>
+
+                <div class="value">
+                  ${converted.errors}
+                </div>
+
+              </div>
+
+            </div>
+
+          `;
+
+
+        $('#excelPreview')
+          .innerHTML =
+            excelPreview(
+              converted.rows
+            );
+
+
+        if (
+          converted.rows.length
+        ) {
+
+          $('#importActions')
+            .style.display =
+              'flex';
+        }
+
+
+      } catch(error) {
+
+        console.error(error);
+
+        $('#excelInfo')
+          .innerHTML = `
+
+            <div
+              class="notice"
+              style="border-left:4px solid #c00"
+            >
+
+              ❌
+              ${esc(
+                error.message ||
+                error
+              )}
+
+            </div>
+
+          `;
+      }
+    };
+
+
+  $('#startExcelImport').onclick =
+    async () => {
+
+      if (
+        !pendingExcelImport ||
+        !pendingExcelImport.length
+      ) {
+
+        alert(
+          'Сначала выберите Excel-файл.'
+        );
+
+        return;
+      }
+
+
+      const total =
+        pendingExcelImport.length;
+
+
+      const confirmed =
+        confirm(
+          `Импортировать ${total.toLocaleString('ru-RU')} коробок в Supabase?\n\nКаждая строка Excel станет отдельной физической коробкой.\n\nСуществующие коробки удаляться не будут.`
+        );
+
+
+      if (!confirmed) {
+        return;
+      }
+
+
+      const button =
+        $('#startExcelImport');
+
+
+      button.disabled =
+        true;
+
+      button.textContent =
+        'Импортируем…';
+
+
+      try {
+
+        const imported =
+          await importExcelRows(
+            pendingExcelImport
+          );
+
+
+        $('#importProgress')
+          .innerHTML = `
+
+            <div
+              class="notice"
+              style="margin-top:10px"
+            >
+
+              ✅ Импорт завершён.
+
+              Добавлено:
+
+              <b>
+                ${imported.toLocaleString('ru-RU')}
+              </b>
+
+              коробок.
+
+            </div>
+
+          `;
+
+
+        pendingExcelImport =
+          null;
+
+
+        $('#importActions')
+          .style.display =
+            'none';
+
+
+        await loadDatabase();
+
+
+        state.page =
+          'base';
+
+        render();
+
+
+        alert(
+          `Импорт завершён.\n\nДобавлено коробок: ${imported.toLocaleString('ru-RU')}`
+        );
+
+
+      } catch(error) {
+
+        console.error(error);
+
+
+        $('#importProgress')
+          .innerHTML = `
+
+            <div
+              class="notice"
+              style="
+                margin-top:10px;
+                border-left:4px solid #c00
+              "
+            >
+
+              ❌ Ошибка импорта:
+
+              <br>
+
+              ${esc(
+                error.message ||
+                error
+              )}
+
+            </div>
+
+          `;
+
+
+        button.disabled =
+          false;
+
+        button.textContent =
+          '🚀 Импортировать в Supabase';
+      }
+    };
+
+
+  $('#cancelExcelImport').onclick =
+    () => {
+
+      pendingExcelImport =
+        null;
+
+      fileInput.value =
+        '';
+
+      $('#excelFileName')
+        .textContent =
+          'Файл не выбран';
+
+      $('#excelInfo')
+        .innerHTML = '';
+
+      $('#excelPreview')
+        .innerHTML = '';
+
+      $('#importProgress')
+        .innerHTML = '';
+
+      $('#importActions')
+        .style.display =
+          'none';
+    };
+}
 
 function tools(){
 
