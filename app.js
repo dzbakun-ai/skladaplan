@@ -3071,13 +3071,13 @@ function getPickingBoxes() {
 
   return state.boxes.filter(
     row =>
-      row.pick === true ||
-      row.status === STATUSES.PICK ||
-      row.status === STATUSES.RESERVED
+      row.status ===
+        STATUSES.PICK ||
+      row.status ===
+        STATUSES.RESERVED
   );
 
 }
-
 
 function assemblyView() {
 
