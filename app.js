@@ -4593,8 +4593,6 @@ function backupDatabase() {
 
 const EXCEL_MAP = {
 
-const EXCEL_MAP = {
-
   barcode: [
     'штрихкод',
     'barcode',
@@ -4748,7 +4746,9 @@ function convertExcelRow(
   columnMap
 ) {
 
-  function valueFor(field) {
+  function valueFor(
+    field
+  ) {
 
     const column =
       columnMap[field];
@@ -4759,14 +4759,19 @@ function convertExcelRow(
 
   }
 
+
   const barcode =
     normalizeBarcode(
       valueFor('barcode')
     );
 
+
   if (!barcode) {
+
     return null;
+
   }
+
 
   return {
 
