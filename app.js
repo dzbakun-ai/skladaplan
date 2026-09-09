@@ -5147,15 +5147,14 @@ async function handleExcelFile(
       в строки для нормализации.
     */
 
-    const rows =
-      XLSX.utils.sheet_to_json(
-        sheet,
-        {
-          defval: '',
-          raw: false
-        }
-      );
-
+const rows =
+  XLSX.utils.sheet_to_json(
+    sheet,
+    {
+      defval: '',
+      raw: true
+    }
+  );
 
     if (!rows.length) {
 
