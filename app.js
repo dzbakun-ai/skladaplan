@@ -3684,16 +3684,23 @@ function render(){
   }
 
 
-  if (
-    state.page === 'assembly'
-  ) {
+ if (
+  state.page === 'assembly'
+) {
 
-    setupScanner();
-  }
-
-
-  updateAssemblyBadge();
+  setupScanner();
 }
+
+
+if (
+  state.page === 'tools'
+) {
+
+  setupExcelImport();
+}
+
+
+updateAssemblyBadge();
 
 
 document.addEventListener(
