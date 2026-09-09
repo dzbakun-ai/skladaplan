@@ -2998,8 +2998,10 @@ function importRequestExcel(event) {
     return;
   }
 
+
   const reader =
     new FileReader();
+
 
   reader.onload =
     function(e) {
@@ -3011,6 +3013,7 @@ function importRequestExcel(event) {
             e.target.result
           );
 
+
         const workbook =
           XLSX.read(
             data,
@@ -3019,13 +3022,26 @@ function importRequestExcel(event) {
             }
           );
 
+
         const sheetName =
           workbook.SheetNames[0];
+
 
         const sheet =
           workbook.Sheets[
             sheetName
           ];
+
+
+        /*
+          Читаем Excel построчно.
+
+          Например:
+
+          Штрихкод | Количество
+          4810122640604 | 5
+          4810122680884 | 5
+        */
 
         const rows =
           XLSX.utils.sheet_to_json(
@@ -3033,70 +3049,16 @@ function importRequestExcel(event) {
             {
               header: 1,
               defval: '',
-              raw: true
+              raw: false
             }
           );
 
 
-        /*
-          Собираем все значения
-          из Excel и пытаемся найти
-          штрихкоды.
+        if (!rows.length) {
 
-          Пока не привязываемся
-          к конкретному названию
-          столбца.
-        */
-
-        const barcodes = [];
-
-
-        for (
-          const row of rows
-        ) {
-
-          if (
-            !Array.isArray(row)
-          ) {
-            continue;
-          }
-
-
-          for (
-            const cell of row
-          ) {
-
-            const barcode =
-              normalizeBarcode(
-                cell
-              );
-
-
-            /*
-              Для нашего склада
-              штрихкод — 13 цифр.
-            */
-            if (
-              /^\d{13}$/.test(
-                barcode
-              )
-            ) {
-
-              barcodes.push(
-                barcode
-              );
-
-            }
-
-          }
-
-        }
-
-
-        if (!barcodes.length) {
-
-          alert(
-            'В файле не найдено 13-значных штрихкодов.'
+          toast(
+            'Excel-файл пустой',
+            'error'
           );
 
           return;
@@ -3104,9 +3066,380 @@ function importRequestExcel(event) {
 
 
         /*
-          Записываем найденные
-          штрихкоды в поле заявки.
+          Ищем колонки:
+
+          Штрихкод
+          Количество
+
+          Названия могут немного
+          отличаться.
         */
+
+        let barcodeColumn =
+          -1;
+
+        let quantityColumn =
+          -1;
+
+
+        /*
+          Проверяем первую строку
+          как заголовок.
+        */
+
+        const header =
+          rows[0].map(
+            value =>
+              String(
+                value || ''
+              )
+                .trim()
+                .toLowerCase()
+          );
+
+
+        for (
+          let i = 0;
+          i < header.length;
+          i++
+        ) {
+
+          const name =
+            header[i];
+
+
+          /*
+            Колонка штрихкода
+          */
+
+          if (
+            barcodeColumn === -1 &&
+            (
+              name.includes(
+                'штрихкод'
+              ) ||
+              name.includes(
+                'barcode'
+              )
+            )
+          ) {
+
+            barcodeColumn =
+              i;
+
+          }
+
+
+          /*
+            Колонка количества
+          */
+
+          if (
+            quantityColumn === -1 &&
+            (
+              name === 'количество' ||
+              name === 'кол-во' ||
+              name === 'кол во' ||
+              name.includes(
+                'количество'
+              ) ||
+              name.includes(
+                'кол-во'
+              )
+            )
+          ) {
+
+            quantityColumn =
+              i;
+
+          }
+
+        }
+
+
+        /*
+          Если заголовки не нашли,
+          предполагаем:
+
+          A = Штрихкод
+          B = Количество
+        */
+
+        if (
+          barcodeColumn === -1
+        ) {
+
+          barcodeColumn = 0;
+
+        }
+
+
+        if (
+          quantityColumn === -1
+        ) {
+
+          quantityColumn = 1;
+
+        }
+
+
+        /*
+          Здесь собираем готовую заявку.
+
+          Например:
+
+          4810122640604 - 5
+          4810122680884 - 5
+        */
+
+        const requestLines =
+          [];
+
+
+        let importedCount =
+          0;
+
+
+        let skippedCount =
+          0;
+
+
+        /*
+          Начинаем со второй строки,
+          потому что первая — заголовок.
+        */
+
+        for (
+          let i = 1;
+          i < rows.length;
+          i++
+        ) {
+
+          const row =
+            rows[i];
+
+
+          if (
+            !Array.isArray(row)
+          ) {
+
+            continue;
+          }
+
+
+          /*
+            Получаем значение
+            штрихкода.
+          */
+
+          let barcodeValue =
+            row[
+              barcodeColumn
+            ];
+
+
+          /*
+            Получаем количество.
+          */
+
+          let quantityValue =
+            row[
+              quantityColumn
+            ];
+
+
+          if (
+            barcodeValue === undefined ||
+            barcodeValue === null ||
+            String(
+              barcodeValue
+            ).trim() === ''
+          ) {
+
+            skippedCount++;
+
+            continue;
+          }
+
+
+          /*
+            =================================================
+            НОРМАЛИЗАЦИЯ ШТРИХКОДА
+            =================================================
+
+            Excel может показать:
+
+            4 810 122 640 604
+
+            или:
+
+            4810122640604
+
+            или:
+
+            4810122640604.0
+          */
+
+
+          let barcode =
+            String(
+              barcodeValue
+            )
+              .trim()
+              .replace(
+                /\s+/g,
+                ''
+              );
+
+
+          /*
+            Убираем .0 и ,0
+          */
+
+          barcode =
+            barcode.replace(
+              /[.,]0+$/,
+              ''
+            );
+
+
+          /*
+            Используем твою
+            существующую нормализацию.
+          */
+
+          barcode =
+            normalizeBarcode(
+              barcode
+            );
+
+
+          /*
+            Проверяем именно
+            13-значный штрихкод.
+          */
+
+          if (
+            !/^\d{13}$/.test(
+              barcode
+            )
+          ) {
+
+            console.warn(
+              'Пропущен некорректный штрихкод:',
+              barcodeValue
+            );
+
+            skippedCount++;
+
+            continue;
+          }
+
+
+          /*
+            =================================================
+            КОЛИЧЕСТВО
+            =================================================
+          */
+
+          let quantity =
+            Number(
+              String(
+                quantityValue ?? ''
+              )
+                .trim()
+                .replace(
+                  /\s+/g,
+                  ''
+                )
+                .replace(
+                  ',',
+                  '.'
+                )
+            );
+
+
+          /*
+            Если количество отсутствует,
+            считаем 1.
+          */
+
+          if (
+            !Number.isFinite(
+              quantity
+            ) ||
+            quantity <= 0
+          ) {
+
+            quantity = 1;
+
+          }
+
+
+          /*
+            Количество физических
+            коробок должно быть целым.
+          */
+
+          quantity =
+            Math.floor(
+              quantity
+            );
+
+
+          if (
+            quantity <= 0
+          ) {
+
+            skippedCount++;
+
+            continue;
+          }
+
+
+          /*
+            Добавляем строку заявки.
+          */
+
+          requestLines.push(
+            `${barcode} - ${quantity}`
+          );
+
+
+          importedCount +=
+            quantity;
+
+        }
+
+
+        /*
+          Если ничего не импортировали.
+        */
+
+        if (
+          !requestLines.length
+        ) {
+
+          toast(
+            'Не удалось найти штрихкоды в Excel',
+            'error'
+          );
+
+          console.warn(
+            'Строки Excel:',
+            rows
+          );
+
+          return;
+        }
+
+
+        /*
+          =================================================
+          ЗАПИСЫВАЕМ В ПОЛЕ ЗАЯВКИ
+          =================================================
+        */
+
         const input =
           document.querySelector(
             '#requestBarcodes'
@@ -3115,28 +3448,59 @@ function importRequestExcel(event) {
 
         if (!input) {
 
-          alert(
-            'Поле заявки не найдено.'
+          toast(
+            'Поле заявки не найдено',
+            'error'
           );
 
           return;
         }
 
 
+        /*
+          Получаем готовый текст:
+
+          4810122640604 - 5
+          4810122680884 - 5
+          ...
+        */
+
         input.value =
-          barcodes.join('\n');
-
-
-        toast(
-          `Импортировано штрихкодов: ${barcodes.length}`
-        );
+          requestLines.join(
+            '\n'
+          );
 
 
         /*
-          Возвращаем возможность
-          повторно выбрать тот же файл.
+          =================================================
+          РЕЗУЛЬТАТ
+          =================================================
         */
+
+        toast(
+          `Импортировано: ${requestLines.length} позиций, ${importedCount} коробок`
+        );
+
+
+        if (
+          skippedCount > 0
+        ) {
+
+          console.warn(
+            `Пропущено строк: ${skippedCount}`
+          );
+
+        }
+
+
+        /*
+          Сбрасываем input,
+          чтобы тот же файл можно было
+          импортировать повторно.
+        */
+
         event.target.value = '';
+
 
       }
 
@@ -3147,8 +3511,10 @@ function importRequestExcel(event) {
           error
         );
 
-        alert(
-          'Не удалось прочитать файл заявки.'
+
+        toast(
+          'Не удалось прочитать Excel-файл',
+          'error'
         );
 
       }
