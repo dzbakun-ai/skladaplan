@@ -434,15 +434,21 @@
      MOBILE NAVIGATION
      ===================================================== -->
 
+<!-- =====================================================
+     MOBILE NAVIGATION
+     ===================================================== -->
+
 <nav
   class="mobile-nav"
   id="mobileNav"
 >
 
+  <!-- ГЛАВНАЯ -->
 
   <button
     class="mobile-nav-btn"
     data-page="dashboard"
+    type="button"
   >
 
     <span>
@@ -456,9 +462,12 @@
   </button>
 
 
+  <!-- БАЗА -->
+
   <button
     class="mobile-nav-btn"
     data-page="base"
+    type="button"
   >
 
     <span>
@@ -472,9 +481,12 @@
   </button>
 
 
+  <!-- ПРИЁМКА -->
+
   <button
     class="mobile-nav-btn"
     data-page="received"
+    type="button"
   >
 
     <span>
@@ -488,13 +500,16 @@
   </button>
 
 
+  <!-- СБОРКА -->
+
   <button
     class="mobile-nav-btn"
     data-page="assembly"
+    type="button"
   >
 
     <span>
-      ✓
+      ◫
     </span>
 
     <small>
@@ -506,41 +521,13 @@
   </button>
 
 
-  <button
-    class="mobile-nav-btn"
-    data-page="collected"
-  >
-
-    <span>
-      ✓
-    </span>
-
-    <small>
-      Собрано
-    </small>
-
-  </button>
-
+  <!-- ЕЩЁ -->
 
   <button
-    class="mobile-nav-btn"
-    data-page="shipped"
-  >
-
-    <span>
-      ↑
-    </span>
-
-    <small>
-      Убыло
-    </small>
-
-  </button>
-
-
-  <button
-    class="mobile-nav-btn"
-    data-page="tools"
+    class="mobile-nav-btn mobile-more-btn"
+    id="mobileMore"
+    type="button"
+    aria-label="Открыть меню"
   >
 
     <span>
