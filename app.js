@@ -110,6 +110,18 @@ const state = {
 
   receivingScanning: false,
   receivingLoading: false,
+
+  /*
+    Состояние загрузки справочников приёмки.
+
+    Важно:
+    страница не должна зависать в disabled-состоянии,
+    если Supabase отвечает медленно или вернул ошибку.
+  */
+  receivingDataLoading: false,
+  receivingDataLoaded: false,
+  receivingDataError: '',
+
    
   loading: false,
 
@@ -1357,6 +1369,1082 @@ function ensureAppStyles() {
 
 }
 
+function ensureReceivingStyles() {
+
+  if (
+    $('#skladaplanReceivingStyles')
+  ) {
+
+    return;
+
+  }
+
+
+  const style =
+    document.createElement('style');
+
+
+  style.id =
+    'skladaplanReceivingStyles';
+
+
+  style.textContent = `
+
+    /* =====================================================
+       RECEIVING — APPLE STYLE
+       ===================================================== */
+
+    .sp-receiving-page {
+
+      max-width:1180px;
+
+      margin:0 auto;
+
+      padding:
+        8px
+        0
+        60px;
+
+      color:#111;
+
+    }
+
+
+    .sp-receiving-hero {
+
+      display:flex;
+
+      align-items:flex-end;
+
+      justify-content:space-between;
+
+      gap:24px;
+
+      margin-bottom:28px;
+
+    }
+
+
+    .sp-receiving-eyebrow {
+
+      font-size:12px;
+
+      font-weight:700;
+
+      letter-spacing:.12em;
+
+      color:#8a8a8f;
+
+      margin-bottom:7px;
+
+    }
+
+
+    .sp-receiving-title {
+
+      margin:0;
+
+      font-size:34px;
+
+      line-height:1.08;
+
+      letter-spacing:-.035em;
+
+      font-weight:750;
+
+    }
+
+
+    .sp-receiving-subtitle {
+
+      margin:9px 0 0;
+
+      color:#8a8a8f;
+
+      font-size:14px;
+
+      line-height:1.5;
+
+    }
+
+
+    .sp-receiving-status {
+
+      display:inline-flex;
+
+      align-items:center;
+
+      gap:8px;
+
+      padding:9px 13px;
+
+      border-radius:999px;
+
+      font-size:13px;
+
+      font-weight:650;
+
+      white-space:nowrap;
+
+    }
+
+
+    .sp-receiving-status.is-open {
+
+      background:#eaf7ef;
+
+      color:#167347;
+
+    }
+
+
+    .sp-receiving-status.is-closed {
+
+      background:#f2f2f7;
+
+      color:#6f6f74;
+
+    }
+
+
+    .sp-status-dot {
+
+      width:7px;
+
+      height:7px;
+
+      border-radius:50%;
+
+      background:currentColor;
+
+    }
+
+
+    .sp-receiving-card {
+
+      background:#fff;
+
+      border:
+        1px solid
+        rgba(0,0,0,.07);
+
+      border-radius:22px;
+
+      padding:24px;
+
+      margin-top:16px;
+
+      box-shadow:
+        0 1px 2px rgba(0,0,0,.02),
+        0 10px 35px rgba(0,0,0,.035);
+
+    }
+
+
+    .sp-section-header {
+
+      display:flex;
+
+      align-items:flex-end;
+
+      justify-content:space-between;
+
+      gap:20px;
+
+      margin-bottom:22px;
+
+    }
+
+
+    .sp-section-kicker {
+
+      color:#a0a0a5;
+
+      font-size:11px;
+
+      font-weight:750;
+
+      letter-spacing:.08em;
+
+      margin-bottom:5px;
+
+    }
+
+
+    .sp-section-header h2 {
+
+      margin:0;
+
+      font-size:20px;
+
+      line-height:1.2;
+
+      letter-spacing:-.02em;
+
+      font-weight:700;
+
+    }
+
+
+    .sp-section-caption {
+
+      color:#96969b;
+
+      font-size:13px;
+
+      text-align:right;
+
+    }
+
+
+    .sp-receiving-form {
+
+      display:grid;
+
+      grid-template-columns:
+        1fr
+        1fr
+        .75fr;
+
+      gap:14px;
+
+    }
+
+
+    .sp-receiving-field {
+
+      display:flex;
+
+      flex-direction:column;
+
+      gap:8px;
+
+    }
+
+
+    .sp-receiving-field label {
+
+      color:#77777d;
+
+      font-size:12px;
+
+      font-weight:650;
+
+    }
+
+
+    .sp-receiving-field select,
+    .sp-receiving-field input {
+
+      width:100%;
+
+      height:50px;
+
+      box-sizing:border-box;
+
+      appearance:auto;
+
+      border:
+        1px solid
+        #dedee3;
+
+      border-radius:13px;
+
+      background:#fff;
+
+      color:#111;
+
+      padding:
+        0
+        14px;
+
+      font-size:15px;
+
+      font-family:inherit;
+
+      transition:
+        border-color .15s ease,
+        box-shadow .15s ease,
+        background .15s ease;
+
+      cursor:pointer;
+
+      pointer-events:auto !important;
+
+    }
+
+
+    .sp-receiving-field input {
+
+      cursor:text;
+
+    }
+
+
+    .sp-receiving-field select:hover,
+    .sp-receiving-field input:hover {
+
+      border-color:#bcbcc2;
+
+    }
+
+
+    .sp-receiving-field select:focus,
+    .sp-receiving-field input:focus {
+
+      outline:none;
+
+      border-color:#8f8f95;
+
+      box-shadow:
+        0 0 0 4px
+        rgba(0,0,0,.055);
+
+    }
+
+
+    .sp-receiving-field select:disabled,
+    .sp-receiving-field input:disabled {
+
+      background:#f5f5f7;
+
+      color:#a0a0a5;
+
+      cursor:not-allowed;
+
+      opacity:.72;
+
+    }
+
+
+    .sp-receiving-actions {
+
+      display:flex;
+
+      align-items:center;
+
+      gap:10px;
+
+      margin-top:20px;
+
+    }
+
+
+    .sp-receiving-open-btn {
+
+      min-height:50px;
+
+      min-width:210px;
+
+      display:inline-flex;
+
+      align-items:center;
+
+      justify-content:space-between;
+
+      gap:24px;
+
+      padding:
+        0
+        17px
+        0
+        19px;
+
+      border-radius:14px;
+
+    }
+
+
+    .sp-btn-primary {
+
+      border:0;
+
+      background:#111;
+
+      color:#fff;
+
+      cursor:pointer;
+
+      font-size:14px;
+
+      font-weight:700;
+
+    }
+
+
+    .sp-btn-primary:hover {
+
+      background:#222;
+
+    }
+
+
+    .sp-btn-arrow {
+
+      font-size:18px;
+
+      opacity:.7;
+
+    }
+
+
+    .sp-receiving-close-btn {
+
+      min-height:48px;
+
+      padding:
+        0
+        18px;
+
+      border-radius:13px;
+
+    }
+
+
+    .sp-location-summary {
+
+      display:grid;
+
+      grid-template-columns:
+        repeat(4,1fr);
+
+      border:
+        1px solid
+        #eeeeef;
+
+      border-radius:16px;
+
+      overflow:hidden;
+
+    }
+
+
+    .sp-location-item {
+
+      min-height:82px;
+
+      padding:
+        16px
+        18px;
+
+      border-right:
+        1px solid
+        #eeeeef;
+
+      display:flex;
+
+      flex-direction:column;
+
+      justify-content:center;
+
+      gap:5px;
+
+    }
+
+
+    .sp-location-item:last-child {
+
+      border-right:0;
+
+    }
+
+
+    .sp-location-item span {
+
+      font-size:11px;
+
+      color:#98989e;
+
+      font-weight:600;
+
+    }
+
+
+    .sp-location-item strong {
+
+      font-size:15px;
+
+      font-weight:700;
+
+    }
+
+
+    .sp-location-count {
+
+      font-size:24px !important;
+
+      letter-spacing:-.03em;
+
+    }
+
+
+    .sp-scanner-card {
+
+      background:
+        linear-gradient(
+          180deg,
+          #fff,
+          #fcfcfd
+        );
+
+    }
+
+
+    .sp-scanner-counter {
+
+      display:flex;
+
+      align-items:baseline;
+
+      gap:6px;
+
+    }
+
+
+    .sp-scanner-counter strong {
+
+      font-size:38px;
+
+      line-height:1;
+
+      letter-spacing:-.05em;
+
+    }
+
+
+    .sp-scanner-counter span {
+
+      color:#929297;
+
+      font-size:13px;
+
+    }
+
+
+    .sp-receiving-scanner {
+
+      padding-top:4px;
+
+    }
+
+
+    .sp-receiving-scanner-input {
+
+      display:block;
+
+      width:100%;
+
+      height:70px;
+
+      box-sizing:border-box;
+
+      border:
+        2px solid
+        #dedee3;
+
+      border-radius:17px;
+
+      padding:
+        0
+        20px;
+
+      font-size:22px;
+
+      font-weight:500;
+
+      letter-spacing:.01em;
+
+      background:#fff;
+
+      color:#111;
+
+      cursor:text;
+
+      pointer-events:auto !important;
+
+    }
+
+
+    .sp-receiving-scanner-input:focus {
+
+      outline:none;
+
+      border-color:#111;
+
+      box-shadow:
+        0 0 0 5px
+        rgba(0,0,0,.055);
+
+    }
+
+
+    .sp-receiving-scanner-result {
+
+      margin-top:10px;
+
+      min-height:42px;
+
+      box-sizing:border-box;
+
+      display:flex;
+
+      align-items:center;
+
+      padding:
+        0
+        14px;
+
+      border-radius:11px;
+
+      background:#f5f5f7;
+
+      color:#707076;
+
+      font-size:13px;
+
+    }
+
+
+    .sp-recent-scans {
+
+      display:flex;
+
+      flex-direction:column;
+
+      gap:7px;
+
+    }
+
+
+    .sp-recent-scan {
+
+      display:flex;
+
+      align-items:center;
+
+      justify-content:space-between;
+
+      gap:20px;
+
+      min-height:54px;
+
+      padding:
+        0
+        14px;
+
+      border-radius:12px;
+
+      background:#f7f7f8;
+
+    }
+
+
+    .sp-recent-scan div {
+
+      display:flex;
+
+      align-items:center;
+
+      gap:12px;
+
+      min-width:0;
+
+    }
+
+
+    .sp-recent-scan strong {
+
+      font-size:14px;
+
+      font-weight:650;
+
+      overflow:hidden;
+
+      text-overflow:ellipsis;
+
+      white-space:nowrap;
+
+    }
+
+
+    .sp-recent-scan span {
+
+      color:#96969b;
+
+      font-size:12px;
+
+    }
+
+
+    .sp-recent-scan time {
+
+      color:#96969b;
+
+      font-size:12px;
+
+      white-space:nowrap;
+
+    }
+
+
+    .sp-empty-receiving {
+
+      min-height:70px;
+
+      display:flex;
+
+      align-items:center;
+
+      justify-content:center;
+
+      color:#99999f;
+
+      background:#f7f7f8;
+
+      border-radius:13px;
+
+      font-size:13px;
+
+    }
+
+
+    .sp-receiving-hint {
+
+      display:flex;
+
+      align-items:center;
+
+      gap:14px;
+
+      margin-top:16px;
+
+      padding:
+        17px
+        18px;
+
+      border-radius:17px;
+
+      background:#f5f5f7;
+
+      color:#66666c;
+
+    }
+
+
+    .sp-receiving-hint-icon {
+
+      width:34px;
+
+      height:34px;
+
+      display:flex;
+
+      align-items:center;
+
+      justify-content:center;
+
+      border-radius:50%;
+
+      background:#fff;
+
+      color:#111;
+
+      font-size:17px;
+
+    }
+
+
+    .sp-receiving-hint strong {
+
+      display:block;
+
+      color:#333;
+
+      font-size:13px;
+
+      margin-bottom:3px;
+
+    }
+
+
+    .sp-receiving-hint span {
+
+      display:block;
+
+      color:#8c8c92;
+
+      font-size:12px;
+
+    }
+
+
+    .sp-receiving-loading {
+
+      display:flex;
+
+      align-items:center;
+
+      gap:10px;
+
+      margin-top:16px;
+
+      padding:
+        13px
+        15px;
+
+      background:#f5f5f7;
+
+      border-radius:13px;
+
+      color:#77777d;
+
+      font-size:13px;
+
+    }
+
+
+    .sp-receiving-spinner {
+
+      width:14px;
+
+      height:14px;
+
+      border:
+        2px solid
+        #d5d5d9;
+
+      border-top-color:#111;
+
+      border-radius:50%;
+
+      animation:
+        spReceivingSpin .7s linear infinite;
+
+    }
+
+
+    @keyframes spReceivingSpin {
+
+      to {
+        transform:rotate(360deg);
+      }
+
+    }
+
+
+    .sp-receiving-error {
+
+      display:flex;
+
+      align-items:center;
+
+      gap:13px;
+
+      margin-bottom:16px;
+
+      padding:
+        14px
+        16px;
+
+      border:
+        1px solid
+        #f0d4d1;
+
+      border-radius:15px;
+
+      background:#fff8f7;
+
+      color:#8f332b;
+
+      font-size:13px;
+
+    }
+
+
+    .sp-receiving-error > div:nth-child(2) {
+
+      flex:1;
+
+      line-height:1.45;
+
+    }
+
+
+    .sp-receiving-error strong {
+
+      display:block;
+
+      color:#7d2d26;
+
+      margin-bottom:2px;
+
+    }
+
+
+    .sp-receiving-error-icon {
+
+      width:30px;
+
+      height:30px;
+
+      flex:none;
+
+      display:flex;
+
+      align-items:center;
+
+      justify-content:center;
+
+      border-radius:50%;
+
+      background:#f4d8d5;
+
+      color:#8f332b;
+
+      font-weight:800;
+
+    }
+
+
+    @media(max-width:800px) {
+
+      .sp-receiving-page {
+
+        padding-bottom:30px;
+
+      }
+
+
+      .sp-receiving-hero {
+
+        align-items:flex-start;
+
+        flex-direction:column;
+
+      }
+
+
+      .sp-receiving-title {
+
+        font-size:30px;
+
+      }
+
+
+      .sp-receiving-form {
+
+        grid-template-columns:1fr;
+
+      }
+
+
+      .sp-location-summary {
+
+        grid-template-columns:
+          1fr
+          1fr;
+
+      }
+
+
+      .sp-location-item:nth-child(2) {
+
+        border-right:0;
+
+      }
+
+
+      .sp-location-item:nth-child(-n+2) {
+
+        border-bottom:
+          1px solid
+          #eeeeef;
+
+      }
+
+
+      .sp-section-header {
+
+        align-items:flex-start;
+
+        flex-direction:column;
+
+      }
+
+
+      .sp-section-caption {
+
+        text-align:left;
+
+      }
+
+
+    }
+
+
+    @media(max-width:500px) {
+
+      .sp-receiving-card {
+
+        padding:18px;
+
+        border-radius:18px;
+
+      }
+
+
+      .sp-location-summary {
+
+        grid-template-columns:1fr;
+
+      }
+
+
+      .sp-location-item {
+
+        border-right:0;
+
+        border-bottom:
+          1px solid
+          #eeeeef;
+
+      }
+
+
+      .sp-location-item:last-child {
+
+        border-bottom:0;
+
+      }
+
+
+      .sp-receiving-open-btn {
+
+        width:100%;
+
+      }
+
+
+      .sp-recent-scan div {
+
+        align-items:flex-start;
+
+        flex-direction:column;
+
+        gap:2px;
+
+      }
+
+    }
+
+  `;
+
+
+  document.head.appendChild(
+    style
+  );
+
+}
 
 /* =========================================================
    AUTH UI
@@ -1688,70 +2776,223 @@ async function loadBoxesFromSupabase() {
 
 async function loadReceivingData() {
 
-  const [
-    warehousesResult,
-    locationsResult,
-    palletsResult
-  ] = await Promise.all([
-
-    supabaseClient
-      .from('warehouses')
-      .select('*')
-      .eq('is_active', true)
-      .order('id'),
-
-    supabaseClient
-      .from('locations')
-      .select('*')
-      .eq('is_active', true)
-      .order('warehouse_id')
-      .order('code'),
-
-    supabaseClient
-      .from('pallets')
-      .select('*')
-      .order('id', {
-        ascending: false
-      })
-
-  ]);
-
-
-  if (warehousesResult.error) {
-    throw warehousesResult.error;
-  }
-
-  if (locationsResult.error) {
-    throw locationsResult.error;
-  }
-
-  if (palletsResult.error) {
-    throw palletsResult.error;
-  }
-
-
-  state.receivingWarehouses =
-    warehousesResult.data || [];
-
-  state.receivingLocations =
-    locationsResult.data || [];
-
-  state.receivingPallets =
-    palletsResult.data || [];
-
-
   /*
-    Если склад ещё не выбран —
-    автоматически выбираем первый.
+    Не запускаем несколько одинаковых
+    запросов одновременно.
   */
+  if (state.receivingDataLoading) {
+    return;
+  }
 
-  if (
-    !state.receivingWarehouseId &&
-    state.receivingWarehouses.length
-  ) {
+  state.receivingDataLoading = true;
+  state.receivingDataError = '';
+
+  try {
+
+    /*
+      Сначала загружаем склады.
+    */
+    const {
+      data: warehouses,
+      error: warehousesError
+    } =
+      await supabaseClient
+        .from('warehouses')
+        .select('*')
+        .eq('is_active', true)
+        .order('id', {
+          ascending: true
+        });
+
+
+    if (warehousesError) {
+      throw new Error(
+        `Не удалось загрузить склады: ${warehousesError.message}`
+      );
+    }
+
+
+    /*
+      Затем загружаем места.
+    */
+    const {
+      data: locations,
+      error: locationsError
+    } =
+      await supabaseClient
+        .from('locations')
+        .select('*')
+        .eq('is_active', true)
+        .order('warehouse_id', {
+          ascending: true
+        })
+        .order('code', {
+          ascending: true
+        });
+
+
+    if (locationsError) {
+      throw new Error(
+        `Не удалось загрузить места: ${locationsError.message}`
+      );
+    }
+
+
+    /*
+      Поддоны загружаем отдельно.
+
+      Ошибка поддонов НЕ должна ломать
+      всю форму приёмки.
+    */
+    const {
+      data: pallets,
+      error: palletsError
+    } =
+      await supabaseClient
+        .from('pallets')
+        .select('*')
+        .order('id', {
+          ascending: false
+        });
+
+
+    state.receivingWarehouses =
+      warehouses || [];
+
+    state.receivingLocations =
+      locations || [];
+
+    state.receivingPallets =
+      palletsError
+        ? []
+        : (pallets || []);
+
+
+    /*
+      Если склад ещё не выбран —
+      выбираем первый автоматически.
+
+      Пользователь при этом всё равно
+      сможет открыть список и выбрать другой.
+    */
+    if (
+      !state.receivingWarehouseId &&
+      state.receivingWarehouses.length
+    ) {
+
+      state.receivingWarehouseId =
+        state.receivingWarehouses[0].id;
+
+    }
+
+
+    /*
+      Проверяем, существует ли выбранный
+      склад после загрузки.
+    */
+    const selectedWarehouse =
+      state.receivingWarehouses.find(
+        row =>
+          String(row.id) ===
+          String(
+            state.receivingWarehouseId
+          )
+      );
+
+
+    if (!selectedWarehouse) {
+
+      state.receivingWarehouseId =
+        state.receivingWarehouses.length
+          ? state.receivingWarehouses[0].id
+          : null;
+
+    }
+
+
+    /*
+      Если выбранное место больше не относится
+      к выбранному складу — сбрасываем его.
+    */
+    const selectedLocation =
+      state.receivingLocations.find(
+        row =>
+          String(row.id) ===
+          String(
+            state.receivingLocationId
+          )
+      );
+
+
+    if (
+      selectedLocation &&
+      String(
+        selectedLocation.warehouse_id
+      ) !==
+      String(
+        state.receivingWarehouseId
+      )
+    ) {
+
+      state.receivingLocationId =
+        null;
+
+    }
+
+
+    state.receivingDataLoaded =
+      true;
+
+
+    if (palletsError) {
+
+      console.warn(
+        'Поддоны не загрузились:',
+        palletsError
+      );
+
+    }
+
+  } catch (error) {
+
+    console.error(
+      'Ошибка загрузки данных приёмки:',
+      error
+    );
+
+
+    state.receivingWarehouses =
+      [];
+
+    state.receivingLocations =
+      [];
+
+    state.receivingPallets =
+      [];
 
     state.receivingWarehouseId =
-      state.receivingWarehouses[0].id;
+      null;
+
+    state.receivingLocationId =
+      null;
+
+    state.receivingDataLoaded =
+      false;
+
+    state.receivingDataError =
+      error.message ||
+      'Не удалось загрузить данные приёмки';
+
+
+    toast(
+      state.receivingDataError,
+      'error'
+    );
+
+  } finally {
+
+    state.receivingDataLoading =
+      false;
 
   }
 
@@ -1891,9 +3132,58 @@ async function startReceiving() {
   }
 
 
+  if (
+    !state.receivingWarehouseId ||
+    !state.receivingLocationId ||
+    !normalizeText(
+      state.receivingPalletNumber
+    )
+  ) {
+
+    toast(
+      'Выберите склад, место и укажите номер поддона.',
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  if (
+    state.receivingLoading
+  ) {
+
+    return;
+
+  }
+
+
   state.receivingLoading =
     true;
 
+
+  const button =
+    $('#startReceivingBtn');
+
+
+  if (button) {
+
+    button.disabled =
+      true;
+
+    button.innerHTML =
+      `
+        <span>
+          Открываем...
+        </span>
+
+        <span class="sp-btn-arrow">
+          …
+        </span>
+      `;
+
+  }
 
   try {
 
@@ -2658,17 +3948,32 @@ async function closeReceiving() {
 function setupReceived() {
 
   /*
-    Загружаем данные приёмки,
-    если они ещё не загружены.
+    ЗАГРУЗКА ДАННЫХ
+
+    Важно:
+    если данные уже загружены —
+    повторный запрос не делаем.
   */
 
   if (
-    !state.receivingWarehouses.length
+    !state.receivingDataLoaded &&
+    !state.receivingDataLoading
   ) {
 
     loadReceivingData()
       .then(
-        () => render()
+        () => {
+
+          if (
+            state.currentPage ===
+            'received'
+          ) {
+
+            render();
+
+          }
+
+        }
       )
       .catch(
         error => {
@@ -2676,12 +3981,6 @@ function setupReceived() {
           console.error(
             'Ошибка загрузки данных приёмки:',
             error
-          );
-
-          toast(
-            error.message ||
-            'Не удалось загрузить склады',
-            'error'
           );
 
         }
@@ -2694,99 +3993,196 @@ function setupReceived() {
     СКЛАД
   */
 
-  $('#receivingWarehouse')
-    ?.addEventListener(
-      'change',
-      event => {
+  const warehouseSelect =
+    $('#receivingWarehouse');
 
-        state.receivingWarehouseId =
-          event.target.value ||
-          null;
 
-        state.receivingLocationId =
-          null;
+  warehouseSelect?.addEventListener(
+    'change',
+    event => {
 
-        state.receivingPalletId =
-          null;
+      const value =
+        event.target.value;
 
-        render();
 
-      }
-    );
+      state.receivingWarehouseId =
+        value
+          ? Number(value)
+          : null;
+
+
+      /*
+        При смене склада старое место
+        больше не подходит.
+      */
+
+      state.receivingLocationId =
+        null;
+
+      state.receivingPalletId =
+        null;
+
+
+      render();
+
+    }
+  );
 
 
   /*
     МЕСТО
   */
 
-  $('#receivingLocation')
-    ?.addEventListener(
-      'change',
-      event => {
+  const locationSelect =
+    $('#receivingLocation');
 
-        state.receivingLocationId =
-          event.target.value ||
-          null;
 
-        state.receivingPalletId =
-          null;
+  locationSelect?.addEventListener(
+    'change',
+    event => {
 
-        render();
+      const value =
+        event.target.value;
 
-      }
-    );
+
+      state.receivingLocationId =
+        value
+          ? Number(value)
+          : null;
+
+
+      state.receivingPalletId =
+        null;
+
+
+      render();
+
+    }
+  );
 
 
   /*
     НОМЕР ПОДДОНА
   */
 
-  $('#receivingPalletNumber')
-    ?.addEventListener(
-      'input',
-      event => {
+  const palletInput =
+    $('#receivingPalletNumber');
 
-        state.receivingPalletNumber =
-          event.target.value;
 
-        const button =
-          $('#startReceivingBtn');
+  palletInput?.addEventListener(
+    'input',
+    event => {
 
-        if (button) {
+      state.receivingPalletNumber =
+        event.target.value;
 
-          button.disabled =
-            !state.receivingWarehouseId ||
-            !state.receivingLocationId ||
-            !normalizeText(
-              state.receivingPalletNumber
-            );
 
-        }
+      /*
+        Не перерисовываем страницу
+        на каждый символ.
+
+        Просто обновляем кнопку.
+      */
+
+      const button =
+        $('#startReceivingBtn');
+
+
+      if (button) {
+
+        button.disabled =
+          !state.receivingWarehouseId ||
+          !state.receivingLocationId ||
+          !normalizeText(
+            state.receivingPalletNumber
+          ) ||
+          state.receivingLoading;
 
       }
-    );
+
+    }
+  );
 
 
   /*
     ОТКРЫТЬ ПРИЁМКУ
   */
 
-  $('#startReceivingBtn')
-    ?.addEventListener(
-      'click',
-      startReceiving
-    );
+  const startButton =
+    $('#startReceivingBtn');
+
+
+  startButton?.addEventListener(
+    'click',
+    async event => {
+
+      event.preventDefault();
+
+
+      if (
+        startButton.disabled
+      ) {
+
+        return;
+
+      }
+
+
+      await startReceiving();
+
+    }
+  );
 
 
   /*
     ЗАКРЫТЬ ПРИЁМКУ
   */
 
-  $('#closeReceivingBtn')
-    ?.addEventListener(
-      'click',
-      closeReceiving
-    );
+  const closeButton =
+    $('#closeReceivingBtn');
+
+
+  closeButton?.addEventListener(
+    'click',
+    async event => {
+
+      event.preventDefault();
+
+      await closeReceiving();
+
+    }
+  );
+
+
+  /*
+    ПОВТОРИТЬ ЗАГРУЗКУ
+  */
+
+  const reloadButton =
+    $('#reloadReceivingDataBtn');
+
+
+  reloadButton?.addEventListener(
+    'click',
+    async event => {
+
+      event.preventDefault();
+
+
+      state.receivingDataLoaded =
+        false;
+
+      state.receivingDataError =
+        '';
+
+
+      await loadReceivingData();
+
+
+      render();
+
+    }
+  );
 
 
   /*
@@ -2811,6 +4207,7 @@ function setupReceived() {
 
 
       event.preventDefault();
+      event.stopPropagation();
 
 
       const barcode =
@@ -2830,12 +4227,17 @@ function setupReceived() {
 
 
   /*
-    После рендера сразу возвращаем
-    фокус на сканер.
+    ENTER / FOCUS
+
+    После открытия приёмки
+    автоматически ставим фокус
+    на сканер.
   */
 
   if (
-    state.receivingReceiptId
+    state.receivingReceiptId &&
+    state.receivingReceiptStatus ===
+      'В процессе'
   ) {
 
     setTimeout(
@@ -7884,12 +9286,10 @@ async function shipSelectedCollected() {
    RECEIVED
    ========================================================= */
 
-/* =========================================================
-   RECEIVING
-   ========================================================= */
-
 function receivedView() {
 
+  ensureReceivingStyles();   
+   
   const warehouses =
     state.receivingWarehouses || [];
 
@@ -7899,29 +9299,52 @@ function receivedView() {
   const pallets =
     state.receivingPallets || [];
 
+
   const currentWarehouse =
     warehouses.find(
       row =>
         String(row.id) ===
-        String(state.receivingWarehouseId)
+        String(
+          state.receivingWarehouseId
+        )
     );
+
 
   const currentLocation =
     locations.find(
       row =>
         String(row.id) ===
-        String(state.receivingLocationId)
+        String(
+          state.receivingLocationId
+        )
     );
+
 
   const currentPallet =
     pallets.find(
       row =>
         String(row.id) ===
-        String(state.receivingPalletId)
+        String(
+          state.receivingPalletId
+        )
     );
+
+
+  const warehouseLocations =
+    locations.filter(
+      location =>
+        String(
+          location.warehouse_id
+        ) ===
+        String(
+          state.receivingWarehouseId
+        )
+    );
+
 
   const scannedCount =
     state.receivingScannedIds.length;
+
 
   const isOpen =
     Boolean(
@@ -7930,111 +9353,196 @@ function receivedView() {
         'В процессе'
     );
 
+
   const canStart =
     Boolean(
       state.receivingWarehouseId &&
       state.receivingLocationId &&
-      state.receivingPalletNumber.trim()
+      normalizeText(
+        state.receivingPalletNumber
+      )
     );
+
+
+  const statusText =
+    isOpen
+      ? 'Приёмка открыта'
+      : 'Приёмка не открыта';
+
 
   return `
 
-    <div class="sp-receiving">
+    <div class="sp-receiving-page">
 
-      <div class="sp-receiving-header">
+      <!-- ==========================================
+           HEADER
+           ========================================== -->
+
+      <div class="sp-receiving-hero">
 
         <div>
 
-          <div class="sp-card-label">
+          <div class="sp-receiving-eyebrow">
             ПРИЁМКА
           </div>
 
-          <h2 style="
-            margin:4px 0 6px;
-            font-size:28px;
-          ">
+          <h1 class="sp-receiving-title">
             Приёмка товара
-          </h2>
+          </h1>
 
-          <div class="muted">
+          <p class="sp-receiving-subtitle">
             Склад → место → поддон → сканирование коробок
-          </div>
+          </p>
 
         </div>
 
-        <div class="sp-receiving-status">
 
-          ${
-            isOpen
-              ? `
-                <span style="
-                  display:inline-flex;
-                  align-items:center;
-                  gap:7px;
-                  padding:8px 12px;
-                  border-radius:999px;
-                  background:#eaf7ef;
-                  color:#18794e;
-                  font-weight:700;
-                ">
-                  <span>●</span>
-                  Приёмка открыта
-                </span>
-              `
-              : `
-                <span style="
-                  display:inline-flex;
-                  align-items:center;
-                  gap:7px;
-                  padding:8px 12px;
-                  border-radius:999px;
-                  background:#f2f2f2;
-                  color:#666;
-                  font-weight:600;
-                ">
-                  Приёмка не открыта
-                </span>
-              `
-          }
+        <div class="
+          sp-receiving-status
+          ${isOpen ? 'is-open' : 'is-closed'}
+        ">
+
+          <span class="sp-status-dot"></span>
+
+          ${statusText}
 
         </div>
 
       </div>
 
 
-      <!-- ================================================
-           НАСТРОЙКИ ПРИЁМКИ
-           ================================================ -->
+      <!-- ==========================================
+           ERROR
+           ========================================== -->
 
-      <div class="sp-card" style="margin-top:18px;">
+      ${
+        state.receivingDataError
+          ? `
 
-        <div class="sp-card-label">
-          1. МЕСТО ПРИЁМКИ
+            <div class="sp-receiving-error">
+
+              <div class="sp-receiving-error-icon">
+                !
+              </div>
+
+              <div>
+
+                <strong>
+                  Не удалось загрузить данные
+                </strong>
+
+                <div>
+                  ${escapeHtml(
+                    state.receivingDataError
+                  )}
+                </div>
+
+              </div>
+
+              <button
+                class="sp-btn secondary"
+                id="reloadReceivingDataBtn"
+                type="button"
+              >
+                Повторить
+              </button>
+
+            </div>
+
+          `
+          : ''
+      }
+
+
+      <!-- ==========================================
+           LOADING
+           ========================================== -->
+
+      ${
+        state.receivingDataLoading
+          ? `
+
+            <div class="sp-receiving-loading">
+
+              <div class="sp-receiving-spinner"></div>
+
+              <div>
+                Загружаем склады и места...
+              </div>
+
+            </div>
+
+          `
+          : ''
+      }
+
+
+      <!-- ==========================================
+           LOCATION CARD
+           ========================================== -->
+
+      <section class="sp-receiving-card">
+
+        <div class="sp-section-header">
+
+          <div>
+
+            <div class="sp-section-kicker">
+              01
+            </div>
+
+            <h2>
+              Место приёмки
+            </h2>
+
+          </div>
+
+          <div class="sp-section-caption">
+            Куда разместить поступившие коробки
+          </div>
+
         </div>
+
 
         <div class="sp-receiving-form">
 
+
+          <!-- СКЛАД -->
+
           <div class="sp-receiving-field">
 
-            <label>
+            <label for="receivingWarehouse">
               Склад
             </label>
 
             <select
               id="receivingWarehouse"
-              ${isOpen ? 'disabled' : ''}
+              ${
+                isOpen
+                  ? 'disabled'
+                  : ''
+              }
             >
 
               <option value="">
-                Выберите склад
+                ${
+                  state.receivingDataLoading
+                    ? 'Загрузка складов...'
+                    : warehouses.length
+                      ? 'Выберите склад'
+                      : 'Склады не найдены'
+                }
               </option>
 
               ${
                 warehouses
                   .map(
                     warehouse => `
+
                       <option
-                        value="${escapeHtml(warehouse.id)}"
+                        value="${escapeHtml(
+                          warehouse.id
+                        )}"
                         ${
                           String(
                             warehouse.id
@@ -8050,6 +9558,7 @@ function receivedView() {
                           warehouse.name
                         )}
                       </option>
+
                     `
                   )
                   .join('')
@@ -8060,9 +9569,11 @@ function receivedView() {
           </div>
 
 
+          <!-- МЕСТО -->
+
           <div class="sp-receiving-field">
 
-            <label>
+            <label for="receivingLocation">
               Место
             </label>
 
@@ -8077,24 +9588,26 @@ function receivedView() {
             >
 
               <option value="">
-                Выберите место
+
+                ${
+                  !state.receivingWarehouseId
+                    ? 'Сначала выберите склад'
+                    : warehouseLocations.length
+                      ? 'Выберите место'
+                      : 'Места не найдены'
+                }
+
               </option>
 
               ${
-                locations
-                  .filter(
-                    location =>
-                      String(
-                        location.warehouse_id
-                      ) ===
-                      String(
-                        state.receivingWarehouseId
-                      )
-                  )
+                warehouseLocations
                   .map(
                     location => `
+
                       <option
-                        value="${escapeHtml(location.id)}"
+                        value="${escapeHtml(
+                          location.id
+                        )}"
                         ${
                           String(
                             location.id
@@ -8106,10 +9619,13 @@ function receivedView() {
                             : ''
                         }
                       >
+
                         ${escapeHtml(
                           location.code
                         )}
+
                       </option>
+
                     `
                   )
                   .join('')
@@ -8120,16 +9636,19 @@ function receivedView() {
           </div>
 
 
+          <!-- ПОДДОН -->
+
           <div class="sp-receiving-field">
 
-            <label>
+            <label for="receivingPalletNumber">
               Номер поддона
             </label>
 
             <input
               id="receivingPalletNumber"
               type="text"
-              placeholder="Например: 1"
+              inputmode="text"
+              placeholder="Например 1"
               value="${escapeHtml(
                 state.receivingPalletNumber
               )}"
@@ -8143,266 +9662,94 @@ function receivedView() {
 
           </div>
 
+
         </div>
 
 
-        <div style="
-          display:flex;
-          gap:10px;
-          flex-wrap:wrap;
-          margin-top:16px;
-        ">
+        <!-- ACTIONS -->
+
+        <div class="sp-receiving-actions">
 
           ${
             !isOpen
               ? `
+
                 <button
-                  class="sp-btn success"
+                  class="sp-btn sp-btn-primary sp-receiving-open-btn"
                   id="startReceivingBtn"
+                  type="button"
                   ${
-                    canStart
+                    canStart &&
+                    !state.receivingLoading
                       ? ''
                       : 'disabled'
                   }
                 >
-                  Открыть приёмку
+
+                  <span>
+                    Открыть приёмку
+                  </span>
+
+                  <span class="sp-btn-arrow">
+                    →
+                  </span>
+
                 </button>
+
               `
               : `
+
                 <button
-                  class="sp-btn danger"
+                  class="sp-btn danger sp-receiving-close-btn"
                   id="closeReceivingBtn"
+                  type="button"
                 >
-                  Закрыть приёмку
+
+                  Завершить приёмку
+
                 </button>
-              `
-          }
 
-          ${
-            currentPallet
-              ? `
-                <div style="
-                  display:flex;
-                  align-items:center;
-                  padding:0 12px;
-                  border-radius:9px;
-                  background:#f6f6f6;
-                  color:#555;
-                ">
-                  Поддон:
-                  <b style="margin-left:5px;">
-                    ${escapeHtml(
-                      currentPallet.pallet_number
-                    )}
-                  </b>
-                </div>
               `
-              : ''
           }
 
         </div>
 
-      </div>
+      </section>
 
 
-      ${
-        isOpen
-          ? `
+      <!-- ==========================================
+           CURRENT LOCATION
+           ========================================== -->
 
-            <!-- ==========================================
-                 СКАНИРОВАНИЕ
-                 ========================================== -->
+      <section class="sp-receiving-card">
 
-            <div
-              class="sp-card"
-              style="margin-top:18px;"
-            >
+        <div class="sp-section-header">
 
-              <div class="sp-card-label">
-                2. СКАНИРОВАНИЕ
-              </div>
+          <div>
 
-              <div style="
-                display:flex;
-                align-items:center;
-                justify-content:space-between;
-                gap:20px;
-                flex-wrap:wrap;
-              ">
-
-                <div>
-
-                  <div style="
-                    font-size:42px;
-                    line-height:1;
-                    font-weight:800;
-                  ">
-                    ${scannedCount}
-                  </div>
-
-                  <div class="muted" style="margin-top:6px;">
-                    коробок принято
-                  </div>
-
-                </div>
-
-
-                <div style="
-                  flex:1;
-                  min-width:280px;
-                ">
-
-                  <input
-                    id="receivingScannerInput"
-                    class="search"
-                    style="
-                      width:100%;
-                      min-height:54px;
-                      font-size:20px;
-                      box-sizing:border-box;
-                    "
-                    inputmode="none"
-                    autocomplete="off"
-                    autocorrect="off"
-                    spellcheck="false"
-                    placeholder="Сканируйте штрихкод..."
-                  >
-
-                  <div
-                    id="receivingScannerResult"
-                    class="notice"
-                    style="
-                      margin-top:10px;
-                      margin-bottom:0;
-                    "
-                  >
-                    Готов к сканированию.
-                  </div>
-
-                </div>
-
-              </div>
-
+            <div class="sp-section-kicker">
+              02
             </div>
 
+            <h2>
+              Текущая локация
+            </h2>
 
-            <!-- ==========================================
-                 ПОСЛЕДНИЕ СКАНЫ
-                 ========================================== -->
+          </div>
 
-            <div
-              class="sp-card"
-              style="margin-top:18px;"
-            >
-
-              <div class="sp-card-label">
-                ПОСЛЕДНИЕ КОРОБКИ
-              </div>
-
-              ${
-                state.receivingRecentScans.length
-                  ? `
-                    <div style="
-                      display:flex;
-                      flex-direction:column;
-                      gap:8px;
-                    ">
-
-                      ${
-                        state.receivingRecentScans
-                          .map(
-                            item => `
-                              <div style="
-                                display:flex;
-                                align-items:center;
-                                justify-content:space-between;
-                                padding:11px 13px;
-                                border-radius:10px;
-                                background:#f7f7f7;
-                              ">
-
-                                <div>
-                                  <b>
-                                    ${escapeHtml(
-                                      item.barcode
-                                    )}
-                                  </b>
-
-                                  <div style="
-                                    font-size:12px;
-                                    color:#888;
-                                    margin-top:3px;
-                                  ">
-                                    ${
-                                      item.time
-                                        ? escapeHtml(
-                                            item.time
-                                          )
-                                        : ''
-                                    }
-                                  </div>
-                                </div>
-
-                                <span style="
-                                  color:#18794e;
-                                  font-weight:700;
-                                ">
-                                  ✓
-                                </span>
-
-                              </div>
-                            `
-                          )
-                          .join('')
-                      }
-
-                    </div>
-                  `
-                  : `
-                    <div class="sp-empty">
-                      Пока ничего не отсканировано
-                    </div>
-                  `
-              }
-
-            </div>
-
-          `
-          : ''
-      }
-
-
-      <!-- ================================================
-           ИНФОРМАЦИЯ
-           ================================================ -->
-
-      <div
-        class="sp-card"
-        style="margin-top:18px;"
-      >
-
-        <div class="sp-card-label">
-          ТЕКУЩАЯ ЛОКАЦИЯ
         </div>
 
-        <div style="
-          display:grid;
-          grid-template-columns:
-            repeat(auto-fit,minmax(160px,1fr));
-          gap:12px;
-        ">
 
-          <div style="
-            padding:14px;
-            background:#f7f7f7;
-            border-radius:12px;
-          ">
+        <div class="sp-location-summary">
 
-            <div class="muted">
+
+          <div class="sp-location-item">
+
+            <span>
               Склад
-            </div>
+            </span>
 
-            <b>
+            <strong>
               ${
                 currentWarehouse
                   ? escapeHtml(
@@ -8410,22 +9757,18 @@ function receivedView() {
                     )
                   : '—'
               }
-            </b>
+            </strong>
 
           </div>
 
 
-          <div style="
-            padding:14px;
-            background:#f7f7f7;
-            border-radius:12px;
-          ">
+          <div class="sp-location-item">
 
-            <div class="muted">
+            <span>
               Место
-            </div>
+            </span>
 
-            <b>
+            <strong>
               ${
                 currentLocation
                   ? escapeHtml(
@@ -8433,22 +9776,18 @@ function receivedView() {
                     )
                   : '—'
               }
-            </b>
+            </strong>
 
           </div>
 
 
-          <div style="
-            padding:14px;
-            background:#f7f7f7;
-            border-radius:12px;
-          ">
+          <div class="sp-location-item">
 
-            <div class="muted">
+            <span>
               Поддон
-            </div>
+            </span>
 
-            <b>
+            <strong>
               ${
                 currentPallet
                   ? escapeHtml(
@@ -8460,30 +9799,197 @@ function receivedView() {
                       )
                     : '—'
               }
-            </b>
+            </strong>
 
           </div>
 
 
-          <div style="
-            padding:14px;
-            background:#f7f7f7;
-            border-radius:12px;
-          ">
+          <div class="sp-location-item">
 
-            <div class="muted">
+            <span>
               Принято
-            </div>
+            </span>
 
-            <b>
+            <strong class="sp-location-count">
               ${scannedCount}
-            </b>
+            </strong>
 
           </div>
+
 
         </div>
 
-      </div>
+      </section>
+
+
+      ${
+        isOpen
+          ? `
+
+            <!-- ==========================================
+                 SCANNER
+                 ========================================== -->
+
+            <section class="sp-receiving-card sp-scanner-card">
+
+              <div class="sp-section-header">
+
+                <div>
+
+                  <div class="sp-section-kicker">
+                    03
+                  </div>
+
+                  <h2>
+                    Сканирование
+                  </h2>
+
+                </div>
+
+                <div class="sp-scanner-counter">
+
+                  <strong>
+                    ${scannedCount}
+                  </strong>
+
+                  <span>
+                    коробок
+                  </span>
+
+                </div>
+
+              </div>
+
+
+              <div class="sp-receiving-scanner">
+
+                <input
+                  id="receivingScannerInput"
+                  class="sp-receiving-scanner-input"
+                  inputmode="none"
+                  autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  placeholder="Сканируйте штрихкод..."
+                >
+
+
+                <div
+                  id="receivingScannerResult"
+                  class="sp-receiving-scanner-result"
+                >
+                  Готов к сканированию
+                </div>
+
+              </div>
+
+            </section>
+
+
+            <!-- ==========================================
+                 RECENT SCANS
+                 ========================================== -->
+
+            <section class="sp-receiving-card">
+
+              <div class="sp-section-header">
+
+                <div>
+
+                  <div class="sp-section-kicker">
+                    04
+                  </div>
+
+                  <h2>
+                    Последние коробки
+                  </h2>
+
+                </div>
+
+              </div>
+
+
+              ${
+                state.receivingRecentScans.length
+                  ? `
+
+                    <div class="sp-recent-scans">
+
+                      ${
+                        state.receivingRecentScans
+                          .map(
+                            item => `
+
+                              <div class="sp-recent-scan">
+
+                                <div>
+
+                                  <strong>
+                                    ${escapeHtml(
+                                      item.barcode
+                                    )}
+                                  </strong>
+
+                                  <span>
+                                    Коробка принята
+                                  </span>
+
+                                </div>
+
+                                <time>
+                                  ${escapeHtml(
+                                    item.time || ''
+                                  )}
+                                </time>
+
+                              </div>
+
+                            `
+                          )
+                          .join('')
+                      }
+
+                    </div>
+
+                  `
+                  : `
+
+                    <div class="sp-empty-receiving">
+                      Пока ни одной коробки
+                    </div>
+
+                  `
+              }
+
+            </section>
+
+          `
+          : `
+
+            <div class="sp-receiving-hint">
+
+              <div class="sp-receiving-hint-icon">
+                ↓
+              </div>
+
+              <div>
+
+                <strong>
+                  Приёмка готова к запуску
+                </strong>
+
+                <span>
+                  Выберите склад, место и номер поддона,
+                  затем откройте приёмку.
+                </span>
+
+              </div>
+
+            </div>
+
+          `
+      }
 
     </div>
 
@@ -12023,16 +13529,22 @@ function render() {
 
       break;
 
+    case 'received':
 
-case 'received':
+      content.innerHTML =
+        receivedView();
 
-  content.innerHTML =
-    receivedView();
+      /*
+        Сначала показываем интерфейс.
 
-  setupReceived();
+        Затем setupReceived()
+        либо подключит обработчики,
+        либо запустит загрузку данных.
+      */
 
-  break;
+      setupReceived();
 
+      break;
 
     case 'collected':
 
