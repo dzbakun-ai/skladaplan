@@ -1,304 +1,129 @@
+/* =========================================================
+   SKLADAPLAN
+   Local WMS / Supabase
+   ========================================================= */
+
+'use strict';
+
+/* =========================================================
+   SUPABASE
+   ========================================================= */
+
 const SUPABASE_URL = 'https://ithhecprdosvjiddoalq.supabase.co';
-const SUPABASE_KEY = 'sb_secret_H0PZl90jP2RyTHzP7UPIhA_mf3jkfzR';
 
-const supabaseClient = window.supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_KEY
-);
+const SUPABASE_KEY =
+  'sb_publishable_0dB5DQt2_ysOohx42IN4rA_mnypLeOR';
 
-let DATA = {};
-let BOX_IDS = [];
-
-
-// =====================================================
-// ЗАГРУЗКА БАЗЫ
-// =====================================================
-
-async function loadDatabase(){
-
-  try {
-
-    const r = await fetch('database.json', {
-      cache: 'no-store'
-    });
-
-    if (!r.ok) {
-      throw new Error('HTTP ' + r.status);
-    }
-
-    DATA = await r.json();
-
-
-    const {
-      data,
-      error
-    } = await supabaseClient
-      .from('boxes')
-      .select('*')
-      .order('id', {
-        ascending: true
-      });
-
-
-    if (error) {
-      throw error;
-    }
-
-
-    BOX_IDS = data.map(
-      row => row.id
-    );
-
-
-    DATA['База'] = [
-
-      [
-        'Штрихкод',
-        'Артикул',
-        'Кол-во в коробке',
-        'Зона/Ряд',
-        'Поддон',
-        'Статус',
-        'Дата',
-        'Склад',
-        'Столбец 9',
-        'Направление',
-        'Отбор ✔️',
-        'Кто работал'
-      ],
-
-      ...data.map(
-        row => [
-
-          row.barcode ?? '',
-          row.article ?? '',
-          row.quantity_in_box ?? '',
-          row.zone_row ?? '',
-          row.pallet ?? '',
-          row.status ?? '',
-          row.date ?? '',
-          row.warehouse ?? '',
-          row.column_9 ?? '',
-          row.direction ?? '',
-          row.pick ? 'ИСТИНА' : 'ЛОЖЬ',
-          row.worker ?? ''
-
-        ]
-      )
-
-    ];
-
-
-    console.log(
-      'SKLADAPLAN: База загружена из Supabase:',
-      data.length,
-      'коробок'
-    );
-
-
-    return true;
-
-  } catch (err) {
-
-    console.error(
-      'Ошибка подключения к Supabase:',
-      err
-    );
-
-
-    try {
-
-      const r = await fetch(
-        'database.json',
-        {
-          cache: 'no-store'
-        }
-      );
-
-
-      if (!r.ok) {
-        throw new Error('HTTP ' + r.status);
-      }
-
-
-      DATA = await r.json();
-
-      BOX_IDS = [];
-
-
-      console.warn(
-        'Supabase недоступен. Используется database.json.'
-      );
-
-
-      return true;
-
-    } catch (fallbackError) {
-
-      console.error(
-        'Не удалось загрузить database.json:',
-        fallbackError
-      );
-
-
-      return false;
-    }
-  }
-}
-
-
-// =====================================================
-// STATE
-// =====================================================
-
-const state = {
-  page: 'dashboard',
-  editingRow: null
-};
-
-
-// =====================================================
-// PAGES
-// =====================================================
-
-const pages = {
-
-  dashboard: [
-    'Главная',
-    'Главный экран склада'
-  ],
-
-  base: [
-    'База',
-    'Все коробки и остатки'
-  ],
-
-  assembly: [
-    'Сборка',
-    'Заказы к комплектации'
-  ],
-
-  received: [
-    'Принято',
-    'Поступления на склад'
-  ],
-
-  collected: [
-    'Собрано',
-    'Скомплектованные коробки'
-  ],
-
-  shipped: [
-    'Убыло',
-    'История отгрузок'
-  ],
-
-  tools: [
-    'Инструменты',
-    'Сервисные операции'
-  ]
-
-};
-
-
-// =====================================================
-// HELPERS
-// =====================================================
-
-const $ = selector =>
-  document.querySelector(selector);
-
-
-const esc = value =>
-  String(value ?? '').replace(
-    /[&<>"']/g,
-    char => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;'
-    }[char])
+const supabaseClient =
+  window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
   );
 
 
-function rows(sheet){
+/* =========================================================
+   CONFIG
+   ========================================================= */
 
-  return DATA[sheet] || [];
+const PAGE_SIZE = 100;
 
+const EXCEL_CHUNK_SIZE = 500;
+
+const BOX_SELECT =
+  'id,barcode,article,quantity_in_box,zone_row,pallet,status,date,warehouse,column_9,direction,pick,worker,created_at,updated_at';
+
+
+const STATUSES = {
+  STOCK: 'На складе',
+  RESERVED: 'Зарезервирована',
+  PICK: 'КПодбору',
+  COLLECTED: 'Скомплектовано',
+  SHIPPED: 'Отгружено',
+  EMPTY: 'Пустая'
+};
+
+
+/* =========================================================
+   STATE
+   ========================================================= */
+
+const state = {
+
+  boxes: [],
+
+  loading: false,
+
+  currentPage: 'dashboard',
+
+  basePage: 1,
+
+  baseSearch: '',
+
+  baseWarehouse: '',
+
+  baseStatus: '',
+
+  selectedIds: new Set(),
+
+  editingId: null,
+
+  currentPallet: '',
+
+  scannerInput: '',
+
+  scannerActive: false,
+
+  excelRows: [],
+
+  excelFileName: '',
+
+  excelSheetName: '',
+
+  user: null,
+
+  session: null
+
+};
+
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
+function $(selector) {
+  return document.querySelector(selector);
 }
 
 
-function headerRows(sheet){
-
-  const data =
-    rows(sheet);
-
-
-  return data.length
-    ? data[0].map(
-        x => x ?? ''
-      )
-    : [];
-
+function $all(selector) {
+  return [...document.querySelectorAll(selector)];
 }
 
 
-function objects(sheet){
+function escapeHtml(value) {
 
-  const data =
-    rows(sheet);
-
-
-  if (!data.length) {
-    return [];
+  if (value === null || value === undefined) {
+    return '';
   }
 
-
-  const headers =
-    data[0];
-
-
-  return data
-    .slice(1)
-    .filter(
-      row =>
-        row.some(
-          value =>
-            value !== null &&
-            value !== '' &&
-            value !== undefined
-        )
-    )
-    .map(
-      (row, index) => ({
-
-        __rowIndex:
-          index + 1,
-
-        ...Object.fromEntries(
-          headers.map(
-            (key, i) => [
-              key || `col_${i + 1}`,
-              row[i] ?? ''
-            ]
-          )
-        )
-
-      })
-    );
-
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
 
-function count(sheet){
+function normalizeText(value) {
 
-  return objects(sheet).length;
-
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, ' ');
 }
 
 
-function fmt(value){
+function normalizeBarcode(value) {
 
   if (
     value === null ||
@@ -307,181 +132,1321 @@ function fmt(value){
     return '';
   }
 
+  let str = String(value).trim();
 
-  if (
-    typeof value === 'string' &&
-    /^\d{4}-\d\d-\d\d/.test(value)
-  ) {
-
-    return value.slice(0, 10);
-
+  if (!str) {
+    return '';
   }
 
+  str = str.replace(/\s+/g, '');
 
-  if (
-    typeof value === 'number'
-  ) {
+  /*
+    Excel can give:
 
-    return value.toLocaleString('ru-RU');
+    4810122659354.0
+    4810122659354,0
+    4.810122659354E+12
+  */
 
+  str = str.replace(',', '.');
+
+  if (/^\d+\.0+$/.test(str)) {
+    str = str.split('.')[0];
   }
 
+  if (/^\d+e\+\d+$/i.test(str)) {
 
-  return String(value);
+    const number = Number(str);
 
+    if (Number.isFinite(number)) {
+      str = String(Math.trunc(number));
+    }
+  }
+
+  return str;
 }
 
 
-function status(value){
+function normalizeHeader(value) {
 
-  let className = '';
+  return String(value ?? '')
+    .replace(/^\uFEFF/, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[\/\\_.-]/g, '')
+    .replace(/ё/g, 'е');
+}
 
 
-  if (
-    String(value).includes('Скомплект')
-  ) {
+function formatDate(value) {
 
-    className = 'green';
+  if (!value) {
+    return '';
+  }
 
+  const str = String(value).trim();
+
+  if (!str) {
+    return '';
+  }
+
+  /*
+    ISO:
+    2026-06-25
+    2026-06-25T00:00:00
+  */
+
+  const iso =
+    str.match(
+      /^(\d{4})-(\d{2})-(\d{2})/
+    );
+
+  if (iso) {
+
+    return `${iso[3]}.${iso[2]}.${iso[1]}`;
   }
 
 
-  if (
-    String(value).includes('Взять') ||
-    String(value).includes('КПодбору')
-  ) {
+  /*
+    DD.MM.YYYY
+  */
 
-    className = 'yellow';
+  const ru =
+    str.match(
+      /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/
+    );
 
+  if (ru) {
+
+    let year = ru[3];
+
+    if (year.length === 2) {
+      year = `20${year}`;
+    }
+
+    return `${String(ru[1]).padStart(2, '0')}.${String(ru[2]).padStart(2, '0')}.${year}`;
   }
 
 
+  return str;
+}
+
+
+function toISODate(value) {
+
   if (
-    String(value).includes('Отгруж')
+    value === null ||
+    value === undefined ||
+    value === ''
   ) {
-
-    className = 'red';
-
+    return null;
   }
 
 
-  return `
+  if (value instanceof Date) {
 
-    <span class="status ${className}">
-      ${esc(value)}
-    </span>
+    if (Number.isNaN(value.getTime())) {
+      return null;
+    }
+
+    return value.toISOString().slice(0, 10);
+  }
+
+
+  const str = String(value).trim();
+
+  if (!str) {
+    return null;
+  }
+
+
+  /*
+    Excel serial date.
+  */
+
+  if (
+    /^\d+(\.\d+)?$/.test(str) &&
+    Number(str) > 20000 &&
+    Number(str) < 80000
+  ) {
+
+    const serial = Number(str);
+
+    const date =
+      new Date(
+        Date.UTC(1899, 11, 30) +
+        serial * 86400000
+      );
+
+    return date.toISOString().slice(0, 10);
+  }
+
+
+  /*
+    DD.MM.YYYY
+  */
+
+  let match =
+    str.match(
+      /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/
+    );
+
+  if (match) {
+
+    let year = match[3];
+
+    if (year.length === 2) {
+      year = `20${year}`;
+    }
+
+    return `${year}-${String(match[2]).padStart(2, '0')}-${String(match[1]).padStart(2, '0')}`;
+  }
+
+
+  /*
+    YYYY-MM-DD
+  */
+
+  match =
+    str.match(
+      /^(\d{4})-(\d{1,2})-(\d{1,2})/
+    );
+
+  if (match) {
+
+    return `${match[1]}-${String(match[2]).padStart(2, '0')}-${String(match[3]).padStart(2, '0')}`;
+  }
+
+
+  const parsed = new Date(str);
+
+  if (!Number.isNaN(parsed.getTime())) {
+
+    return parsed.toISOString().slice(0, 10);
+  }
+
+
+  return null;
+}
+
+
+function excelBoolean(value) {
+
+  if (
+    value === true ||
+    value === 1
+  ) {
+    return true;
+  }
+
+  const str =
+    String(value ?? '')
+      .trim()
+      .toLowerCase();
+
+  return [
+    'true',
+    'истина',
+    'да',
+    '1',
+    'yes',
+    'y',
+    '✓',
+    '✔',
+    'истинно'
+  ].includes(str);
+}
+
+
+function downloadBlob(
+  blob,
+  fileName
+) {
+
+  const url =
+    URL.createObjectURL(blob);
+
+  const a =
+    document.createElement('a');
+
+  a.href = url;
+  a.download = fileName;
+
+  document.body.appendChild(a);
+
+  a.click();
+
+  a.remove();
+
+  setTimeout(
+    () => URL.revokeObjectURL(url),
+    1000
+  );
+}
+
+
+function downloadJSON(
+  data,
+  fileName
+) {
+
+  const blob =
+    new Blob(
+      [
+        JSON.stringify(
+          data,
+          null,
+          2
+        )
+      ],
+      {
+        type: 'application/json;charset=utf-8'
+      }
+    );
+
+  downloadBlob(blob, fileName);
+}
+
+
+function todayFileDate() {
+
+  return new Date()
+    .toISOString()
+    .slice(0, 10);
+}
+
+
+/* =========================================================
+   TOAST
+   ========================================================= */
+
+function toast(
+  message,
+  type = 'success'
+) {
+
+  let container =
+    $('#toastContainer');
+
+  if (!container) {
+
+    container =
+      document.createElement('div');
+
+    container.id =
+      'toastContainer';
+
+    container.style.cssText = `
+      position:fixed;
+      right:20px;
+      bottom:20px;
+      z-index:99999;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      max-width:380px;
+    `;
+
+    document.body.appendChild(container);
+  }
+
+
+  const item =
+    document.createElement('div');
+
+  item.style.cssText = `
+    padding:13px 16px;
+    border-radius:12px;
+    background:${type === 'error' ? '#b42318' : '#111'};
+    color:#fff;
+    box-shadow:0 10px 30px rgba(0,0,0,.2);
+    font-size:14px;
+    line-height:1.4;
+  `;
+
+  item.textContent =
+    message;
+
+  container.appendChild(item);
+
+
+  setTimeout(
+    () => item.remove(),
+    4000
+  );
+}
+
+
+/* =========================================================
+   STYLES
+   ========================================================= */
+
+function ensureAppStyles() {
+
+  if ($('#skladaplanRuntimeStyles')) {
+    return;
+  }
+
+  const style =
+    document.createElement('style');
+
+  style.id =
+    'skladaplanRuntimeStyles';
+
+  style.textContent = `
+
+    .sp-loading {
+      padding:40px;
+      text-align:center;
+      color:#777;
+    }
+
+    .sp-grid {
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+      gap:14px;
+      margin-bottom:20px;
+    }
+
+    .sp-card {
+      background:#fff;
+      border:1px solid #e8e8e8;
+      border-radius:16px;
+      padding:18px;
+      box-shadow:0 4px 18px rgba(0,0,0,.04);
+    }
+
+    .sp-card-label {
+      color:#777;
+      font-size:13px;
+      margin-bottom:8px;
+    }
+
+    .sp-card-value {
+      font-size:28px;
+      font-weight:700;
+    }
+
+    .sp-toolbar {
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      margin-bottom:16px;
+    }
+
+    .sp-toolbar input,
+    .sp-toolbar select,
+    .sp-toolbar button,
+    .sp-form input,
+    .sp-form select {
+      min-height:40px;
+      border:1px solid #ddd;
+      border-radius:9px;
+      padding:0 12px;
+      background:#fff;
+    }
+
+    .sp-toolbar input {
+      min-width:240px;
+    }
+
+    .sp-btn {
+      border:0;
+      border-radius:9px;
+      padding:10px 15px;
+      cursor:pointer;
+      font-weight:600;
+      background:#111;
+      color:#fff;
+    }
+
+    .sp-btn.secondary {
+      background:#f2f2f2;
+      color:#111;
+    }
+
+    .sp-btn.danger {
+      background:#b42318;
+    }
+
+    .sp-btn.success {
+      background:#18794e;
+    }
+
+    .sp-btn:disabled {
+      opacity:.45;
+      cursor:not-allowed;
+    }
+
+    .sp-table-wrap {
+      width:100%;
+      overflow:auto;
+      background:#fff;
+      border:1px solid #e7e7e7;
+      border-radius:14px;
+    }
+
+    .sp-table {
+      width:100%;
+      border-collapse:collapse;
+      min-width:900px;
+    }
+
+    .sp-table th,
+    .sp-table td {
+      padding:11px 12px;
+      border-bottom:1px solid #eee;
+      text-align:left;
+      white-space:nowrap;
+      font-size:13px;
+    }
+
+    .sp-table th {
+      background:#f8f8f8;
+      font-weight:700;
+      position:sticky;
+      top:0;
+      z-index:2;
+    }
+
+    .sp-table tr.selected {
+      background:#f1f7ff;
+    }
+
+    .sp-table tr:hover {
+      background:#fafafa;
+    }
+
+    .sp-status {
+      display:inline-flex;
+      align-items:center;
+      padding:5px 9px;
+      border-radius:999px;
+      background:#f1f1f1;
+      font-size:12px;
+      font-weight:600;
+    }
+
+    .sp-pagination {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      padding:15px 0;
+    }
+
+    .sp-pagination-buttons {
+      display:flex;
+      gap:7px;
+    }
+
+    .sp-modal-backdrop {
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.5);
+      z-index:9990;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    }
+
+    .sp-modal {
+      background:#fff;
+      width:min(650px,100%);
+      max-height:90vh;
+      overflow:auto;
+      border-radius:18px;
+      padding:22px;
+      box-shadow:0 25px 80px rgba(0,0,0,.25);
+    }
+
+    .sp-modal-head {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-bottom:20px;
+    }
+
+    .sp-modal-close {
+      border:0;
+      background:none;
+      font-size:24px;
+      cursor:pointer;
+    }
+
+    .sp-form {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:14px;
+    }
+
+    .sp-form label {
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      font-size:13px;
+      font-weight:600;
+    }
+
+    .sp-form .full {
+      grid-column:1 / -1;
+    }
+
+    .sp-form-actions {
+      grid-column:1 / -1;
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+      margin-top:8px;
+    }
+
+    .sp-login {
+      position:fixed;
+      inset:0;
+      background:#f5f5f5;
+      z-index:100000;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+    }
+
+    .sp-login-box {
+      width:min(420px,100%);
+      background:#fff;
+      padding:30px;
+      border-radius:20px;
+      box-shadow:0 20px 60px rgba(0,0,0,.12);
+    }
+
+    .sp-login-logo {
+      width:48px;
+      height:48px;
+      border-radius:14px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:#111;
+      color:#fff;
+      font-size:24px;
+      font-weight:700;
+      margin-bottom:18px;
+    }
+
+    .sp-login h2 {
+      margin:0 0 6px;
+    }
+
+    .sp-login p {
+      color:#777;
+      margin:0 0 22px;
+    }
+
+    .sp-login label {
+      display:block;
+      margin-bottom:14px;
+      font-size:13px;
+      font-weight:600;
+    }
+
+    .sp-login input {
+      display:block;
+      width:100%;
+      box-sizing:border-box;
+      height:44px;
+      border:1px solid #ddd;
+      border-radius:10px;
+      padding:0 12px;
+      margin-top:6px;
+    }
+
+    .sp-login button {
+      width:100%;
+      height:44px;
+      border:0;
+      border-radius:10px;
+      background:#111;
+      color:#fff;
+      font-weight:700;
+      cursor:pointer;
+    }
+
+    .sp-import-preview {
+      max-height:450px;
+      overflow:auto;
+      border:1px solid #eee;
+      border-radius:10px;
+      margin-top:15px;
+    }
+
+    .sp-import-preview table {
+      width:100%;
+      border-collapse:collapse;
+      font-size:12px;
+    }
+
+    .sp-import-preview th,
+    .sp-import-preview td {
+      padding:8px;
+      border-bottom:1px solid #eee;
+      white-space:nowrap;
+    }
+
+    .sp-scanner {
+      display:grid;
+      gap:16px;
+    }
+
+    .sp-scanner-input {
+      width:100%;
+      box-sizing:border-box;
+      height:60px;
+      border:2px solid #ddd;
+      border-radius:14px;
+      font-size:22px;
+      padding:0 16px;
+    }
+
+    .sp-pallet {
+      padding:15px;
+      background:#f7f7f7;
+      border-radius:14px;
+    }
+
+    .sp-big-number {
+      font-size:40px;
+      font-weight:800;
+    }
+
+    .sp-muted {
+      color:#777;
+    }
+
+    .sp-empty {
+      padding:35px;
+      text-align:center;
+      color:#777;
+    }
+
+    @media(max-width:700px) {
+
+      .sp-form {
+        grid-template-columns:1fr;
+      }
+
+      .sp-form .full {
+        grid-column:auto;
+      }
+
+      .sp-toolbar input {
+        width:100%;
+        min-width:0;
+      }
+
+      .sp-grid {
+        grid-template-columns:1fr 1fr;
+      }
+
+      .sp-card-value {
+        font-size:24px;
+      }
+
+    }
 
   `;
 
+  document.head.appendChild(style);
 }
 
 
-// =====================================================
-// ОБЩАЯ ТАБЛИЦА
-// =====================================================
+/* =========================================================
+   AUTH UI
+   ========================================================= */
 
-function table(
-  sheet,
-  limit = 500
-){
+function showLogin() {
 
-  const data =
-    rows(sheet);
+  let login =
+    $('#spLogin');
 
-
-  if (!data.length) {
-
-    return `
-
-      <div class="empty">
-        Нет данных
-      </div>
-
-    `;
-
+  if (login) {
+    return;
   }
 
 
-  const headers =
-    data[0];
+  login =
+    document.createElement('div');
+
+  login.id =
+    'spLogin';
+
+  login.className =
+    'sp-login';
+
+  login.innerHTML = `
+
+    <div class="sp-login-box">
+
+      <div class="sp-login-logo">
+        S
+      </div>
+
+      <h2>SKLADAPLAN</h2>
+
+      <p>
+        Войдите, чтобы открыть склад.
+      </p>
+
+      <form id="loginForm">
+
+        <label>
+          Email
+          <input
+            id="loginEmail"
+            type="email"
+            autocomplete="username"
+            required
+          >
+        </label>
+
+        <label>
+          Пароль
+          <input
+            id="loginPassword"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+        </label>
+
+        <button type="submit">
+          Войти
+        </button>
+
+      </form>
+
+    </div>
+
+  `;
+
+  document.body.appendChild(login);
 
 
-  const body =
-    data
-      .slice(1)
-      .filter(
-        row =>
-          row.some(
-            value =>
-              value !== null &&
-              value !== '' &&
-              value !== undefined
-          )
-      )
-      .slice(
-        0,
-        limit
+  $('#loginForm')
+    .addEventListener(
+      'submit',
+      loginUser
+    );
+}
+
+
+async function loginUser(event) {
+
+  event.preventDefault();
+
+  const email =
+    $('#loginEmail').value.trim();
+
+  const password =
+    $('#loginPassword').value;
+
+
+  const button =
+    event.target.querySelector('button');
+
+  button.disabled = true;
+
+  button.textContent =
+    'Вход...';
+
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient.auth
+      .signInWithPassword({
+        email,
+        password
+      });
+
+
+  button.disabled = false;
+
+  button.textContent =
+    'Войти';
+
+
+  if (error) {
+
+    toast(
+      error.message,
+      'error'
+    );
+
+    return;
+  }
+
+
+  state.session =
+    data.session;
+
+  state.user =
+    data.user;
+
+  $('#spLogin')?.remove();
+
+  await startAuthenticatedApp();
+}
+
+
+async function logout() {
+
+  await supabaseClient.auth.signOut();
+
+  state.session = null;
+  state.user = null;
+  state.boxes = [];
+  state.selectedIds.clear();
+
+  $('#content').innerHTML = '';
+
+  showLogin();
+
+  toast('Вы вышли из системы');
+}
+
+
+/* =========================================================
+   SUPABASE LOAD
+   ========================================================= */
+
+async function loadBoxesFromSupabase() {
+
+  state.loading = true;
+
+  try {
+
+    const all = [];
+
+    const pageSize = 1000;
+
+    let from = 0;
+
+    while (true) {
+
+      const to =
+        from + pageSize - 1;
+
+      const {
+        data,
+        error
+      } =
+        await supabaseClient
+          .from('boxes')
+          .select(BOX_SELECT)
+          .order('id', {
+            ascending: true
+          })
+          .range(from, to);
+
+
+      if (error) {
+        throw error;
+      }
+
+
+      if (!data || data.length === 0) {
+        break;
+      }
+
+
+      all.push(...data);
+
+      if (data.length < pageSize) {
+        break;
+      }
+
+      from += pageSize;
+    }
+
+
+    state.boxes = all;
+
+    /*
+      Удаляем выбранные id,
+      которых больше нет.
+    */
+
+    const existingIds =
+      new Set(
+        all.map(row => String(row.id))
       );
+
+    state.selectedIds =
+      new Set(
+        [...state.selectedIds]
+          .filter(id => existingIds.has(String(id)))
+      );
+
+
+  } finally {
+
+    state.loading = false;
+  }
+}
+
+
+/*
+  После INSERT не делаем полный reload.
+*/
+
+function addLocalBox(row) {
+
+  state.boxes.push(row);
+
+  state.boxes.sort(
+    (a, b) =>
+      Number(a.id) - Number(b.id)
+  );
+}
+
+
+/*
+  После UPDATE меняем только нужную строку.
+*/
+
+function updateLocalBox(
+  id,
+  changes
+) {
+
+  const index =
+    state.boxes.findIndex(
+      row => String(row.id) === String(id)
+    );
+
+  if (index === -1) {
+    return;
+  }
+
+  state.boxes[index] = {
+    ...state.boxes[index],
+    ...changes
+  };
+}
+
+
+/*
+  После DELETE удаляем только нужную строку.
+*/
+
+function removeLocalBox(id) {
+
+  state.boxes =
+    state.boxes.filter(
+      row =>
+        String(row.id) !== String(id)
+    );
+
+  state.selectedIds.delete(
+    String(id)
+  );
+}
+
+
+/* =========================================================
+   SUPABASE PAYLOAD
+   ========================================================= */
+
+function boxToPayload(formData) {
+
+  return {
+
+    barcode:
+      normalizeBarcode(
+        formData.barcode
+      ),
+
+    article:
+      normalizeText(
+        formData.article
+      ) || null,
+
+    quantity_in_box:
+      normalizeText(
+        formData.quantity_in_box
+      ) || null,
+
+    zone_row:
+      normalizeText(
+        formData.zone_row
+      ) || null,
+
+    pallet:
+      normalizeText(
+        formData.pallet
+      ) || null,
+
+    status:
+      normalizeText(
+        formData.status
+      ) || STATUSES.STOCK,
+
+    date:
+      toISODate(
+        formData.date
+      ),
+
+    warehouse:
+      normalizeText(
+        formData.warehouse
+      ) || null
+
+  };
+}
+
+
+/* =========================================================
+   BASE
+   ========================================================= */
+
+function getFilteredBoxes() {
+
+  const search =
+    state.baseSearch
+      .trim()
+      .toLowerCase();
+
+
+  return state.boxes.filter(row => {
+
+    if (
+      state.baseWarehouse &&
+      row.warehouse !== state.baseWarehouse
+    ) {
+      return false;
+    }
+
+
+    if (
+      state.baseStatus &&
+      row.status !== state.baseStatus
+    ) {
+      return false;
+    }
+
+
+    if (!search) {
+      return true;
+    }
+
+
+    return [
+
+      row.barcode,
+      row.article,
+      row.zone_row,
+      row.pallet,
+      row.status,
+      row.warehouse,
+      formatDate(row.date)
+
+    ]
+      .join(' ')
+      .toLowerCase()
+      .includes(search);
+
+  });
+}
+
+
+function baseView() {
+
+  const filtered =
+    getFilteredBoxes();
+
+
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        filtered.length / PAGE_SIZE
+      )
+    );
+
+
+  if (state.basePage > totalPages) {
+    state.basePage = totalPages;
+  }
+
+
+  const start =
+    (state.basePage - 1) *
+    PAGE_SIZE;
+
+  const rows =
+    filtered.slice(
+      start,
+      start + PAGE_SIZE
+    );
+
+
+  const warehouses =
+    [...new Set(
+      state.boxes
+        .map(row => row.warehouse)
+        .filter(Boolean)
+    )]
+      .sort();
+
+
+  const statuses =
+    [...new Set(
+      state.boxes
+        .map(row => row.status)
+        .filter(Boolean)
+    )]
+      .sort();
 
 
   return `
 
-    <div class="table-wrap">
+    <div class="sp-toolbar">
 
-      <table class="data-table">
+      <input
+        id="baseSearch"
+        type="search"
+        placeholder="Поиск по штрихкоду, артикулу, зоне..."
+        value="${escapeHtml(state.baseSearch)}"
+      >
+
+      <select id="baseWarehouse">
+
+        <option value="">
+          Все склады
+        </option>
+
+        ${warehouses.map(
+          warehouse => `
+            <option
+              value="${escapeHtml(warehouse)}"
+              ${warehouse === state.baseWarehouse ? 'selected' : ''}
+            >
+              ${escapeHtml(warehouse)}
+            </option>
+          `
+        ).join('')}
+
+      </select>
+
+
+      <select id="baseStatus">
+
+        <option value="">
+          Все статусы
+        </option>
+
+        ${statuses.map(
+          status => `
+            <option
+              value="${escapeHtml(status)}"
+              ${status === state.baseStatus ? 'selected' : ''}
+            >
+              ${escapeHtml(status)}
+            </option>
+          `
+        ).join('')}
+
+      </select>
+
+
+      <button
+        class="sp-btn"
+        id="addBoxBtn"
+      >
+        + Добавить коробку
+      </button>
+
+
+      <button
+        class="sp-btn success"
+        id="markPickBtn"
+        ${state.selectedIds.size ? '' : 'disabled'}
+      >
+        В подбор (${state.selectedIds.size})
+      </button>
+
+
+      <button
+        class="sp-btn danger"
+        id="deleteSelectedBtn"
+        ${state.selectedIds.size ? '' : 'disabled'}
+      >
+        Удалить выбранные
+      </button>
+
+    </div>
+
+
+    <div class="sp-muted" style="margin-bottom:10px">
+      Найдено: <b>${filtered.length}</b>
+      · Всего коробок: <b>${state.boxes.length}</b>
+      · Страница ${state.basePage} из ${totalPages}
+    </div>
+
+
+    <div class="sp-table-wrap">
+
+      <table class="sp-table">
 
         <thead>
 
           <tr>
 
-            ${headers
-              .map(
-                header =>
-                  `<th>${esc(header ?? '')}</th>`
-              )
-              .join('')
-            }
+            <th style="width:35px">
+              ✓
+            </th>
+
+            <th>Штрихкод</th>
+
+            <th>Артикул</th>
+
+            <th>Кол-во в коробке</th>
+
+            <th>Зона/ряд</th>
+
+            <th>Поддон</th>
+
+            <th>Статус</th>
+
+            <th>ДатаРазмещения</th>
+
+            <th>Склад</th>
+
+            <th>Действия</th>
 
           </tr>
 
         </thead>
 
-
         <tbody>
 
-          ${body
-            .map(
-              row => `
-
+          ${
+            rows.length
+              ? rows.map(baseRow).join('')
+              : `
                 <tr>
-
-                  ${headers
-                    .map(
-                      (header, i) => `
-
-                        <td
-                          data-label="${esc(header ?? '')}"
-                        >
-
-                          ${
-                            i === 5 &&
-                            sheet !== 'Сборка'
-                              ? status(row[i])
-                              : esc(fmt(row[i]))
-                          }
-
-                        </td>
-
-                      `
-                    )
-                    .join('')
-                  }
-
+                  <td colspan="10">
+                    <div class="sp-empty">
+                      Нет данных
+                    </div>
+                  </td>
                 </tr>
-
               `
-            )
-            .join('')}
+          }
 
         </tbody>
 
@@ -489,2166 +1454,1065 @@ function table(
 
     </div>
 
-  `;
 
-}
+    <div class="sp-pagination">
 
+      <div>
+        Показано
+        ${rows.length}
+        из
+        ${filtered.length}
+      </div>
 
-// =====================================================
-// БАЗА
-// =====================================================
+      <div class="sp-pagination-buttons">
 
-function baseView(){
+        <button
+          class="sp-btn secondary"
+          id="basePrev"
+          ${state.basePage <= 1 ? 'disabled' : ''}
+        >
+          ←
+        </button>
 
-  const data =
-    rows('База');
-
-
-  if (!data.length) {
-
-    return `
-
-      <div class="panel">
-
-        <div class="empty">
-          Лист «База» отсутствует
-        </div>
+        <button
+          class="sp-btn secondary"
+          id="baseNext"
+          ${state.basePage >= totalPages ? 'disabled' : ''}
+        >
+          →
+        </button>
 
       </div>
 
-    `;
+    </div>
 
-  }
-
-
-  const headers =
-    data[0];
+  `;
+}
 
 
-  const body =
-    data
-      .slice(1)
-      .map(
-        (row, index) => ({
-          row,
-          index
-        })
-      )
-      .filter(
-        ({row}) =>
-          row.some(
-            value =>
-              value !== null &&
-              value !== '' &&
-              value !== undefined
-          )
-      );
+function baseRow(row) {
+
+  const id =
+    String(row.id);
+
+  const selected =
+    state.selectedIds.has(id);
 
 
   return `
 
-    <div class="panel">
+    <tr
+      data-row-id="${escapeHtml(id)}"
+      class="${selected ? 'selected' : ''}"
+    >
 
-      <div
-        class="toolbar"
-        style="gap:8px;flex-wrap:wrap"
-      >
+      <td>
 
         <input
-          id="search"
-          class="search"
-          placeholder="Поиск штрихкода, артикула, зоны, поддона…"
+          type="checkbox"
+          class="base-check"
+          data-id="${escapeHtml(id)}"
+          ${selected ? 'checked' : ''}
         >
 
+      </td>
 
-        <span
-          class="muted"
-          style="padding:10px 0"
-        >
+      <td>
+        <b>${escapeHtml(row.barcode)}</b>
+      </td>
 
-          ${count('База').toLocaleString('ru-RU')}
-          коробок
+      <td>
+        ${escapeHtml(row.article)}
+      </td>
 
+      <td>
+        ${escapeHtml(row.quantity_in_box)}
+      </td>
+
+      <td>
+        ${escapeHtml(row.zone_row)}
+      </td>
+
+      <td>
+        ${escapeHtml(row.pallet)}
+      </td>
+
+      <td>
+        <span class="sp-status">
+          ${escapeHtml(row.status)}
         </span>
+      </td>
 
+      <td>
+        ${escapeHtml(formatDate(row.date))}
+      </td>
+
+      <td>
+        ${escapeHtml(row.warehouse)}
+      </td>
+
+      <td>
 
         <button
-          class="primary"
-          id="addBoxBtn"
+          class="sp-btn secondary edit-box"
+          data-id="${escapeHtml(id)}"
         >
-          ＋ Добавить коробку
+          Изменить
+        </button>
+
+      </td>
+
+    </tr>
+
+  `;
+}
+
+
+function setupBase() {
+
+  $('#baseSearch')
+    ?.addEventListener(
+      'input',
+      event => {
+
+        state.baseSearch =
+          event.target.value;
+
+        state.basePage = 1;
+
+        render();
+      }
+    );
+
+
+  $('#baseWarehouse')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.baseWarehouse =
+          event.target.value;
+
+        state.basePage = 1;
+
+        render();
+      }
+    );
+
+
+  $('#baseStatus')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.baseStatus =
+          event.target.value;
+
+        state.basePage = 1;
+
+        render();
+      }
+    );
+
+
+  $('#basePrev')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        if (state.basePage > 1) {
+
+          state.basePage--;
+
+          render();
+        }
+      }
+    );
+
+
+  $('#baseNext')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        state.basePage++;
+
+        render();
+      }
+    );
+
+
+  $('#addBoxBtn')
+    ?.addEventListener(
+      'click',
+      () => openBoxModal()
+    );
+
+
+  $('#markPickBtn')
+    ?.addEventListener(
+      'click',
+      markSelectedForPicking
+    );
+
+
+  $('#deleteSelectedBtn')
+    ?.addEventListener(
+      'click',
+      deleteSelectedBoxes
+    );
+
+
+  $all('.base-check')
+    .forEach(check => {
+
+      check.addEventListener(
+        'change',
+        event => {
+
+          const id =
+            String(
+              event.target.dataset.id
+            );
+
+
+          if (event.target.checked) {
+            state.selectedIds.add(id);
+          } else {
+            state.selectedIds.delete(id);
+          }
+
+
+          render();
+        }
+      );
+
+    });
+
+
+  $all('.edit-box')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          openBoxModal(
+            button.dataset.id
+          );
+        }
+      );
+
+    });
+}
+
+
+/* =========================================================
+   BOX MODAL
+   ========================================================= */
+
+function closeBoxModal() {
+
+  $('#boxModal')?.remove();
+
+  state.editingId = null;
+}
+
+
+function openBoxModal(id = null) {
+
+  closeBoxModal();
+
+  state.editingId =
+    id !== null
+      ? String(id)
+      : null;
+
+
+  const row =
+    id !== null
+      ? state.boxes.find(
+          item =>
+            String(item.id) === String(id)
+        )
+      : null;
+
+
+  const modal =
+    document.createElement('div');
+
+  modal.id =
+    'boxModal';
+
+  modal.className =
+    'sp-modal-backdrop';
+
+  modal.innerHTML = `
+
+    <div class="sp-modal">
+
+      <div class="sp-modal-head">
+
+        <h2 style="margin:0">
+          ${
+            row
+              ? 'Редактирование коробки'
+              : 'Добавить коробку'
+          }
+        </h2>
+
+        <button
+          class="sp-modal-close"
+          id="closeBoxModal"
+        >
+          ×
         </button>
 
       </div>
 
 
-      <div
-        id="baseTable"
-        style="margin-top:12px"
+      <form
+        class="sp-form"
+        id="boxForm"
       >
 
-        ${baseTable(
-          body,
-          headers
-        )}
-
-      </div>
-
-    </div>
-
-
-    ${boxModal()}
-
-  `;
-
-}
-
-
-function baseTable(
-  body,
-  headers
-){
-
-  return `
-
-    <div class="table-wrap">
-
-      <table class="data-table">
-
-        <thead>
-
-          <tr>
-
-            ${headers
-              .map(
-                header =>
-                  `<th>${esc(header ?? '')}</th>`
-              )
-              .join('')
-            }
-
-            <th>
-              Действия
-            </th>
-
-          </tr>
-
-        </thead>
-
-
-        <tbody>
-
-          ${body
-            .map(
-              ({row, index}) => `
-
-                <tr>
-
-                  ${headers
-                    .map(
-                      (header, i) => `
-
-                        <td
-                          data-label="${esc(header ?? '')}"
-                        >
-
-                          ${
-                            i === 5
-                              ? status(row[i])
-                              : esc(fmt(row[i]))
-                          }
-
-                        </td>
-
-                      `
-                    )
-                    .join('')
-                  }
-
-
-                  <td data-label="Действия">
-
-                    <div
-                      style="
-                        display:flex;
-                        gap:6px;
-                        flex-wrap:wrap
-                      "
-                    >
-
-                      <button
-                        class="ghost edit-box"
-                        data-row="${index}"
-                        style="padding:7px 10px"
-                      >
-                        ✏️
-                      </button>
-
-
-                      <button
-                        class="ghost delete-box"
-                        data-row="${index}"
-                        style="padding:7px 10px"
-                      >
-                        🗑️
-                      </button>
-
-                    </div>
-
-                  </td>
-
-                </tr>
-
-              `
-            )
-            .join('')}
-
-        </tbody>
-
-      </table>
-
-    </div>
-
-  `;
-
-}
-
-
-// =====================================================
-// MODAL КОРОБКИ
-// =====================================================
-
-function boxModal(){
-
-  const headers =
-    headerRows('База');
-
-
-  let row = [];
-
-
-  if (
-    state.editingRow !== null
-  ) {
-
-    row =
-      rows('База')[
-        state.editingRow + 1
-      ] || [];
-
-  }
-
-
-  const fields =
-    headers
-      .map(
-        (header, i) => {
-
-          const value =
-            row[i] ?? '';
-
-
-          return `
-
-            <label
-              style="
-                display:block;
-                margin-bottom:12px
-              "
-            >
-
-              <span
-                style="
-                  display:block;
-                  font-size:11px;
-                  font-weight:700;
-                  margin-bottom:5px
-                "
-              >
-                ${esc(header)}
-              </span>
-
-
-              <input
-                class="box-field"
-                data-index="${i}"
-                value="${esc(value)}"
-                autocomplete="off"
-              >
-
-            </label>
-
-          `;
-
-        }
-      )
-      .join('');
-
-
-  return `
-
-    <div
-      id="boxModal"
-      class="scan-modal"
-    >
-
-      <div
-        class="scan-box"
-        style="
-          max-width:620px;
-          max-height:90vh;
-          overflow:auto
-        "
-      >
-
-        <div class="scan-head">
-
-          <h2>
-
-            ${
-              state.editingRow === null
-                ? 'Добавить коробку'
-                : 'Редактировать коробку'
-            }
-
-          </h2>
-
-
-          <button
-            class="scan-close"
-            id="boxModalClose"
+        <label>
+          Штрихкод
+          <input
+            id="boxBarcode"
+            required
+            value="${escapeHtml(row?.barcode ?? '')}"
           >
-            ×
-          </button>
-
-        </div>
+        </label>
 
 
-        <div style="margin-top:15px">
+        <label>
+          Артикул
+          <input
+            id="boxArticle"
+            value="${escapeHtml(row?.article ?? '')}"
+          >
+        </label>
 
-          ${fields}
 
-        </div>
+        <label>
+          Кол-во в коробке
+          <input
+            id="boxQuantity"
+            value="${escapeHtml(row?.quantity_in_box ?? '')}"
+          >
+        </label>
 
 
-        <div
-          style="
-            display:flex;
-            gap:8px;
-            justify-content:flex-end;
-            margin-top:16px;
-            flex-wrap:wrap
-          "
-        >
+        <label>
+          Зона/ряд
+          <input
+            id="boxZone"
+            value="${escapeHtml(row?.zone_row ?? '')}"
+          >
+        </label>
+
+
+        <label>
+          Поддон
+          <input
+            id="boxPallet"
+            value="${escapeHtml(row?.pallet ?? '')}"
+          >
+        </label>
+
+
+        <label>
+          Статус
+
+          <select id="boxStatus">
+
+            ${Object.values(STATUSES)
+              .map(
+                status => `
+                  <option
+                    value="${escapeHtml(status)}"
+                    ${
+                      (row?.status ?? STATUSES.STOCK) === status
+                        ? 'selected'
+                        : ''
+                    }
+                  >
+                    ${escapeHtml(status)}
+                  </option>
+                `
+              )
+              .join('')}
+
+          </select>
+
+        </label>
+
+
+        <label>
+          Дата размещения
+          <input
+            id="boxDate"
+            type="date"
+            value="${escapeHtml(
+              toISODate(row?.date) ?? ''
+            )}"
+          >
+        </label>
+
+
+        <label>
+          Склад
+          <input
+            id="boxWarehouse"
+            value="${escapeHtml(row?.warehouse ?? '')}"
+          >
+        </label>
+
+
+        <div class="sp-form-actions">
 
           <button
-            class="ghost"
-            id="boxCancel"
+            type="button"
+            class="sp-btn secondary"
+            id="cancelBoxModal"
           >
             Отмена
           </button>
 
-
           <button
-            class="primary"
-            id="boxSave"
+            type="submit"
+            class="sp-btn"
+            id="saveBoxBtn"
           >
-            💾 Сохранить
+            Сохранить
           </button>
 
         </div>
 
-      </div>
+      </form>
 
     </div>
 
   `;
 
-}
+
+  document.body.appendChild(modal);
 
 
-// =====================================================
-// НАСТРОЙКА БАЗЫ
-// =====================================================
-
-function setupBase(){
-
-  const addButton =
-    $('#addBoxBtn');
-
-
-  if (addButton) {
-
-    addButton.onclick = () => {
-
-      state.editingRow = null;
-
-
-      const oldModal =
-        $('#boxModal');
-
-
-      if (oldModal) {
-        oldModal.remove();
-      }
-
-
-      document.body.insertAdjacentHTML(
-        'beforeend',
-        boxModal()
-      );
-
-
-      openBoxModal();
-
-    };
-
-  }
-
-
-  document
-    .querySelectorAll('.edit-box')
-    .forEach(
-      button => {
-
-        button.onclick = () => {
-
-          state.editingRow =
-            Number(
-              button.dataset.row
-            );
-
-
-          const oldModal =
-            $('#boxModal');
-
-
-          if (oldModal) {
-            oldModal.remove();
-          }
-
-
-          document.body.insertAdjacentHTML(
-            'beforeend',
-            boxModal()
-          );
-
-
-          openBoxModal();
-
-        };
-
-      }
+  $('#closeBoxModal')
+    .addEventListener(
+      'click',
+      closeBoxModal
     );
 
 
-  document
-    .querySelectorAll('.delete-box')
-    .forEach(
-      button => {
-
-        button.onclick =
-          async () => {
-
-            const index =
-              Number(
-                button.dataset.row
-              );
-
-
-            const row =
-              rows('База')[
-                index + 1
-              ];
-
-
-            if (!row) {
-              return;
-            }
-
-
-            const barcode =
-              row[0] || '';
-
-
-            const id =
-              BOX_IDS[index];
-
-
-            if (!id) {
-
-              alert(
-                'Для этой строки не найден ID Supabase.\n\n' +
-                'Обновите страницу и попробуйте ещё раз.'
-              );
-
-              return;
-            }
-
-
-            const confirmed =
-              confirm(
-                `Удалить коробку ${barcode}?\n\n` +
-                'Она будет удалена из общей базы Supabase.'
-              );
-
-
-            if (!confirmed) {
-              return;
-            }
-
-
-            button.disabled = true;
-
-
-            const {
-              error
-            } = await supabaseClient
-              .from('boxes')
-              .delete()
-              .eq('id', id);
-
-
-            if (error) {
-
-              console.error(error);
-
-
-              alert(
-                'Не удалось удалить коробку:\n' +
-                error.message
-              );
-
-
-              button.disabled = false;
-
-              return;
-            }
-
-
-            await reloadAndRender();
-
-          };
-
-      }
-    );
-
-}
-
-
-// =====================================================
-// MODAL
-// =====================================================
-
-function openBoxModal(){
-
-  const modal =
-    $('#boxModal');
-
-
-  if (!modal) {
-    return;
-  }
-
-
-  modal.classList.add('show');
-
-
-  const close = () => {
-
-    modal.classList.remove(
-      'show'
+  $('#cancelBoxModal')
+    .addEventListener(
+      'click',
+      closeBoxModal
     );
 
 
-    state.editingRow = null;
-
-
-    setTimeout(
-      () => {
-
-        const current =
-          $('#boxModal');
-
-
-        if (current) {
-          current.remove();
-        }
-
-      },
-      150
+  $('#boxForm')
+    .addEventListener(
+      'submit',
+      saveBox
     );
 
-  };
+
+  $('#boxBarcode')
+    ?.focus();
 
 
-  $('#boxModalClose').onclick =
-    close;
-
-
-  $('#boxCancel').onclick =
-    close;
-
-
-  modal.onclick =
+  modal.addEventListener(
+    'click',
     event => {
 
       if (
         event.target === modal
       ) {
-
-        close();
-
+        closeBoxModal();
       }
-
-    };
-
-
-  $('#boxSave').onclick =
-    saveBox;
-
+    }
+  );
 }
 
 
-// =====================================================
-// BARCODE
-// =====================================================
+async function saveBox(event) {
 
-function normBarcode(value){
-
-  return String(value ?? '')
-    .replace(
-      /\.0$|,0$/,
-      ''
-    )
-    .replace(
-      /\D/g,
-      ''
-    );
-
-}
-
-
-// =====================================================
-// SUPABASE ROW
-// =====================================================
-
-function rowToSupabase(row){
-
-  let quantity = null;
-
-
-  if (
-    row[2] !== '' &&
-    row[2] !== null &&
-    row[2] !== undefined
-  ) {
-
-    const parsed =
-      Number(row[2]);
-
-
-    quantity =
-      Number.isFinite(parsed)
-        ? parsed
-        : null;
-
-  }
-
-
-  return {
-
-    barcode:
-      normBarcode(row[0]),
-
-    article:
-      row[1] || null,
-
-    quantity_in_box:
-      quantity,
-
-    zone_row:
-      row[3] || null,
-
-    pallet:
-      row[4] || null,
-
-    status:
-      row[5] || 'На складе',
-
-    date:
-      row[6] || null,
-
-    warehouse:
-      row[7] || null,
-
-    column_9:
-      row[8] || null,
-
-    direction:
-      row[9] || null,
-
-    pick:
-      String(row[10] || '')
-        .toLowerCase() === 'истина' ||
-      String(row[10] || '')
-        .toLowerCase() === 'true',
-
-    worker:
-      row[11] || null,
-
-    updated_at:
-      new Date().toISOString()
-
-  };
-
-}
-
-
-// =====================================================
-// СОХРАНЕНИЕ КОРОБКИ
-// =====================================================
-
-async function saveBox(){
-
-  const headers =
-    headerRows('База');
-
-
-  const newRow =
-    headers.map(
-      (_, i) => {
-
-        const input =
-          document.querySelector(
-            `.box-field[data-index="${i}"]`
-          );
-
-
-        return input
-          ? input.value.trim()
-          : '';
-
-      }
-    );
-
-
-  const barcode =
-    normBarcode(
-      newRow[0]
-    );
-
-
-  if (!barcode) {
-
-    alert(
-      'Введите штрихкод.'
-    );
-
-    return;
-  }
-
-
-  newRow[0] =
-    barcode;
+  event.preventDefault();
 
 
   const button =
-    $('#boxSave');
+    $('#saveBoxBtn');
 
+  button.disabled = true;
 
-  if (button) {
-
-    button.disabled =
-      true;
-
-    button.textContent =
-      'Сохранение…';
-
-  }
+  button.textContent =
+    'Сохранение...';
 
 
   try {
 
-    // =================================================
-    // ДОБАВЛЕНИЕ НОВОЙ КОРОБКИ
-    // =================================================
+    const formData = {
 
-    if (
-      state.editingRow === null
-    ) {
+      barcode:
+        $('#boxBarcode').value,
 
-      const payload =
-        rowToSupabase(
-          newRow
-        );
+      article:
+        $('#boxArticle').value,
+
+      quantity_in_box:
+        $('#boxQuantity').value,
+
+      zone_row:
+        $('#boxZone').value,
+
+      pallet:
+        $('#boxPallet').value,
+
+      status:
+        $('#boxStatus').value,
+
+      date:
+        $('#boxDate').value,
+
+      warehouse:
+        $('#boxWarehouse').value
+
+    };
 
 
-      delete payload.updated_at;
+    const payload =
+      boxToPayload(formData);
 
+
+    if (!payload.barcode) {
+
+      throw new Error(
+        'Штрихкод обязателен'
+      );
+    }
+
+
+    /*
+      INSERT
+    */
+
+    if (!state.editingId) {
 
       const {
+        data,
         error
-      } = await supabaseClient
-        .from('boxes')
-        .insert(payload);
+      } =
+        await supabaseClient
+          .from('boxes')
+          .insert(payload)
+          .select(BOX_SELECT)
+          .single();
 
 
       if (error) {
         throw error;
       }
 
-    }
 
-    // =================================================
-    // РЕДАКТИРОВАНИЕ
-    // =================================================
+      /*
+        ВАЖНО:
 
-    else {
+        не reloadAndRender(),
+        а просто добавляем новую строку
+        локально.
+      */
 
-      const id =
-        BOX_IDS[
-          state.editingRow
-        ];
+      addLocalBox(data);
 
+      closeBoxModal();
 
-      if (!id) {
+      render();
 
-        throw new Error(
-          'Не найден ID коробки в Supabase.'
-        );
-
-      }
-
-
-      const payload =
-        rowToSupabase(
-          newRow
-        );
-
-
-      const {
-        error
-      } = await supabaseClient
-        .from('boxes')
-        .update(payload)
-        .eq('id', id);
-
-
-      if (error) {
-        throw error;
-      }
-
-    }
-
-
-    // =================================================
-    // СОХРАНЕНИЕ УСПЕШНО
-    // =================================================
-
-    state.editingRow =
-      null;
-
-
-    // СРАЗУ УБИРАЕМ МОДАЛЬНОЕ ОКНО
-    const modal =
-      $('#boxModal');
-
-
-    if (modal) {
-
-      modal.classList.remove(
-        'show'
+      toast(
+        'Коробка добавлена'
       );
 
-      modal.remove();
-
+      return;
     }
 
 
-    // Показываем обновление страницы
-    // после успешного сохранения
-    await reloadAndRender();
+    /*
+      UPDATE
+    */
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from('boxes')
+        .update(payload)
+        .eq(
+          'id',
+          state.editingId
+        )
+        .select(BOX_SELECT)
+        .single();
+
+
+    if (error) {
+      throw error;
+    }
+
+
+    updateLocalBox(
+      state.editingId,
+      data
+    );
+
+
+    closeBoxModal();
+
+    render();
+
+    toast(
+      'Коробка сохранена'
+    );
 
 
   } catch (error) {
 
     console.error(
-      'Ошибка сохранения коробки:',
+      'saveBox error:',
       error
     );
 
-
-    alert(
-      'Не удалось сохранить коробку:\n' +
-      (error.message || error)
+    toast(
+      error.message ||
+      'Ошибка сохранения',
+      'error'
     );
 
+    button.disabled = false;
 
-    if (button) {
-
-      button.disabled =
-        false;
-
-      button.textContent =
-        '💾 Сохранить';
-
-    }
-
+    button.textContent =
+      'Сохранить';
   }
-
 }
 
 
-  try {
+/* =========================================================
+   DELETE
+   ========================================================= */
 
-    if (
-      state.editingRow === null
-    ) {
+async function deleteBox(id) {
 
-      const payload =
-        rowToSupabase(
-          newRow
-        );
-
-
-      delete payload.updated_at;
-
-
-      const {
-        error
-      } = await supabaseClient
-        .from('boxes')
-        .insert(payload);
-
-
-      if (error) {
-        throw error;
-      }
-
-    } else {
-
-      const id =
-        BOX_IDS[
-          state.editingRow
-        ];
-
-
-      if (!id) {
-
-        throw new Error(
-          'Не найден ID коробки в Supabase.'
-        );
-
-      }
-
-
-      const payload =
-        rowToSupabase(
-          newRow
-        );
-
-
-      const {
-        error
-      } = await supabaseClient
-        .from('boxes')
-        .update(payload)
-        .eq('id', id);
-
-
-      if (error) {
-        throw error;
-      }
-
-    }
-
-
-    state.editingRow =
-      null;
-
-
-    await reloadAndRender();
-
-  } catch (error) {
-
-    console.error(error);
-
-
-    alert(
-      'Не удалось сохранить коробку:\n' +
-      (error.message || error)
-    );
-
-
-    if (button) {
-
-      button.disabled =
-        false;
-
-      button.textContent =
-        '💾 Сохранить';
-
-    }
-
+  if (
+    !confirm(
+      'Удалить эту коробку?'
+    )
+  ) {
+    return;
   }
-
-}
-
-
-// =====================================================
-// UPDATE BOX
-// =====================================================
-
-async function updateBox(
-  id,
-  changes
-){
-
-  const payload = {
-
-    ...changes,
-
-    updated_at:
-      new Date().toISOString()
-
-  };
 
 
   const {
     error
-  } = await supabaseClient
-    .from('boxes')
-    .update(payload)
-    .eq('id', id);
+  } =
+    await supabaseClient
+      .from('boxes')
+      .delete()
+      .eq('id', id);
 
 
   if (error) {
-    throw error;
-  }
 
-}
-
-
-// =====================================================
-// RELOAD
-// =====================================================
-
-async function reloadAndRender(){
-
-  const loaded =
-    await loadDatabase();
-
-
-  if (!loaded) {
-
-    alert(
-      'Не удалось обновить данные.'
+    toast(
+      error.message,
+      'error'
     );
 
     return;
   }
 
 
+  removeLocalBox(id);
+
   render();
 
+  toast(
+    'Коробка удалена'
+  );
 }
 
 
-// =====================================================
-// DASHBOARD
-// =====================================================
+async function deleteSelectedBoxes() {
 
-function dashboard(){
-
-  const base =
-    objects('База');
+  const ids =
+    [...state.selectedIds];
 
 
-  const statuses = {};
+  if (!ids.length) {
+    return;
+  }
 
 
-  base.forEach(
-    row => {
-
-      const s =
-        row['Статус'] || '';
-
-
-      statuses[s] =
-        (statuses[s] || 0) + 1;
-
-    }
-  );
-
-
-  const directions =
-    objects('Убыло')
-      .reduce(
-        (result, row) => {
-
-          const direction =
-            row['Направление'] ||
-            'Без направления';
-
-
-          result[direction] =
-            (result[direction] || 0) + 1;
-
-
-          return result;
-
-        },
-        {}
-      );
-
-
-  const top =
-    Object.entries(
-      directions
+  if (
+    !confirm(
+      `Удалить выбранные коробки: ${ids.length}?`
     )
-      .sort(
-        (a,b) =>
-          b[1] - a[1]
-      )
-      .slice(
-        0,
-        8
+  ) {
+    return;
+  }
+
+
+  const {
+    error
+  } =
+    await supabaseClient
+      .from('boxes')
+      .delete()
+      .in(
+        'id',
+        ids
       );
 
 
-  return `
-
-    <div class="notice">
-
-      SKLADAPLAN подключён к Supabase.
-
-      Изменения в «Базе»
-      сохраняются в общей базе данных.
-
-    </div>
-
-
-    <div class="cards">
-
-      <div class="card">
-
-        <div class="label">
-          Всего записей в Базе
-        </div>
-
-        <div class="value">
-          ${base.length.toLocaleString('ru-RU')}
-        </div>
-
-        <div class="sub">
-          коробок / строк
-        </div>
-
-      </div>
-
-
-      <div class="card">
-
-        <div class="label">
-          На складе
-        </div>
-
-        <div class="value">
-
-          ${
-            (
-              statuses['На складе'] || 0
-            ).toLocaleString('ru-RU')
-          }
-
-        </div>
-
-        <div class="sub">
-          текущий остаток
-        </div>
-
-      </div>
-
-
-      <div class="card">
-
-        <div class="label">
-          Скомплектовано
-        </div>
-
-        <div class="value">
-
-          ${
-            (
-              statuses['Скомплектовано'] || 0
-            ).toLocaleString('ru-RU')
-          }
-
-        </div>
-
-        <div class="sub">
-          готово к отгрузке
-        </div>
-
-      </div>
-
-
-      <div class="card">
-
-        <div class="label">
-          Отгружено
-        </div>
-
-        <div class="value">
-
-          ${
-            (
-              statuses['Отгружено'] || 0
-            ).toLocaleString('ru-RU')
-          }
-
-        </div>
-
-        <div class="sub">
-          по данным Базы
-        </div>
-
-      </div>
-
-    </div>
-
-
-    <div class="grid2">
-
-      <div class="panel">
-
-        <div class="section-title">
-
-          <h3>
-            Последние операции
-          </h3>
-
-          <span class="muted">
-            лист «Убыло»
-          </span>
-
-        </div>
-
-
-        ${table(
-          'Убыло',
-          10
-        )}
-
-      </div>
-
-
-      <div class="panel">
-
-        <div class="section-title">
-
-          <h3>
-            По направлениям
-          </h3>
-
-          <span class="muted">
-            отгрузки
-          </span>
-
-        </div>
-
-
-        ${top
-          .map(
-            ([key,value]) => `
-
-              <div
-                style="
-                  display:flex;
-                  justify-content:space-between;
-                  padding:9px 0;
-                  border-bottom:1px solid #eee;
-                  font-size:11px
-                "
-              >
-
-                <span>
-                  ${esc(key)}
-                </span>
-
-                <b>
-                  ${value}
-                </b>
-
-              </div>
-
-            `
-          )
-          .join('')}
-
-      </div>
-
-    </div>
-
-
-    <div
-      class="panel"
-      style="margin-top:14px"
-    >
-
-      <h3>
-        Быстрые действия
-      </h3>
-
-
-      <div class="quick">
-
-        <button data-go="base">
-
-          <b>
-            ▦ Открыть базу
-          </b>
-
-          <span>
-            Поиск, добавление и
-            редактирование коробок
-          </span>
-
-        </button>
-
-
-        <button data-go="assembly">
-
-          <b>
-            ✓ Сборка
-          </b>
-
-          <span>
-            Перейти к комплектации
-          </span>
-
-        </button>
-
-
-        <button id="calcBoxes">
-
-          <b>
-            ＋ Рассчитать коробки
-          </b>
-
-          <span>
-            Для будущего модуля заказов
-          </span>
-
-        </button>
-
-      </div>
-
-    </div>
-
-  `;
-
-}
-
-
-// =====================================================
-// SHEET VIEW
-// =====================================================
-
-function sheetView(sheet){
-
-  return `
-
-    <div class="panel">
-
-      <div class="toolbar">
-
-        <input
-          id="search"
-          class="search"
-          placeholder="Поиск по всем колонкам…"
-        >
-
-
-        <span
-          class="muted"
-          style="padding:10px 0"
-        >
-
-          ${count(sheet).toLocaleString('ru-RU')}
-          строк
-
-        </span>
-
-      </div>
-
-
-      <div id="sheetTable">
-
-        ${table(sheet)}
-
-      </div>
-
-    </div>
-
-  `;
-
-}
-
-
-// =====================================================
-// ASSEMBLY
-// =====================================================
-
-function assembly(){
-
-  const data =
-    objects('Сборка')
-      .filter(
-        row =>
-          row['Штрихкод'] != null
-      );
-
-
-  data.sort(
-    (a,b) =>
-
-      String(
-        a['Зона/Ряд'] || ''
-      ).localeCompare(
-        String(
-          b['Зона/Ряд'] || ''
-        ),
-        'ru',
-        {
-          numeric:true
-        }
-      )
-
-      ||
-
-      String(
-        a['Поддон'] || ''
-      ).localeCompare(
-        String(
-          b['Поддон'] || ''
-        ),
-        'ru',
-        {
-          numeric:true
-        }
-      )
-  );
-
-
-  const total =
-    data.reduce(
-      (sum,row) =>
-        sum +
-        (
-          Number(
-            row['Кол-во коробок']
-          ) || 0
-        ),
-      0
+  if (error) {
+
+    toast(
+      error.message,
+      'error'
     );
 
+    return;
+  }
+
+
+  ids.forEach(
+    id => removeLocalBox(id)
+  );
+
+  state.selectedIds.clear();
+
+  render();
+
+  toast(
+    `Удалено коробок: ${ids.length}`
+  );
+}
+
+
+/* =========================================================
+   PICKING
+   ========================================================= */
+
+async function markSelectedForPicking() {
+
+  const ids =
+    [...state.selectedIds];
+
+
+  if (!ids.length) {
+    return;
+  }
+
+
+  let done = 0;
+
+
+  for (
+    const id of ids
+  ) {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from('boxes')
+        .update({
+          status: STATUSES.PICK,
+          pick: true
+        })
+        .eq('id', id)
+        .select(BOX_SELECT)
+        .single();
+
+
+    if (error) {
+
+      console.error(error);
+
+      continue;
+    }
+
+
+    updateLocalBox(
+      id,
+      data
+    );
+
+    done++;
+  }
+
+
+  state.selectedIds.clear();
+
+  render();
+
+  toast(
+    `Добавлено в подбор: ${done}`
+  );
+}
+
+
+/* =========================================================
+   ASSEMBLY
+   ========================================================= */
+
+function getPickingBoxes() {
+
+  return state.boxes.filter(
+    row =>
+      row.pick === true ||
+      row.status === STATUSES.PICK ||
+      row.status === STATUSES.RESERVED
+  );
+}
+
+
+function assemblyView() {
+
+  const picking =
+    getPickingBoxes();
+
+
+  const collected =
+    state.boxes.filter(
+      row =>
+        row.status === STATUSES.COLLECTED
+    ).length;
+
 
   return `
 
-    <div class="panel">
+    <div class="sp-scanner">
 
-      <div class="section-title">
+      <div class="sp-grid">
 
-        <div>
+        <div class="sp-card">
 
-          <h3>
-            Список сборки
-          </h3>
+          <div class="sp-card-label">
+            К подбору
+          </div>
 
-
-          <div class="route-note">
-
-            Маршрут отсортирован
-            по зоне/ряду → поддону.
-
-            Всего к подбору:
-
-            <b>
-              ${total}
-            </b>
-
-            коробок.
-
+          <div class="sp-big-number">
+            ${picking.length}
           </div>
 
         </div>
 
 
-        <span class="muted">
-          ${data.length} позиции
-        </span>
+        <div class="sp-card">
+
+          <div class="sp-card-label">
+            Уже собрано
+          </div>
+
+          <div class="sp-big-number">
+            ${collected}
+          </div>
+
+        </div>
 
       </div>
 
 
-      <div class="assembly-tools">
+      <div class="sp-pallet">
+
+        <b>
+          Текущий поддон
+        </b>
+
+        <div class="sp-toolbar" style="margin-top:10px">
+
+          <input
+            id="currentPallet"
+            placeholder="Например: А"
+            value="${escapeHtml(state.currentPallet)}"
+          >
+
+          <button
+            class="sp-btn secondary"
+            id="clearPallet"
+          >
+            Сбросить
+          </button>
+
+        </div>
+
+        <div class="sp-muted">
+          Если поддон указан, сканирование разрешено
+          только для коробок этого поддона.
+        </div>
+
+      </div>
+
+
+      <div>
 
         <input
-          id="assemblySearch"
-          placeholder="Штрихкод, зона, поддон…"
+          id="scannerInput"
+          class="sp-scanner-input"
+          inputmode="none"
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+          placeholder="Сканируйте штрихкод..."
         >
-
-
-        <input
-          id="currentPallet"
-          placeholder="Текущий поддон (необязательно)"
-        >
-
-
-        <button
-          class="primary"
-          id="scanBtn"
-        >
-          ▣ Сканировать
-        </button>
 
       </div>
 
 
       <div
-        class="muted"
-        style="
-          font-size:11px;
-          margin-bottom:10px
-        "
+        id="scannerResult"
+        class="sp-card"
       >
-
-        Если указан текущий поддон,
-        сканер будет принимать коробки
-        только с него.
-
+        Готов к сканированию.
       </div>
 
 
-      ${assemblyTable(data)}
+      <div class="sp-table-wrap">
 
-    </div>
+        <table class="sp-table">
 
+          <thead>
 
-    <div
-      id="scanModal"
-      class="scan-modal"
-    >
+            <tr>
 
-      <div class="scan-box">
+              <th>Штрихкод</th>
+              <th>Артикул</th>
+              <th>Зона/ряд</th>
+              <th>Поддон</th>
+              <th>Склад</th>
+              <th>Статус</th>
 
-        <div class="scan-head">
+            </tr>
 
-          <h2>
-            Сканирование коробки
-          </h2>
+          </thead>
 
+          <tbody>
 
-          <button
-            class="scan-close"
-            id="scanClose"
-          >
-            ×
-          </button>
+            ${
+              picking.length
+                ? picking
+                    .slice(0, 300)
+                    .map(pickingRow)
+                    .join('')
+                : `
+                  <tr>
+                    <td colspan="6">
+                      <div class="sp-empty">
+                        В подборе пока ничего нет
+                      </div>
+                    </td>
+                  </tr>
+                `
+            }
 
-        </div>
+          </tbody>
 
-
-        <input
-          id="scanInput"
-          class="scan-input"
-          autocomplete="off"
-          inputmode="numeric"
-          placeholder="Сканируйте штрихкод…"
-        >
-
-
-        <div
-          id="scanStatus"
-          class="scan-status"
-        >
-          Готов к сканированию.
-        </div>
-
-
-        <div class="scan-hint">
-
-          Bluetooth-сканер должен
-          работать как клавиатура.
-
-          После сканирования нажмите
-          Enter или дождитесь
-          автоматической обработки.
-
-        </div>
+        </table>
 
       </div>
 
     </div>
 
   `;
-
 }
 
 
-function assemblyTable(data){
+function pickingRow(row) {
 
   return `
 
-    <div class="table-wrap">
+    <tr>
 
-      <table class="data-table">
+      <td>
+        <b>
+          ${escapeHtml(row.barcode)}
+        </b>
+      </td>
 
-        <thead>
+      <td>
+        ${escapeHtml(row.article)}
+      </td>
 
-          <tr>
+      <td>
+        ${escapeHtml(row.zone_row)}
+      </td>
 
-            <th>
-              Штрихкод
-            </th>
+      <td>
+        ${escapeHtml(row.pallet)}
+      </td>
 
-            <th>
-              Зона/Ряд
-            </th>
+      <td>
+        ${escapeHtml(row.warehouse)}
+      </td>
 
-            <th>
-              Поддон
-            </th>
+      <td>
+        <span class="sp-status">
+          ${escapeHtml(row.status)}
+        </span>
+      </td>
 
-            <th>
-              Коробок
-            </th>
-
-            <th>
-              Отбор
-            </th>
-
-          </tr>
-
-        </thead>
-
-
-        <tbody>
-
-          ${data
-            .map(
-              row => `
-
-                <tr>
-
-                  <td data-label="Штрихкод">
-
-                    ${esc(
-                      fmt(
-                        row['Штрихкод']
-                      )
-                    )}
-
-                  </td>
-
-
-                  <td data-label="Зона/Ряд">
-
-                    ${esc(
-                      fmt(
-                        row['Зона/Ряд']
-                      )
-                    )}
-
-                  </td>
-
-
-                  <td data-label="Поддон">
-
-                    ${esc(
-                      fmt(
-                        row['Поддон']
-                      )
-                    )}
-
-                  </td>
-
-
-                  <td data-label="Коробок">
-
-                    ${esc(
-                      fmt(
-                        row['Кол-во коробок']
-                      )
-                    )}
-
-                  </td>
-
-
-                  <td data-label="Отбор">
-
-                    ${
-                      row['Отбор ✔️']
-                        ? '✓'
-                        : ''
-                    }
-
-                  </td>
-
-                </tr>
-
-              `
-            )
-            .join('')}
-
-        </tbody>
-
-      </table>
-
-    </div>
+    </tr>
 
   `;
-
 }
 
 
-// =====================================================
-// SCANNER
-// =====================================================
+function setupAssembly() {
 
-function setupScanner(){
+  const pallet =
+    $('#currentPallet');
 
-  const modal =
-    $('#scanModal');
+  pallet?.addEventListener(
+    'input',
+    event => {
 
-
-  const input =
-    $('#scanInput');
-
-
-  const statusElement =
-    $('#scanStatus');
+      state.currentPallet =
+        event.target.value.trim();
+    }
+  );
 
 
-  if (
-    !modal ||
-    !input ||
-    !statusElement
-  ) {
-
-    return;
-
-  }
-
-
-  const close = () => {
-
-    modal.classList.remove(
-      'show'
-    );
-
-    input.value = '';
-
-  };
-
-
-  const scanButton =
-    $('#scanBtn');
-
-
-  if (scanButton) {
-
-    scanButton.onclick =
+  $('#clearPallet')
+    ?.addEventListener(
+      'click',
       () => {
 
-        modal.classList.add(
-          'show'
-        );
+        state.currentPallet = '';
 
+        render();
 
-        setTimeout(
-          () =>
-            input.focus(),
-          80
-        );
-
-      };
-
-  }
-
-
-  $('#scanClose').onclick =
-    close;
-
-
-  modal.onclick =
-    event => {
-
-      if (
-        event.target === modal
-      ) {
-
-        close();
-
+        focusScanner();
       }
+    );
 
-    };
 
+  const scanner =
+    $('#scannerInput');
 
-  const processScan =
-    async () => {
 
-      const code =
-        normBarcode(
-          input.value
-        );
-
-
-      if (!code) {
-        return;
-      }
-
-
-      const currentPallet =
-        String(
-          $('#currentPallet')?.value ||
-          ''
-        )
-          .trim()
-          .toLowerCase();
-
-
-      const base =
-        objects('База');
-
-
-      let candidates =
-        base
-          .map(
-            row => ({
-
-              object:
-                row,
-
-              index:
-                row.__rowIndex
-
-            })
-          )
-          .filter(
-            item =>
-
-              normBarcode(
-                item.object['Штрихкод']
-              ) === code &&
-
-              String(
-                item.object['Статус'] ||
-                ''
-              )
-                .toLowerCase()
-                .includes(
-                  'на складе'
-                )
-          );
-
-
-      if (currentPallet) {
-
-        candidates =
-          candidates.filter(
-            item =>
-              String(
-                item.object['Поддон'] ??
-                ''
-              )
-                .toLowerCase() ===
-              currentPallet
-          );
-
-      }
-
-
-      if (!candidates.length) {
-
-        statusElement.className =
-          'scan-status bad';
-
-
-        statusElement.innerHTML = `
-
-          <b>
-            ✕ Коробка не найдена
-          </b>
-
-
-          <br>
-
-
-          <span style="font-size:12px">
-
-            ${esc(code)}
-
-            ${
-              currentPallet
-                ? ' · поддон ' +
-                  esc(currentPallet)
-                : ''
-            }
-
-          </span>
-
-        `;
-
-
-        input.select();
-
-
-        beep(false);
-
-
-        return;
-
-      }
-
-
-      const hit =
-        candidates[0];
-
-
-      const id =
-        BOX_IDS[
-          hit.index - 1
-        ];
-
-
-      if (!id) {
-
-        statusElement.className =
-          'scan-status bad';
-
-
-        statusElement.innerHTML = `
-
-          <b>
-            ✕ У коробки нет ID Supabase
-          </b>
-
-
-          <br>
-
-
-          <span style="font-size:12px">
-
-            ${esc(code)}
-
-          </span>
-
-        `;
-
-
-        beep(false);
-
-
-        return;
-
-      }
-
-
-      try {
-
-        await updateBox(
-          id,
-          {
-
-            status:
-              'Скомплектовано',
-
-            worker:
-              'SKLADAPLAN',
-
-            date:
-              new Date().toISOString(),
-
-            pick:
-              true
-
-          }
-        );
-
-
-        const row =
-          DATA['База'][
-            hit.index
-          ];
-
-
-        const headers =
-          headerRows('База');
-
-
-        if (row) {
-
-          const statusIndex =
-            headers.indexOf(
-              'Статус'
-            );
-
-
-          const workerIndex =
-            headers.indexOf(
-              'Кто работал'
-            );
-
-
-          const dateIndex =
-            headers.indexOf(
-              'Дата'
-            );
-
-
-          const pickIndex =
-            headers.indexOf(
-              'Отбор ✔️'
-            );
-
-
-          if (
-            statusIndex >= 0
-          ) {
-
-            row[statusIndex] =
-              'Скомплектовано';
-
-          }
-
-
-          if (
-            workerIndex >= 0
-          ) {
-
-            row[workerIndex] =
-              'SKLADAPLAN';
-
-          }
-
-
-          if (
-            dateIndex >= 0
-          ) {
-
-            row[dateIndex] =
-              new Date().toISOString();
-
-          }
-
-
-          if (
-            pickIndex >= 0
-          ) {
-
-            row[pickIndex] =
-              'ИСТИНА';
-
-          }
-
-        }
-
-
-        statusElement.className =
-          'scan-status ok';
-
-
-        statusElement.innerHTML = `
-
-          <b>
-            ✓ Коробка сохранена
-          </b>
-
-
-          <br>
-
-
-          <span style="font-size:12px">
-
-            ${esc(code)}
-
-            ·
-
-            ${esc(
-              hit.object['Артикул'] || ''
-            )}
-
-            ·
-
-            ${esc(
-              hit.object['Зона/Ряд'] || ''
-            )}
-
-            · поддон
-
-            ${esc(
-              hit.object['Поддон'] || ''
-            )}
-
-          </span>
-
-        `;
-
-
-        beep(true);
-
-
-        input.value = '';
-
-        input.focus();
-
-
-        updateAssemblyBadge();
-
-      } catch(error) {
-
-        console.error(error);
-
-
-        statusElement.className =
-          'scan-status bad';
-
-
-        statusElement.innerHTML = `
-
-          <b>
-            ✕ Ошибка сохранения
-          </b>
-
-
-          <br>
-
-
-          <span style="font-size:12px">
-
-            ${esc(
-              error.message ||
-              error
-            )}
-
-          </span>
-
-        `;
-
-
-        beep(false);
-
-      }
-
-    };
-
-
-  input.addEventListener(
+  scanner?.addEventListener(
     'keydown',
-    event => {
+    async event => {
+
+      /*
+        Большинство Bluetooth-сканеров
+        заканчивают скан Enter.
+      */
 
       if (
         event.key === 'Enter'
@@ -2656,49 +2520,228 @@ function setupScanner(){
 
         event.preventDefault();
 
-        processScan();
+        const barcode =
+          scanner.value;
 
+        scanner.value = '';
+
+        await processScan(
+          barcode
+        );
       }
 
     }
   );
 
 
-  let timer;
-
-
-  input.addEventListener(
-    'input',
+  scanner?.addEventListener(
+    'blur',
     () => {
 
-      clearTimeout(timer);
-
-
-      if (
-        normBarcode(
-          input.value
-        ).length >= 12
-      ) {
-
-        timer =
-          setTimeout(
-            processScan,
-            120
-          );
-
-      }
+      /*
+        Не возвращаем фокус сразу,
+        чтобы пользователь мог нажать
+        кнопки интерфейса.
+      */
 
     }
   );
 
+
+  setTimeout(
+    focusScanner,
+    100
+  );
 }
 
 
-// =====================================================
-// BEEP
-// =====================================================
+function focusScanner() {
 
-function beep(ok){
+  const scanner =
+    $('#scannerInput');
+
+  if (!scanner) {
+    return;
+  }
+
+  scanner.focus({
+    preventScroll: true
+  });
+}
+
+
+async function processScan(
+  barcode
+) {
+
+  barcode =
+    normalizeBarcode(barcode);
+
+
+  if (!barcode) {
+    return;
+  }
+
+
+  const candidates =
+    state.boxes.filter(
+      row =>
+        normalizeBarcode(row.barcode) === barcode &&
+        (
+          row.pick === true ||
+          row.status === STATUSES.PICK ||
+          row.status === STATUSES.RESERVED
+        )
+    );
+
+
+  if (!candidates.length) {
+
+    showScannerResult(
+      `Штрихкод ${barcode} не найден среди коробок к подбору.`,
+      'error'
+    );
+
+    beep(false);
+
+    focusScanner();
+
+    return;
+  }
+
+
+  let box = null;
+
+
+  if (state.currentPallet) {
+
+    box =
+      candidates.find(
+        row =>
+          normalizeText(row.pallet).toLowerCase() ===
+          normalizeText(state.currentPallet).toLowerCase()
+      );
+
+
+    if (!box) {
+
+      showScannerResult(
+        `Коробка найдена, но она находится не на текущем поддоне "${state.currentPallet}".`,
+        'error'
+      );
+
+      beep(false);
+
+      focusScanner();
+
+      return;
+    }
+
+  } else {
+
+    box = candidates[0];
+  }
+
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+      .from('boxes')
+      .update({
+
+        status:
+          STATUSES.COLLECTED,
+
+        pick:
+          false,
+
+        worker:
+          state.user?.email || null
+
+      })
+      .eq(
+        'id',
+        box.id
+      )
+      .select(BOX_SELECT)
+      .single();
+
+
+  if (error) {
+
+    console.error(error);
+
+    showScannerResult(
+      error.message,
+      'error'
+    );
+
+    beep(false);
+
+    focusScanner();
+
+    return;
+  }
+
+
+  updateLocalBox(
+    box.id,
+    data
+  );
+
+
+  showScannerResult(
+    `✓ Коробка ${barcode} скомплектована`,
+    'success'
+  );
+
+
+  beep(true);
+
+  render();
+
+
+  /*
+    После render() снова получаем scannerInput.
+  */
+
+  setTimeout(
+    focusScanner,
+    50
+  );
+}
+
+
+function showScannerResult(
+  message,
+  type
+) {
+
+  const element =
+    $('#scannerResult');
+
+  if (!element) {
+    return;
+  }
+
+
+  element.textContent =
+    message;
+
+  element.style.border =
+    type === 'error'
+      ? '2px solid #b42318'
+      : '2px solid #18794e';
+}
+
+
+/* =========================================================
+   BEEP
+   ========================================================= */
+
+function beep(success = true) {
 
   try {
 
@@ -2719,996 +2762,134 @@ function beep(ok){
     const oscillator =
       context.createOscillator();
 
-
     const gain =
       context.createGain();
 
 
-    oscillator.frequency.value =
-      ok
-        ? 880
-        : 180;
-
-
-    oscillator.type =
-      'sine';
-
-
-    gain.gain.value =
-      0.06;
-
-
-    oscillator.connect(gain);
+    oscillator.connect(
+      gain
+    );
 
     gain.connect(
       context.destination
     );
 
 
+    oscillator.frequency.value =
+      success ? 1000 : 250;
+
+
+    oscillator.type =
+      'sine';
+
+
+    gain.gain.setValueAtTime(
+      0.0001,
+      context.currentTime
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+      0.12,
+      context.currentTime + 0.01
+    );
+
+    gain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      context.currentTime + (
+        success ? 0.12 : 0.25
+      )
+    );
+
+
     oscillator.start();
 
-
-    setTimeout(
-      () => {
-
-        oscillator.stop();
-
-        context.close();
-
-      },
-      ok
-        ? 130
-        : 260
+    oscillator.stop(
+      context.currentTime +
+      (success ? 0.13 : 0.26)
     );
 
-  } catch(error) {}
-
-}
-
-
-// =====================================================
-// SEARCH
-// =====================================================
-
-function bindSearch(){
-
-  const input =
-    $('#search');
-
-
-  if (!input) {
-    return;
-  }
-
-
-  input.addEventListener(
-    'input',
-    () => {
-
-      const sheet =
-        {
-          base: 'База',
-          received: 'Принято',
-          collected: 'Собрано',
-          shipped: 'Убыло'
-        }[
-          state.page
-        ];
-
-
-      const query =
-        input.value
-          .trim()
-          .toLowerCase();
-
-
-      if (
-        sheet === 'База'
-      ) {
-
-        const data =
-          rows(sheet);
-
-
-        const filtered =
-          data
-            .slice(1)
-            .map(
-              (row,index) => ({
-                row,
-                index
-              })
-            )
-            .filter(
-              ({row}) =>
-                row.some(
-                  value =>
-                    String(
-                      value ?? ''
-                    )
-                      .toLowerCase()
-                      .includes(query)
-                )
-            );
-
-
-        const baseTableElement =
-          $('#baseTable');
-
-
-        if (baseTableElement) {
-
-          baseTableElement.innerHTML =
-            baseTable(
-              filtered,
-              data[0]
-            );
-
-        }
-
-
-        setupBase();
-
-
-        return;
-
-      }
-
-
-      if (!query) {
-
-        const sheetTableElement =
-          $('#sheetTable');
-
-
-        if (sheetTableElement) {
-
-          sheetTableElement.innerHTML =
-            table(sheet);
-
-        }
-
-
-        return;
-
-      }
-
-
-      const data =
-        rows(sheet);
-
-
-      const filtered = [
-
-        data[0],
-
-        ...data
-          .slice(1)
-          .filter(
-            row =>
-              row.some(
-                value =>
-                  String(
-                    value ?? ''
-                  )
-                    .toLowerCase()
-                    .includes(query)
-              )
-          )
-
-      ];
-
-
-      const old =
-        DATA[sheet];
-
-
-      DATA[sheet] =
-        filtered;
-
-
-      const sheetTableElement =
-        $('#sheetTable');
-
-
-      if (sheetTableElement) {
-
-        sheetTableElement.innerHTML =
-          table(sheet);
-
-      }
-
-
-      DATA[sheet] =
-        old;
-
-    }
-  );
-
-}
-
-
-// =====================================================
-// ASSEMBLY BADGE
-// =====================================================
-
-function updateAssemblyBadge(){
-
-  const value =
-    count('Сборка');
-
-
-  const badge =
-    $('#assemblyBadge');
-
-
-  if (badge) {
-
-    badge.textContent =
-      value || '';
-
-  }
-
-
-  const mobileBadge =
-    $('#mobileAssemblyBadge');
-
-
-  if (mobileBadge) {
-
-    mobileBadge.textContent =
-      value || '';
-
-  }
-
-}
-
-
-// =====================================================
-// EXCEL IMPORT
-// =====================================================
-
-const EXCEL_HEADERS = [
-
-  'Штрихкод',
-  'Артикул',
-  'Кол-во в коробке',
-  'Зона/Ряд',
-  'Поддон',
-  'Статус',
-  'Дата',
-  'Склад',
-  'Столбец 9',
-  'Направление',
-  'Отбор ✔️',
-  'Кто работал'
-
-];
-
-
-let pendingExcelImport = null;
-
-
-// -----------------------------------------------------
-// Нормализация заголовка
-// -----------------------------------------------------
-
-function normalizeExcelHeader(value){
-
-  return String(
-    value ?? ''
-  )
-    .trim()
-    .replace(
-      /\s+/g,
-      ' '
-    )
-    .toLowerCase();
-
-}
-
-
-// -----------------------------------------------------
-// Нормализация штрихкода
-// -----------------------------------------------------
-
-function normalizeImportedBarcode(value){
-
-  if (
-    value === null ||
-    value === undefined ||
-    value === ''
-  ) {
-
-    return '';
-
-  }
-
-
-  return String(value)
-    .trim()
-    .replace(
-      /\.0$/,
-      ''
-    )
-    .replace(
-      /,0$/,
-      ''
-    )
-    .replace(
-      /\D/g,
-      ''
+  } catch (error) {
+
+    console.warn(
+      'Audio error:',
+      error
     );
-
+  }
 }
 
 
-// -----------------------------------------------------
-// Boolean из Excel
-// -----------------------------------------------------
-
-function excelBoolean(value){
-
-  const text =
-    String(
-      value ?? ''
-    )
-      .trim()
-      .toLowerCase();
-
-
-  return (
-
-    text === 'истина' ||
-
-    text === 'true' ||
-
-    text === 'да' ||
-
-    text === '1' ||
-
-    text === '✓' ||
-
-    text === '✔️'
-
-  );
-
-}
-
-
-// -----------------------------------------------------
-// Дата из Excel
-// -----------------------------------------------------
-
-function excelDate(value){
-
-  if (
-    value === null ||
-    value === undefined ||
-    value === ''
-  ) {
-
-    return null;
-
-  }
-
-
-  if (
-    value instanceof Date
-  ) {
-
-    if (
-      isNaN(
-        value.getTime()
-      )
-    ) {
-
-      return null;
-
-    }
-
-
-    return value.toISOString();
-
-  }
-
-
-  if (
-    typeof value === 'number' &&
-    value > 20000 &&
-    value < 60000
-  ) {
-
-    const d =
-      XLSX.SSF.parse_date_code(
-        value
-      );
-
-
-    if (d) {
-
-      return new Date(
-        Date.UTC(
-          d.y,
-          d.m - 1,
-          d.d,
-          d.H || 0,
-          d.M || 0,
-          Math.floor(
-            d.S || 0
-          )
-        )
-      ).toISOString();
-
-    }
-
-  }
-
-
-  const text =
-    String(value)
-      .trim();
-
-
-  const match =
-    text.match(
-      /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/
-    );
-
-
-  if (match) {
-
-    const day =
-      Number(
-        match[1]
-      );
-
-
-    const month =
-      Number(
-        match[2]
-      );
-
-
-    const year =
-      Number(
-        match[3]
-      );
-
-
-    return new Date(
-      Date.UTC(
-        year,
-        month - 1,
-        day
-      )
-    ).toISOString();
-
-  }
-
-
-  const parsed =
-    new Date(text);
-
-
-  if (
-    !isNaN(
-      parsed.getTime()
-    )
-  ) {
-
-    return parsed.toISOString();
-
-  }
-
-
-  return null;
-
-}
-
-
-// -----------------------------------------------------
-// Поиск колонки
-// -----------------------------------------------------
-
-function findExcelColumn(
-  headers,
-  name
-){
-
-  const target =
-    normalizeExcelHeader(
-      name
-    );
-
-
-  return headers.findIndex(
-    header =>
-      normalizeExcelHeader(
-        header
-      ) === target
-  );
-
-}
-
-
-// -----------------------------------------------------
-// Чтение Excel
-// -----------------------------------------------------
-
-async function readExcel(file){
-
-  return new Promise(
-    (resolve, reject) => {
-
-      const reader =
-        new FileReader();
-
-
-      reader.onload =
-        event => {
-
-          try {
-
-            const workbook =
-              XLSX.read(
-                event.target.result,
-                {
-                  type: 'array',
-                  cellDates: true
-                }
-              );
-
-
-            if (
-              !workbook.SheetNames.length
-            ) {
-
-              throw new Error(
-                'В Excel нет листов.'
-              );
-
-            }
-
-
-            const sheet =
-              workbook.Sheets[
-                workbook.SheetNames[0]
-              ];
-
-
-            const data =
-              XLSX.utils.sheet_to_json(
-                sheet,
-                {
-                  header: 1,
-                  defval: '',
-                  raw: true
-                }
-              );
-
-
-            resolve({
-
-              sheetName:
-                workbook.SheetNames[0],
-
-              data
-
-            });
-
-          } catch(error) {
-
-            reject(error);
-
-          }
-
-        };
-
-
-      reader.onerror =
-        () =>
-          reject(
-            new Error(
-              'Не удалось прочитать Excel.'
-            )
-          );
-
-
-      reader.readAsArrayBuffer(
-        file
-      );
-
-    }
-  );
-
-}
-
-
-// -----------------------------------------------------
-// Конвертация Excel
-// -----------------------------------------------------
-
-function convertExcelData(
-  rawData
-){
-
-  if (
-    !rawData ||
-    rawData.length < 2
-  ) {
-
-    throw new Error(
-      'Excel-файл пустой или содержит только заголовки.'
-    );
-
-  }
-
-
-  const headers =
-    rawData[0].map(
-      value =>
-        String(
-          value ?? ''
-        ).trim()
-    );
-
-
-  const indexes = {};
-
-
-  EXCEL_HEADERS.forEach(
-    header => {
-
-      indexes[header] =
-        findExcelColumn(
-          headers,
-          header
-        );
-
-    }
-  );
-
-
-  if (
-    indexes['Штрихкод'] === -1
-  ) {
-
-    throw new Error(
-      'Не найдена колонка «Штрихкод».'
-    );
-
-  }
-
-
-  const result = [];
-
-  let errors = 0;
-
-
-  rawData
-    .slice(1)
-    .forEach(
-      (sourceRow, index) => {
-
-        const empty =
-          sourceRow.every(
-            value =>
-              value === '' ||
-              value === null ||
-              value === undefined
-          );
-
-
-        if (empty) {
-          return;
-        }
-
-
-        const barcode =
-          normalizeImportedBarcode(
-            sourceRow[
-              indexes['Штрихкод']
-            ]
-          );
-
-
-        if (!barcode) {
-
-          errors++;
-
-          return;
-
-        }
-
-
-        let quantity = null;
-
-
-        if (
-          indexes['Кол-во в коробке'] >= 0
-        ) {
-
-          const value =
-            sourceRow[
-              indexes['Кол-во в коробке']
-            ];
-
-
-          if (
-            value !== '' &&
-            value !== null &&
-            value !== undefined
-          ) {
-
-            const number =
-              Number(value);
-
-
-            if (
-              Number.isFinite(number)
-            ) {
-
-              quantity =
-                number;
-
-            }
-
-          }
-
-        }
-
-
-        result.push({
-
-          excelRow:
-            index + 2,
-
-          data: {
-
-            barcode,
-
-            article:
-              indexes['Артикул'] >= 0
-                ? String(
-                    sourceRow[
-                      indexes['Артикул']
-                    ] ?? ''
-                  ).trim() || null
-                : null,
-
-
-            quantity_in_box:
-              quantity,
-
-
-            zone_row:
-              indexes['Зона/Ряд'] >= 0
-                ? String(
-                    sourceRow[
-                      indexes['Зона/Ряд']
-                    ] ?? ''
-                  ).trim() || null
-                : null,
-
-
-            pallet:
-              indexes['Поддон'] >= 0
-                ? String(
-                    sourceRow[
-                      indexes['Поддон']
-                    ] ?? ''
-                  ).trim() || null
-                : null,
-
-
-            status:
-              indexes['Статус'] >= 0
-                ? String(
-                    sourceRow[
-                      indexes['Статус']
-                    ] ?? ''
-                  ).trim() ||
-                  'На складе'
-                : 'На складе',
-
-
-            date:
-              indexes['Дата'] >= 0
-                ? excelDate(
-                    sourceRow[
-                      indexes['Дата']
-                    ]
-                  )
-                : null,
-
-
-            warehouse:
-              indexes['Склад'] >= 0
-                ? String(
-                    sourceRow[
-                      indexes['Склад']
-                    ] ?? ''
-                  ).trim() || null
-                : null,
-
-
-            column_9:
-              indexes['Столбец 9'] >= 0
-                ? String(
-                    sourceRow[
-                      indexes['Столбец 9']
-                    ] ?? ''
-                  ).trim() || null
-                : null,
-
-
-            direction:
-              indexes['Направление'] >= 0
-                ? String(
-                    sourceRow[
-                      indexes['Направление']
-                    ] ?? ''
-                  ).trim() || null
-                : null,
-
-
-            pick:
-              indexes['Отбор ✔️'] >= 0
-                ? excelBoolean(
-                    sourceRow[
-                      indexes['Отбор ✔️']
-                    ]
-                  )
-                : false,
-
-
-            worker:
-              indexes['Кто работал'] >= 0
-                ? String(
-                    sourceRow[
-                      indexes['Кто работал']
-                    ] ?? ''
-                  ).trim() || null
-                : null
-
-          }
-
-        });
-
-      }
-    );
-
-
-  return {
-
-    rows:
-      result,
-
-    errors
-
-  };
-
-}
-
-
-// -----------------------------------------------------
-// Preview Excel
-// -----------------------------------------------------
-
-function excelPreview(
-  items
-){
-
-  const preview =
-    items.slice(
-      0,
-      20
+/* =========================================================
+   COLLECTED
+   ========================================================= */
+
+function collectedView() {
+
+  const rows =
+    state.boxes.filter(
+      row =>
+        row.status === STATUSES.COLLECTED
     );
 
 
   return `
 
-    <div class="table-wrap">
+    <div class="sp-toolbar">
 
-      <table class="data-table">
+      <div>
+        Собрано:
+        <b>${rows.length}</b>
+      </div>
+
+
+      <button
+        class="sp-btn success"
+        id="shipCollectedBtn"
+        ${rows.length ? '' : 'disabled'}
+      >
+        Отгрузить выбранные
+      </button>
+
+    </div>
+
+
+    <div class="sp-table-wrap">
+
+      <table class="sp-table">
 
         <thead>
 
           <tr>
 
-            <th>
-              №
-            </th>
-
-            <th>
-              Штрихкод
-            </th>
-
-            <th>
-              Артикул
-            </th>
-
-            <th>
-              Зона/Ряд
-            </th>
-
-            <th>
-              Поддон
-            </th>
-
-            <th>
-              Статус
-            </th>
-
-            <th>
-              Склад
-            </th>
+            <th>✓</th>
+            <th>Штрихкод</th>
+            <th>Артикул</th>
+            <th>Зона/ряд</th>
+            <th>Поддон</th>
+            <th>Склад</th>
+            <th>Работник</th>
+            <th>Дата</th>
 
           </tr>
 
         </thead>
 
-
         <tbody>
 
-          ${preview
-            .map(
-              item => `
-
+          ${
+            rows.length
+              ? rows
+                  .map(collectedRow)
+                  .join('')
+              : `
                 <tr>
-
-                  <td>
-                    ${item.excelRow}
+                  <td colspan="8">
+                    <div class="sp-empty">
+                      Собранных коробок нет
+                    </div>
                   </td>
-
-
-                  <td>
-                    ${esc(
-                      item.data.barcode
-                    )}
-                  </td>
-
-
-                  <td>
-                    ${esc(
-                      item.data.article || ''
-                    )}
-                  </td>
-
-
-                  <td>
-                    ${esc(
-                      item.data.zone_row || ''
-                    )}
-                  </td>
-
-
-                  <td>
-                    ${esc(
-                      item.data.pallet || ''
-                    )}
-                  </td>
-
-
-                  <td>
-                    ${esc(
-                      item.data.status || ''
-                    )}
-                  </td>
-
-
-                  <td>
-                    ${esc(
-                      item.data.warehouse || ''
-                    )}
-                  </td>
-
                 </tr>
-
               `
-            )
-            .join('')}
+          }
 
         </tbody>
 
@@ -3716,1194 +2897,2042 @@ function excelPreview(
 
     </div>
 
-
-    ${
-      items.length > 20
-
-        ? `
-
-          <div
-            class="muted"
-            style="margin-top:8px"
-          >
-
-            Показаны первые 20 строк
-            из
-            ${items.length.toLocaleString('ru-RU')}.
-
-          </div>
-
-        `
-
-        : ''
-    }
-
   `;
-
 }
 
 
-// -----------------------------------------------------
-// Импорт в Supabase
-// -----------------------------------------------------
+function collectedRow(row) {
 
-async function importExcelRows(
-  items
-){
-
-  const chunkSize =
-    500;
+  const id =
+    String(row.id);
 
 
-  let imported =
-    0;
+  return `
+
+    <tr>
+
+      <td>
+
+        <input
+          type="checkbox"
+          class="collected-check"
+          data-id="${escapeHtml(id)}"
+        >
+
+      </td>
+
+      <td>
+        <b>${escapeHtml(row.barcode)}</b>
+      </td>
+
+      <td>
+        ${escapeHtml(row.article)}
+      </td>
+
+      <td>
+        ${escapeHtml(row.zone_row)}
+      </td>
+
+      <td>
+        ${escapeHtml(row.pallet)}
+      </td>
+
+      <td>
+        ${escapeHtml(row.warehouse)}
+      </td>
+
+      <td>
+        ${escapeHtml(row.worker)}
+      </td>
+
+      <td>
+        ${escapeHtml(formatDate(row.date))}
+      </td>
+
+    </tr>
+
+  `;
+}
+
+
+function setupCollected() {
+
+  $('#shipCollectedBtn')
+    ?.addEventListener(
+      'click',
+      shipSelectedCollected
+    );
+}
+
+
+async function shipSelectedCollected() {
+
+  const ids =
+    $all('.collected-check')
+      .filter(
+        checkbox =>
+          checkbox.checked
+      )
+      .map(
+        checkbox =>
+          checkbox.dataset.id
+      );
+
+
+  if (!ids.length) {
+
+    toast(
+      'Выберите коробки для отгрузки',
+      'error'
+    );
+
+    return;
+  }
+
+
+  if (
+    !confirm(
+      `Отгрузить выбранные коробки: ${ids.length}?`
+    )
+  ) {
+    return;
+  }
+
+
+  let shipped = 0;
 
 
   for (
-    let i = 0;
-    i < items.length;
-    i += chunkSize
+    const id of ids
   ) {
 
-    const now =
-      new Date().toISOString();
-
-
-    const chunk =
-      items
-        .slice(
-          i,
-          i + chunkSize
-        )
-        .map(
-          item => ({
-
-            ...item.data,
-
-            created_at:
-              now,
-
-            updated_at:
-              now
-
-          })
-        );
-
-
     const {
+      data,
       error
-    } = await supabaseClient
-      .from('boxes')
-      .insert(chunk);
+    } =
+      await supabaseClient
+        .from('boxes')
+        .update({
+          status: STATUSES.SHIPPED
+        })
+        .eq('id', id)
+        .eq(
+          'status',
+          STATUSES.COLLECTED
+        )
+        .select(BOX_SELECT)
+        .single();
 
 
     if (error) {
-      throw error;
+
+      console.error(error);
+
+      continue;
     }
 
 
-    imported +=
-      chunk.length;
-
-
-    const progress =
-      $('#importProgress');
-
-
-    if (progress) {
-
-      progress.textContent =
-
-        `Загружено ${
-          imported.toLocaleString('ru-RU')
-        } из ${
-          items.length.toLocaleString('ru-RU')
-        } коробок…`;
-
-    }
-
-  }
-
-
-  return imported;
-
-}
-
-
-// =====================================================
-// EXCEL IMPORT VIEW
-// =====================================================
-
-function excelImportView(){
-
-  return `
-
-    <div class="panel">
-
-      <div class="section-title">
-
-        <div>
-
-          <h3>
-            📥 Импорт Excel
-          </h3>
-
-
-          <div class="muted">
-
-            Загрузить готовую таблицу склада
-            в Supabase
-
-          </div>
-
-        </div>
-
-      </div>
-
-
-      <div
-        style="
-          border:2px dashed #ccc;
-          border-radius:12px;
-          padding:25px;
-          text-align:center;
-          margin-top:15px
-        "
-      >
-
-        <input
-          type="file"
-          id="excelFile"
-          accept=".xlsx,.xls"
-          style="display:none"
-        >
-
-
-        <button
-          class="primary"
-          id="chooseExcelBtn"
-        >
-          📄 Выбрать Excel
-        </button>
-
-
-        <div
-          id="excelFileName"
-          class="muted"
-          style="margin-top:10px"
-        >
-          Файл не выбран
-        </div>
-
-      </div>
-
-
-      <div
-        id="excelInfo"
-        style="margin-top:15px"
-      ></div>
-
-
-      <div
-        id="excelPreview"
-        style="margin-top:15px"
-      ></div>
-
-
-      <div
-        id="importProgress"
-        class="muted"
-        style="margin-top:12px"
-      ></div>
-
-
-      <div
-        id="importActions"
-        style="
-          display:none;
-          gap:8px;
-          margin-top:15px;
-          flex-wrap:wrap
-        "
-      >
-
-        <button
-          class="primary"
-          id="startExcelImport"
-        >
-          🚀 Импортировать в Supabase
-        </button>
-
-
-        <button
-          class="ghost"
-          id="cancelExcelImport"
-        >
-          Отмена
-        </button>
-
-      </div>
-
-    </div>
-
-
-    <div
-      class="panel"
-      style="margin-top:14px"
-    >
-
-      <h3>
-        Правила импорта
-      </h3>
-
-
-      <div
-        class="muted"
-        style="
-          line-height:1.8;
-          font-size:12px
-        "
-      >
-
-        <div>
-          ✓ 1 строка Excel = 1 физическая коробка
-        </div>
-
-
-        <div>
-          ✓ Одинаковые штрихкоды не объединяются
-        </div>
-
-
-        <div>
-          ✓ Штрихкод автоматически очищается от .0 и ,0
-        </div>
-
-
-        <div>
-          ✓ Пустое «Кол-во в коробке» допускается
-        </div>
-
-
-        <div>
-          ✓ Данные загружаются напрямую в Supabase
-        </div>
-
-
-        <div>
-          ⚠️ Существующие записи не удаляются
-        </div>
-
-      </div>
-
-    </div>
-
-  `;
-
-}
-
-
-// =====================================================
-// SETUP EXCEL IMPORT
-// =====================================================
-
-function setupExcelImport(){
-
-  const fileInput =
-    $('#excelFile');
-
-
-  const chooseButton =
-    $('#chooseExcelBtn');
-
-
-  if (
-    !fileInput ||
-    !chooseButton
-  ) {
-
-    return;
-
-  }
-
-
-  chooseButton.onclick =
-    () =>
-      fileInput.click();
-
-
-  fileInput.onchange =
-    async event => {
-
-      const file =
-        event.target.files?.[0];
-
-
-      if (!file) {
-        return;
-      }
-
-
-      $('#excelFileName')
-        .textContent =
-          file.name;
-
-
-      $('#excelInfo')
-        .innerHTML =
-          '<div class="muted">Читаем Excel…</div>';
-
-
-      $('#excelPreview')
-        .innerHTML = '';
-
-
-      $('#importActions')
-        .style.display =
-          'none';
-
-
-      pendingExcelImport =
-        null;
-
-
-      try {
-
-        if (
-          typeof XLSX ===
-          'undefined'
-        ) {
-
-          throw new Error(
-            'Библиотека XLSX не загружена. Проверь index.html.'
-          );
-
-        }
-
-
-        const workbook =
-          await readExcel(
-            file
-          );
-
-
-        const converted =
-          convertExcelData(
-            workbook.data
-          );
-
-
-        pendingExcelImport =
-          converted.rows;
-
-
-        $('#excelInfo')
-          .innerHTML = `
-
-            <div
-              style="
-                display:grid;
-                grid-template-columns:
-                repeat(auto-fit,minmax(150px,1fr));
-                gap:8px
-              "
-            >
-
-              <div class="card">
-
-                <div class="label">
-                  Лист
-                </div>
-
-                <div class="value">
-                  ${esc(
-                    workbook.sheetName
-                  )}
-                </div>
-
-              </div>
-
-
-              <div class="card">
-
-                <div class="label">
-                  Коробок
-                </div>
-
-                <div class="value">
-                  ${converted.rows.length.toLocaleString('ru-RU')}
-                </div>
-
-              </div>
-
-
-              <div class="card">
-
-                <div class="label">
-                  Ошибки
-                </div>
-
-                <div class="value">
-                  ${converted.errors}
-                </div>
-
-              </div>
-
-            </div>
-
-          `;
-
-
-        $('#excelPreview')
-          .innerHTML =
-            excelPreview(
-              converted.rows
-            );
-
-
-        if (
-          converted.rows.length
-        ) {
-
-          $('#importActions')
-            .style.display =
-              'flex';
-
-        }
-
-      } catch(error) {
-
-        console.error(
-          error
-        );
-
-
-        $('#excelInfo')
-          .innerHTML = `
-
-            <div
-              class="notice"
-              style="border-left:4px solid #c00"
-            >
-
-              ❌
-              ${esc(
-                error.message ||
-                error
-              )}
-
-            </div>
-
-          `;
-
-      }
-
-    };
-
-
-  const importButton =
-    $('#startExcelImport');
-
-
-  if (importButton) {
-
-    importButton.onclick =
-      async () => {
-
-        if (
-          !pendingExcelImport ||
-          !pendingExcelImport.length
-        ) {
-
-          alert(
-            'Сначала выберите Excel-файл.'
-          );
-
-          return;
-
-        }
-
-
-        const total =
-          pendingExcelImport.length;
-
-
-        const confirmed =
-          confirm(
-
-            `Импортировать ${
-              total.toLocaleString('ru-RU')
-            } коробок в Supabase?\n\n` +
-
-            `Каждая строка Excel станет отдельной физической коробкой.\n\n` +
-
-            `Существующие коробки удаляться не будут.`
-
-          );
-
-
-        if (!confirmed) {
-          return;
-        }
-
-
-        const button =
-          $('#startExcelImport');
-
-
-        button.disabled =
-          true;
-
-
-        button.textContent =
-          'Импортируем…';
-
-
-        try {
-
-          const imported =
-            await importExcelRows(
-              pendingExcelImport
-            );
-
-
-          $('#importProgress')
-            .innerHTML = `
-
-              <div
-                class="notice"
-                style="margin-top:10px"
-              >
-
-                ✅ Импорт завершён.
-
-                Добавлено:
-
-                <b>
-                  ${imported.toLocaleString('ru-RU')}
-                </b>
-
-                коробок.
-
-              </div>
-
-            `;
-
-
-          pendingExcelImport =
-            null;
-
-
-          $('#importActions')
-            .style.display =
-              'none';
-
-
-          await loadDatabase();
-
-
-          state.page =
-            'base';
-
-
-          render();
-
-
-          alert(
-
-            `Импорт завершён.\n\n` +
-
-            `Добавлено коробок: ${
-              imported.toLocaleString('ru-RU')
-            }`
-
-          );
-
-        } catch(error) {
-
-          console.error(
-            error
-          );
-
-
-          $('#importProgress')
-            .innerHTML = `
-
-              <div
-                class="notice"
-                style="
-                  margin-top:10px;
-                  border-left:4px solid #c00
-                "
-              >
-
-                ❌ Ошибка импорта:
-
-                <br>
-
-                ${esc(
-                  error.message ||
-                  error
-                )}
-
-              </div>
-
-            `;
-
-
-          button.disabled =
-            false;
-
-
-          button.textContent =
-            '🚀 Импортировать в Supabase';
-
-        }
-
-      };
-
-  }
-
-
-  const cancelButton =
-    $('#cancelExcelImport');
-
-
-  if (cancelButton) {
-
-    cancelButton.onclick =
-      () => {
-
-        pendingExcelImport =
-          null;
-
-
-        fileInput.value =
-          '';
-
-
-        $('#excelFileName')
-          .textContent =
-            'Файл не выбран';
-
-
-        $('#excelInfo')
-          .innerHTML = '';
-
-
-        $('#excelPreview')
-          .innerHTML = '';
-
-
-        $('#importProgress')
-          .innerHTML = '';
-
-
-        $('#importActions')
-          .style.display =
-            'none';
-
-      };
-
-  }
-
-}
-
-
-// =====================================================
-// TOOLS
-// =====================================================
-
-function tools(){
-
-  return `
-
-    ${excelImportView()}
-
-
-    <div
-      class="grid2"
-      style="margin-top:14px"
-    >
-
-      <div class="panel">
-
-        <h3>
-          Экспорт
-        </h3>
-
-
-        <p class="muted">
-
-          Скачать текущие данные
-          SKLADAPLAN в JSON.
-
-        </p>
-
-
-        <button
-          class="big-action"
-          id="exportBtn2"
-        >
-          Скачать текущие данные JSON
-        </button>
-
-      </div>
-
-
-      <div class="panel">
-
-        <h3>
-          Резервная копия
-        </h3>
-
-
-        <p class="muted">
-
-          Создаёт локальный JSON-архив.
-
-        </p>
-
-
-        <button
-          class="big-action"
-          id="backupBtn2"
-        >
-          Создать локальный backup
-        </button>
-
-      </div>
-
-    </div>
-
-
-    <div
-      class="panel"
-      style="margin-top:14px"
-    >
-
-      <h3>
-        Структура данных
-      </h3>
-
-
-      ${Object.entries(DATA)
-        .map(
-          ([key,value]) => `
-
-            <div
-              style="
-                display:flex;
-                justify-content:space-between;
-                padding:9px 0;
-                border-bottom:1px solid #eee;
-                font-size:11px
-              "
-            >
-
-              <span>
-                ${esc(key)}
-              </span>
-
-
-              <b>
-
-                ${
-                  Math.max(
-                    0,
-                    value.length - 1
-                  ).toLocaleString('ru-RU')
-                }
-
-              </b>
-
-            </div>
-
-          `
-        )
-        .join('')}
-
-    </div>
-
-  `;
-
-}
-
-
-// =====================================================
-// VIEWS
-// =====================================================
-
-const views = {
-
-  dashboard:
-    dashboard,
-
-  base:
-    baseView,
-
-  assembly:
-    assembly,
-
-  received:
-    () =>
-      sheetView('Принято'),
-
-  collected:
-    () =>
-      sheetView('Собрано'),
-
-  shipped:
-    () =>
-      sheetView('Убыло'),
-
-  tools:
-    tools
-
-};
-
-
-// =====================================================
-// DOWNLOAD
-// =====================================================
-
-function download(
-  name,
-  text,
-  type = 'application/json'
-){
-
-  const link =
-    document.createElement('a');
-
-
-  link.href =
-    URL.createObjectURL(
-      new Blob(
-        [text],
-        {
-          type
-        }
-      )
+    updateLocalBox(
+      id,
+      data
     );
 
-
-  link.download =
-    name;
-
-
-  link.click();
-
-
-  setTimeout(
-    () =>
-      URL.revokeObjectURL(
-        link.href
-      ),
-    500
-  );
-
-}
-
-
-// =====================================================
-// BACKUP
-// =====================================================
-
-function backup(){
-
-  const stamp =
-    new Date()
-      .toISOString()
-      .replace(
-        /[:.]/g,
-        '-'
-      );
-
-
-  download(
-
-    `SKLADAPLAN_BACKUP_${stamp}.json`,
-
-    JSON.stringify(
-      {
-
-        createdAt:
-          new Date().toISOString(),
-
-        source:
-          'SKLADAPLAN',
-
-        data:
-          DATA
-
-      },
-      null,
-      2
-    )
-
-  );
-
-}
-
-
-// =====================================================
-// EXPORT
-// =====================================================
-
-function exportData(){
-
-  download(
-
-    `SKLADAPLAN_DATA_${
-      new Date()
-        .toISOString()
-        .slice(0,10)
-    }.json`,
-
-    JSON.stringify(
-      DATA,
-      null,
-      2
-    )
-
-  );
-
-}
-
-
-// =====================================================
-// RENDER
-// =====================================================
-
-function render(){
-
-  const [
-    pageTitle,
-    heading
-  ] =
-    pages[state.page];
-
-
-  $('#pageTitle')
-    .textContent =
-      pageTitle;
-
-
-  $('#heading')
-    .textContent =
-      heading;
-
-
-  document
-    .querySelectorAll(
-      '.nav,.mobile-nav-btn'
-    )
-    .forEach(
-      button =>
-        button.classList.toggle(
-          'active',
-          button.dataset.page ===
-          state.page
-        )
-    );
-
-
-  $('#content').innerHTML =
-    views[state.page]();
-
-
-  if (
-    state.page === 'base' ||
-    state.page === 'received' ||
-    state.page === 'collected' ||
-    state.page === 'shipped'
-  ) {
-
-    bindSearch();
-
-  }
-
-
-  if (
-    state.page === 'base'
-  ) {
-
-    setupBase();
-
-  }
-
-
-  if (
-    state.page === 'assembly'
-  ) {
-
-    setupScanner();
-
-  }
-
-
-  if (
-    state.page === 'tools'
-  ) {
-
-    setupExcelImport();
-
-  }
-
-
-  updateAssemblyBadge();
-
-}
-
-
-// =====================================================
-// ГЛОБАЛЬНЫЕ КНОПКИ И НАВИГАЦИЯ
-// =====================================================
-
-document.addEventListener(
-  'click',
-  event => {
-
-    const navigation =
-      event.target.closest(
-        '.nav,.mobile-nav-btn'
-      );
-
-
-    if (navigation) {
-
-      state.page =
-        navigation.dataset.page;
-
-
-      render();
-
-      return;
-
-    }
-
-
-    const go =
-      event.target.closest(
-        '[data-go]'
-      );
-
-
-    if (go) {
-
-      state.page =
-        go.dataset.go;
-
-
-      render();
-
-      return;
-
-    }
-
-
-    if (
-      event.target.id ===
-        'backupBtn' ||
-
-      event.target.id ===
-        'backupBtn2'
-    ) {
-
-      backup();
-
-      return;
-
-    }
-
-
-    if (
-      event.target.id ===
-        'exportBtn' ||
-
-      event.target.id ===
-        'exportBtn2'
-    ) {
-
-      exportData();
-
-      return;
-
-    }
-
-
-    if (
-      event.target.id ===
-      'calcBoxes'
-    ) {
-
-      alert(
-        'Модуль расчёта коробок будет добавлен на этапе работы с заказами.'
-      );
-
-      return;
-
-    }
-
-
-    if (
-      event.target.id ===
-      'mobileMenu'
-    ) {
-
-      state.page =
-        'tools';
-
-
-      render();
-
-    }
-
-  }
-);
-
-
-// =====================================================
-// START APP
-// =====================================================
-
-async function startApp(){
-
-  const loaded =
-    await loadDatabase();
-
-
-  if (!loaded) {
-
-    $('#content').innerHTML = `
-
-      <div class="panel">
-
-        <h3>
-          Не удалось загрузить данные
-        </h3>
-
-
-        <p class="muted">
-
-          Проверь подключение к
-          Supabase и наличие
-          database.json.
-
-        </p>
-
-      </div>
-
-    `;
-
-
-    return;
-
+    shipped++;
   }
 
 
   render();
 
+  toast(
+    `Отгружено: ${shipped}`
+  );
 }
-startApp();
+
+
+/* =========================================================
+   RECEIVED
+   ========================================================= */
+
+function receivedView() {
+
+  const rows =
+    state.boxes
+      .filter(
+        row =>
+          row.status === STATUSES.STOCK
+      )
+      .slice(-300)
+      .reverse();
+
+
+  return `
+
+    <div class="sp-card">
+
+      <div class="sp-card-label">
+        На складе
+      </div>
+
+      <div class="sp-big-number">
+        ${
+          state.boxes.filter(
+            row =>
+              row.status === STATUSES.STOCK
+          ).length
+        }
+      </div>
+
+    </div>
+
+
+    <br>
+
+
+    <div class="sp-table-wrap">
+
+      <table class="sp-table">
+
+        <thead>
+
+          <tr>
+
+            <th>Штрихкод</th>
+            <th>Артикул</th>
+            <th>Зона/ряд</th>
+            <th>Поддон</th>
+            <th>Склад</th>
+            <th>Дата</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${rows.map(
+            row => `
+
+              <tr>
+
+                <td>
+                  <b>${escapeHtml(row.barcode)}</b>
+                </td>
+
+                <td>
+                  ${escapeHtml(row.article)}
+                </td>
+
+                <td>
+                  ${escapeHtml(row.zone_row)}
+                </td>
+
+                <td>
+                  ${escapeHtml(row.pallet)}
+                </td>
+
+                <td>
+                  ${escapeHtml(row.warehouse)}
+                </td>
+
+                <td>
+                  ${escapeHtml(formatDate(row.date))}
+                </td>
+
+              </tr>
+
+            `
+          ).join('')}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+/* =========================================================
+   SHIPPED
+   ========================================================= */
+
+function shippedView() {
+
+  const rows =
+    state.boxes
+      .filter(
+        row =>
+          row.status === STATUSES.SHIPPED
+      )
+      .slice(-500)
+      .reverse();
+
+
+  return `
+
+    <div class="sp-card">
+
+      <div class="sp-card-label">
+        Всего отгружено
+      </div>
+
+      <div class="sp-big-number">
+        ${
+          state.boxes.filter(
+            row =>
+              row.status === STATUSES.SHIPPED
+          ).length
+        }
+      </div>
+
+    </div>
+
+
+    <br>
+
+
+    <div class="sp-table-wrap">
+
+      <table class="sp-table">
+
+        <thead>
+
+          <tr>
+
+            <th>Штрихкод</th>
+            <th>Артикул</th>
+            <th>Зона/ряд</th>
+            <th>Поддон</th>
+            <th>Склад</th>
+            <th>Дата</th>
+
+          </tr>
+
+        </thead>
+
+        <tbody>
+
+          ${rows.map(
+            row => `
+
+              <tr>
+
+                <td>
+                  <b>${escapeHtml(row.barcode)}</b>
+                </td>
+
+                <td>
+                  ${escapeHtml(row.article)}
+                </td>
+
+                <td>
+                  ${escapeHtml(row.zone_row)}
+                </td>
+
+                <td>
+                  ${escapeHtml(row.pallet)}
+                </td>
+
+                <td>
+                  ${escapeHtml(row.warehouse)}
+                </td>
+
+                <td>
+                  ${escapeHtml(formatDate(row.date))}
+                </td>
+
+              </tr>
+
+            `
+          ).join('')}
+
+        </tbody>
+
+      </table>
+
+    </div>
+
+  `;
+}
+
+
+/* =========================================================
+   DASHBOARD
+   ========================================================= */
+
+function dashboardView() {
+
+  const total =
+    state.boxes.length;
+
+
+  const stock =
+    countStatus(
+      STATUSES.STOCK
+    );
+
+
+  const picking =
+    getPickingBoxes().length;
+
+
+  const collected =
+    countStatus(
+      STATUSES.COLLECTED
+    );
+
+
+  const shipped =
+    countStatus(
+      STATUSES.SHIPPED
+    );
+
+
+  const reserved =
+    countStatus(
+      STATUSES.RESERVED
+    );
+
+
+  const warehouses =
+    new Set(
+      state.boxes
+        .map(row => row.warehouse)
+        .filter(Boolean)
+    ).size;
+
+
+  const articles =
+    new Set(
+      state.boxes
+        .map(row => row.article)
+        .filter(Boolean)
+    ).size;
+
+
+  const pallets =
+    new Set(
+      state.boxes
+        .map(row => row.pallet)
+        .filter(Boolean)
+    ).size;
+
+
+  return `
+
+    <div class="sp-grid">
+
+      <div class="sp-card">
+
+        <div class="sp-card-label">
+          Всего коробок
+        </div>
+
+        <div class="sp-card-value">
+          ${total}
+        </div>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <div class="sp-card-label">
+          На складе
+        </div>
+
+        <div class="sp-card-value">
+          ${stock}
+        </div>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <div class="sp-card-label">
+          К подбору
+        </div>
+
+        <div class="sp-card-value">
+          ${picking}
+        </div>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <div class="sp-card-label">
+          Скомплектовано
+        </div>
+
+        <div class="sp-card-value">
+          ${collected}
+        </div>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <div class="sp-card-label">
+          Отгружено
+        </div>
+
+        <div class="sp-card-value">
+          ${shipped}
+        </div>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <div class="sp-card-label">
+          Зарезервировано
+        </div>
+
+        <div class="sp-card-value">
+          ${reserved}
+        </div>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <div class="sp-card-label">
+          Склады
+        </div>
+
+        <div class="sp-card-value">
+          ${warehouses}
+        </div>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <div class="sp-card-label">
+          Артикулы
+        </div>
+
+        <div class="sp-card-value">
+          ${articles}
+        </div>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <div class="sp-card-label">
+          Поддоны
+        </div>
+
+        <div class="sp-card-value">
+          ${pallets}
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <div class="sp-card">
+
+      <h3>
+        Последние операции
+      </h3>
+
+      <div class="sp-table-wrap">
+
+        <table class="sp-table">
+
+          <thead>
+
+            <tr>
+
+              <th>Штрихкод</th>
+              <th>Артикул</th>
+              <th>Зона</th>
+              <th>Поддон</th>
+              <th>Статус</th>
+
+            </tr>
+
+          </thead>
+
+          <tbody>
+
+            ${
+              state.boxes
+                .slice(-10)
+                .reverse()
+                .map(
+                  row => `
+
+                    <tr>
+
+                      <td>
+                        ${escapeHtml(row.barcode)}
+                      </td>
+
+                      <td>
+                        ${escapeHtml(row.article)}
+                      </td>
+
+                      <td>
+                        ${escapeHtml(row.zone_row)}
+                      </td>
+
+                      <td>
+                        ${escapeHtml(row.pallet)}
+                      </td>
+
+                      <td>
+                        <span class="sp-status">
+                          ${escapeHtml(row.status)}
+                        </span>
+                      </td>
+
+                    </tr>
+
+                  `
+                )
+                .join('')
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  `;
+}
+
+
+function countStatus(status) {
+
+  return state.boxes.filter(
+    row =>
+      row.status === status
+  ).length;
+}
+
+
+/* =========================================================
+   TOOLS
+   ========================================================= */
+
+function toolsView() {
+
+  return `
+
+    <div class="sp-grid">
+
+      <div class="sp-card">
+
+        <h3>
+          Импорт Excel
+        </h3>
+
+        <p class="sp-muted">
+          Добавить коробки из XLS/XLSX.
+          Каждая строка Excel считается отдельной
+          физической коробкой.
+        </p>
+
+        <button
+          class="sp-btn"
+          id="openExcelBtn"
+        >
+          📥 Импорт Excel
+        </button>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <h3>
+          Экспорт
+        </h3>
+
+        <p class="sp-muted">
+          Скачать текущую базу коробок.
+        </p>
+
+        <button
+          class="sp-btn secondary"
+          id="exportJsonBtn"
+        >
+          Экспорт JSON
+        </button>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <h3>
+          Backup
+        </h3>
+
+        <p class="sp-muted">
+          Создать локальную копию текущей базы.
+        </p>
+
+        <button
+          class="sp-btn secondary"
+          id="backupToolsBtn"
+        >
+          Создать backup
+        </button>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <h3>
+          Аккаунт
+        </h3>
+
+        <p class="sp-muted">
+          ${escapeHtml(state.user?.email || '')}
+        </p>
+
+        <button
+          class="sp-btn danger"
+          id="logoutBtn"
+        >
+          Выйти
+        </button>
+
+      </div>
+
+    </div>
+
+  `;
+}
+
+
+function setupTools() {
+
+  $('#openExcelBtn')
+    ?.addEventListener(
+      'click',
+      openExcelImport
+    );
+
+
+  $('#exportJsonBtn')
+    ?.addEventListener(
+      'click',
+      exportJSON
+    );
+
+
+  $('#backupToolsBtn')
+    ?.addEventListener(
+      'click',
+      backupDatabase
+    );
+
+
+  $('#logoutBtn')
+    ?.addEventListener(
+      'click',
+      logout
+    );
+}
+
+
+/* =========================================================
+   JSON EXPORT / BACKUP
+   ========================================================= */
+
+function exportJSON() {
+
+  downloadJSON(
+    state.boxes,
+    `skladaplan-${todayFileDate()}.json`
+  );
+
+  toast(
+    'JSON экспортирован'
+  );
+}
+
+
+function backupDatabase() {
+
+  const backup = {
+
+    app: 'SKLADAPLAN',
+
+    created_at:
+      new Date().toISOString(),
+
+    user:
+      state.user?.email || null,
+
+    boxes:
+      state.boxes
+
+  };
+
+
+  downloadJSON(
+    backup,
+    `skladaplan-backup-${todayFileDate()}.json`
+  );
+
+  toast(
+    'Backup создан'
+  );
+}
+
+
+/* =========================================================
+   EXCEL IMPORT
+   ========================================================= */
+
+const EXCEL_MAP = {
+
+  barcode: [
+
+    'штрихкод',
+    'barcode',
+    'баркод',
+    'код',
+    'штрих код'
+
+  ],
+
+  article: [
+
+    'артикул',
+    'article',
+    'sku'
+
+  ],
+
+  quantity_in_box: [
+
+    'колвокоробке',
+    'количествовкоробке',
+    'колвокоробке',
+    'quantityinbox',
+    'количество'
+
+  ],
+
+  zone_row: [
+
+    'зонаряд',
+    'зона',
+    'ряд',
+    'zonerow',
+    'location',
+    'место'
+
+  ],
+
+  pallet: [
+
+    'поддон',
+    'паллета',
+    'pallet'
+
+  ],
+
+  status: [
+
+    'статус',
+    'status'
+
+  ],
+
+  date: [
+
+    'датаразмещения',
+    'датаразмещения',
+    'дата',
+    'date'
+
+  ],
+
+  warehouse: [
+
+    'склад',
+    'warehouse'
+
+  ],
+
+  column_9: [
+
+    'столбец9',
+    'column9'
+
+  ],
+
+  direction: [
+
+    'направление',
+    'direction'
+
+  ],
+
+  pick: [
+
+    'отбор',
+    'отбор',
+    'pick'
+
+  ],
+
+  worker: [
+
+    'ктоработал',
+    'ктоработал',
+    'worker'
+
+  ]
+
+};
+
+
+function findExcelColumn(
+  headers,
+  aliases
+) {
+
+  for (
+    const header of headers
+  ) {
+
+    const normalized =
+      normalizeHeader(header);
+
+
+    for (
+      const alias of aliases
+    ) {
+
+      if (
+        normalized ===
+        normalizeHeader(alias)
+      ) {
+
+        return header;
+      }
+
+    }
+
+  }
+
+
+  return null;
+}
+
+
+function convertExcelRow(
+  row,
+  headers
+) {
+
+  function valueFor(field) {
+
+    const column =
+      findExcelColumn(
+        headers,
+        EXCEL_MAP[field] || []
+      );
+
+    return column
+      ? row[column]
+      : '';
+  }
+
+
+  const barcode =
+    normalizeBarcode(
+      valueFor('barcode')
+    );
+
+
+  if (!barcode) {
+    return null;
+  }
+
+
+  const status =
+    normalizeText(
+      valueFor('status')
+    ) || STATUSES.STOCK;
+
+
+  return {
+
+    barcode,
+
+    article:
+      normalizeText(
+        valueFor('article')
+      ) || null,
+
+    quantity_in_box:
+      normalizeText(
+        valueFor('quantity_in_box')
+      ) || null,
+
+    zone_row:
+      normalizeText(
+        valueFor('zone_row')
+      ) || null,
+
+    pallet:
+      normalizeText(
+        valueFor('pallet')
+      ) || null,
+
+    status,
+
+    date:
+      toISODate(
+        valueFor('date')
+      ),
+
+    warehouse:
+      normalizeText(
+        valueFor('warehouse')
+      ) || null,
+
+    column_9:
+      normalizeText(
+        valueFor('column_9')
+      ) || null,
+
+    direction:
+      normalizeText(
+        valueFor('direction')
+      ) || null,
+
+    pick:
+      excelBoolean(
+        valueFor('pick')
+      ),
+
+    worker:
+      normalizeText(
+        valueFor('worker')
+      ) || null
+
+  };
+}
+
+
+function openExcelImport() {
+
+  const input =
+    document.createElement('input');
+
+  input.type =
+    'file';
+
+  input.accept =
+    '.xlsx,.xls';
+
+
+  input.addEventListener(
+    'change',
+    handleExcelFile
+  );
+
+
+  input.click();
+}
+
+
+async function handleExcelFile(
+  event
+) {
+
+  const file =
+    event.target.files?.[0];
+
+
+  if (!file) {
+    return;
+  }
+
+
+  if (
+    typeof XLSX === 'undefined'
+  ) {
+
+    toast(
+      'Библиотека XLSX не загрузилась',
+      'error'
+    );
+
+    return;
+  }
+
+
+  try {
+
+    const buffer =
+      await file.arrayBuffer();
+
+
+    const workbook =
+      XLSX.read(
+        buffer,
+        {
+          type: 'array',
+          cellDates: true
+        }
+      );
+
+
+    const sheetName =
+      workbook.SheetNames[0];
+
+
+    const sheet =
+      workbook.Sheets[
+        sheetName
+      ];
+
+
+    const rows =
+      XLSX.utils.sheet_to_json(
+        sheet,
+        {
+          defval: '',
+          raw: false
+        }
+      );
+
+
+    if (!rows.length) {
+
+      toast(
+        'Excel-файл пустой',
+        'error'
+      );
+
+      return;
+    }
+
+
+    const headers =
+      Object.keys(
+        rows[0]
+      );
+
+
+    const converted = [];
+
+    let errors = 0;
+
+
+    for (
+      const row of rows
+    ) {
+
+      try {
+
+        const convertedRow =
+          convertExcelRow(
+            row,
+            headers
+          );
+
+
+        if (!convertedRow) {
+
+          errors++;
+
+          continue;
+        }
+
+
+        converted.push(
+          convertedRow
+        );
+
+      } catch (error) {
+
+        console.error(
+          error
+        );
+
+        errors++;
+      }
+
+    }
+
+
+    state.excelRows =
+      converted;
+
+    state.excelFileName =
+      file.name;
+
+    state.excelSheetName =
+      sheetName;
+
+
+    showExcelPreview(
+      rows.length,
+      errors,
+      headers
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      'Excel error:',
+      error
+    );
+
+    toast(
+      error.message ||
+      'Ошибка чтения Excel',
+      'error'
+    );
+  }
+}
+
+
+/* =========================================================
+   EXCEL PREVIEW
+   ========================================================= */
+
+function showExcelPreview(
+  sourceRows,
+  errors,
+  headers
+) {
+
+  $('#excelImportModal')?.remove();
+
+
+  const previewRows =
+    state.excelRows
+      .slice(0, 20);
+
+
+  const modal =
+    document.createElement('div');
+
+  modal.id =
+    'excelImportModal';
+
+  modal.className =
+    'sp-modal-backdrop';
+
+
+  modal.innerHTML = `
+
+    <div class="sp-modal">
+
+      <div class="sp-modal-head">
+
+        <h2 style="margin:0">
+          Импорт Excel
+        </h2>
+
+        <button
+          class="sp-modal-close"
+          id="closeExcelModal"
+        >
+          ×
+        </button>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <b>
+          ${escapeHtml(state.excelFileName)}
+        </b>
+
+        <br>
+
+        Лист:
+        <b>
+          ${escapeHtml(state.excelSheetName)}
+        </b>
+
+        <br><br>
+
+        Строк в Excel:
+        <b>${sourceRows}</b>
+
+        <br>
+
+        Готово к импорту:
+        <b>${state.excelRows.length}</b>
+
+        <br>
+
+        Ошибок:
+        <b>${errors}</b>
+
+      </div>
+
+
+      <p class="sp-muted">
+        Будет добавлена каждая строка Excel.
+        Дубликаты штрихкодов НЕ объединяются.
+      </p>
+
+
+      <div class="sp-import-preview">
+
+        <table>
+
+          <thead>
+
+            <tr>
+
+              <th>Штрихкод</th>
+              <th>Артикул</th>
+              <th>Зона/ряд</th>
+              <th>Поддон</th>
+              <th>Статус</th>
+              <th>Дата</th>
+              <th>Склад</th>
+
+            </tr>
+
+          </thead>
+
+          <tbody>
+
+            ${
+              previewRows.map(
+                row => `
+
+                  <tr>
+
+                    <td>
+                      ${escapeHtml(row.barcode)}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(row.article)}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(row.zone_row)}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(row.pallet)}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(row.status)}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(formatDate(row.date))}
+                    </td>
+
+                    <td>
+                      ${escapeHtml(row.warehouse)}
+                    </td>
+
+                  </tr>
+
+                `
+              ).join('')
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+
+      <div class="sp-form-actions">
+
+        <button
+          class="sp-btn secondary"
+          id="cancelExcelImport"
+        >
+          Отмена
+        </button>
+
+        <button
+          class="sp-btn"
+          id="startExcelImport"
+          ${state.excelRows.length ? '' : 'disabled'}
+        >
+          Импортировать ${state.excelRows.length}
+        </button>
+
+      </div>
+
+    </div>
+
+  `;
+
+
+  document.body.appendChild(modal);
+
+
+  $('#closeExcelModal')
+    .addEventListener(
+      'click',
+      () => modal.remove()
+    );
+
+
+  $('#cancelExcelImport')
+    .addEventListener(
+      'click',
+      () => modal.remove()
+    );
+
+
+  $('#startExcelImport')
+    .addEventListener(
+      'click',
+      importExcelRows
+    );
+}
+
+
+/* =========================================================
+   EXCEL IMPORT TO SUPABASE
+   ========================================================= */
+
+async function importExcelRows() {
+
+  const rows =
+    [...state.excelRows];
+
+
+  if (!rows.length) {
+    return;
+  }
+
+
+  const button =
+    $('#startExcelImport');
+
+
+  button.disabled = true;
+
+
+  let imported = 0;
+
+  let failed = 0;
+
+
+  try {
+
+    for (
+      let i = 0;
+      i < rows.length;
+      i += EXCEL_CHUNK_SIZE
+    ) {
+
+      const chunk =
+        rows.slice(
+          i,
+          i + EXCEL_CHUNK_SIZE
+        );
+
+
+      button.textContent =
+        `Импорт ${Math.min(
+          i + chunk.length,
+          rows.length
+        )} / ${rows.length}`;
+
+
+      const {
+        error
+      } =
+        await supabaseClient
+          .from('boxes')
+          .insert(chunk);
+
+
+      if (error) {
+
+        console.error(
+          'Excel chunk error:',
+          error
+        );
+
+        /*
+          Если пачка не прошла целиком,
+          пробуем построчно, чтобы
+          один плохой ряд не убил весь импорт.
+        */
+
+        for (
+          const row of chunk
+        ) {
+
+          const {
+            error: rowError
+          } =
+            await supabaseClient
+              .from('boxes')
+              .insert(row);
+
+
+          if (rowError) {
+            failed++;
+          } else {
+            imported++;
+          }
+
+        }
+
+      } else {
+
+        imported +=
+          chunk.length;
+      }
+
+    }
+
+
+    $('#excelImportModal')
+      ?.remove();
+
+
+    state.excelRows = [];
+
+
+    /*
+      Здесь один reload оправдан:
+      импорт может добавить десятки тысяч строк.
+    */
+
+    await loadBoxesFromSupabase();
+
+    state.currentPage =
+      'base';
+
+    state.basePage =
+      1;
+
+    render();
+
+
+    toast(
+      `Импортировано: ${imported}. Ошибок: ${failed}.`
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      'Import error:',
+      error
+    );
+
+    button.disabled = false;
+
+    button.textContent =
+      'Повторить импорт';
+
+    toast(
+      error.message ||
+      'Ошибка импорта',
+      'error'
+    );
+  }
+}
+
+
+/* =========================================================
+   NAVIGATION
+   ========================================================= */
+
+const PAGE_META = {
+
+  dashboard: {
+    title: 'Главная',
+    heading: 'Главный экран склада'
+  },
+
+  base: {
+    title: 'База',
+    heading: 'База коробок'
+  },
+
+  assembly: {
+    title: 'Сборка',
+    heading: 'Комплектация заказа'
+  },
+
+  received: {
+    title: 'Принято',
+    heading: 'Принятые коробки'
+  },
+
+  collected: {
+    title: 'Собрано',
+    heading: 'Скомплектованные коробки'
+  },
+
+  shipped: {
+    title: 'Убыло',
+    heading: 'Отгруженные коробки'
+  },
+
+  tools: {
+    title: 'Инструменты',
+    heading: 'Инструменты SKLADAPLAN'
+  }
+
+};
+
+
+function goToPage(
+  page
+) {
+
+  if (
+    !PAGE_META[page]
+  ) {
+    page = 'dashboard';
+  }
+
+
+  state.currentPage =
+    page;
+
+
+  state.basePage =
+    page === 'base'
+      ? state.basePage
+      : 1;
+
+
+  render();
+}
+
+
+/* =========================================================
+   RENDER
+   ========================================================= */
+
+function render() {
+
+  const content =
+    $('#content');
+
+
+  if (!content) {
+    return;
+  }
+
+
+  const meta =
+    PAGE_META[
+      state.currentPage
+    ] ||
+    PAGE_META.dashboard;
+
+
+  $('#pageTitle').textContent =
+    meta.title;
+
+
+  $('#heading').textContent =
+    meta.heading;
+
+
+  $all('.nav').forEach(
+    button => {
+
+      button.classList.toggle(
+        'active',
+        button.dataset.page ===
+        state.currentPage
+      );
+
+    }
+  );
+
+
+  $all('.mobile-nav-btn')
+    .forEach(
+      button => {
+
+        button.classList.toggle(
+          'active',
+          button.dataset.page ===
+          state.currentPage
+        );
+
+      }
+    );
+
+
+  switch (
+    state.currentPage
+  ) {
+
+    case 'base':
+      content.innerHTML =
+        baseView();
+      setupBase();
+      break;
+
+
+    case 'assembly':
+      content.innerHTML =
+        assemblyView();
+      setupAssembly();
+      break;
+
+
+    case 'received':
+      content.innerHTML =
+        receivedView();
+      break;
+
+
+    case 'collected':
+      content.innerHTML =
+        collectedView();
+      setupCollected();
+      break;
+
+
+    case 'shipped':
+      content.innerHTML =
+        shippedView();
+      break;
+
+
+    case 'tools':
+      content.innerHTML =
+        toolsView();
+      setupTools();
+      break;
+
+
+    default:
+      content.innerHTML =
+        dashboardView();
+  }
+
+
+  updateAssemblyBadges();
+}
+
+
+/* =========================================================
+   BADGES
+   ========================================================= */
+
+function updateAssemblyBadges() {
+
+  const count =
+    getPickingBoxes().length;
+
+
+  const badge =
+    $('#assemblyBadge');
+
+
+  const mobileBadge =
+    $('#mobileAssemblyBadge');
+
+
+  if (badge) {
+
+    badge.textContent =
+      count || '';
+
+    badge.style.cssText = `
+      margin-left:auto;
+      background:#111;
+      color:#fff;
+      border-radius:999px;
+      padding:2px 7px;
+      font-size:11px;
+    `;
+  }
+
+
+  if (mobileBadge) {
+
+    mobileBadge.textContent =
+      count || '';
+
+    mobileBadge.style.cssText = `
+      margin-left:3px;
+      background:#111;
+      color:#fff;
+      border-radius:999px;
+      padding:1px 5px;
+      font-size:10px;
+    `;
+  }
+}
+
+
+/* =========================================================
+   GLOBAL EVENTS
+   ========================================================= */
+
+function setupNavigation() {
+
+  $all(
+    '[data-page]'
+  ).forEach(
+    button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          goToPage(
+            button.dataset.page
+          );
+
+        }
+      );
+
+    }
+  );
+
+
+  $('#mobileMenu')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        document
+          .querySelector('.sidebar')
+          ?.classList.toggle(
+            'open'
+          );
+
+      }
+    );
+
+
+  $('#exportBtn')
+    ?.addEventListener(
+      'click',
+      exportJSON
+    );
+
+
+  $('#backupBtn')
+    ?.addEventListener(
+      'click',
+      backupDatabase
+    );
+}
+
+
+/* =========================================================
+   AUTHENTICATED APP
+   ========================================================= */
+
+async function startAuthenticatedApp() {
+
+  $('#spLogin')?.remove();
+
+
+  const content =
+    $('#content');
+
+
+  if (content) {
+
+    content.innerHTML =
+      `
+        <div class="sp-loading">
+          Загружаем базу SKLADAPLAN...
+        </div>
+      `;
+  }
+
+
+  try {
+
+    await loadBoxesFromSupabase();
+
+    render();
+
+
+  } catch (error) {
+
+    console.error(
+      'Database load error:',
+      error
+    );
+
+
+    if (content) {
+
+      content.innerHTML = `
+
+        <div class="sp-card">
+
+          <h2>
+            Ошибка подключения к Supabase
+          </h2>
+
+          <p>
+            ${escapeHtml(
+              error.message ||
+              'Неизвестная ошибка'
+            )}
+          </p>
+
+          <button
+            class="sp-btn"
+            onclick="location.reload()"
+          >
+            Повторить
+          </button>
+
+        </div>
+
+      `;
+    }
+  }
+}
+
+
+/* =========================================================
+   APP START
+   ========================================================= */
+
+async function startApp() {
+
+  ensureAppStyles();
+
+  setupNavigation();
+
+
+  /*
+    Получаем текущую сессию.
+  */
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient.auth
+      .getSession();
+
+
+  if (error) {
+
+    console.error(
+      error
+    );
+
+    showLogin();
+
+    return;
+  }
+
+
+  state.session =
+    data.session;
+
+  state.user =
+    data.session?.user || null;
+
+
+  if (!data.session) {
+
+    showLogin();
+
+  } else {
+
+    await startAuthenticatedApp();
+  }
+
+
+  /*
+    Отслеживаем вход/выход.
+  */
+
+  supabaseClient.auth
+    .onAuthStateChange(
+      async (
+        event,
+        session
+      ) => {
+
+        console.log(
+          'Auth event:',
+          event
+        );
+
+
+        if (
+          event === 'SIGNED_OUT'
+        ) {
+
+          state.session = null;
+
+          state.user = null;
+
+          state.boxes = [];
+
+          showLogin();
+
+          return;
+        }
+
+
+        if (
+          event === 'SIGNED_IN'
+        ) {
+
+          state.session =
+            session;
+
+          state.user =
+            session?.user || null;
+
+          await startAuthenticatedApp();
+        }
+
+      }
+    );
+}
+
+
+/* =========================================================
+   BOOT
+   ========================================================= */
+
+document.addEventListener(
+  'DOMContentLoaded',
+  startApp
+);
