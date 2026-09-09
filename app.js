@@ -4361,33 +4361,48 @@ function assemblyView() {
         STATUSES.COLLECTED
     ).length;
 
+  const selectedCount =
+    state.assemblySelectedIds
+      ? state.assemblySelectedIds.size
+      : 0;
+
   return `
 
-    <div class="sp-scanner">
+    <div>
 
-      <div class="sp-grid">
+      <!-- СТАТИСТИКА -->
 
-        <div class="sp-card">
+      <div class="cards">
 
-          <div class="sp-card-label">
+        <div class="card">
+
+          <div class="label">
             К подбору
           </div>
 
-          <div class="sp-big-number">
+          <div class="value">
             ${picking.length}
+          </div>
+
+          <div class="sub">
+            Коробок ожидает комплектации
           </div>
 
         </div>
 
 
-        <div class="sp-card">
+        <div class="card">
 
-          <div class="sp-card-label">
+          <div class="label">
             Уже собрано
           </div>
 
-          <div class="sp-big-number">
+          <div class="value">
             ${collected}
+          </div>
+
+          <div class="sub">
+            Коробок скомплектовано
           </div>
 
         </div>
@@ -4395,50 +4410,86 @@ function assemblyView() {
       </div>
 
 
-      <div class="sp-pallet">
+      <!-- ПОДДОН -->
 
-        <b>
-          Текущий поддон
-        </b>
+      <div
+        class="panel"
+        style="margin-top:14px"
+      >
 
-        <div
-          class="sp-toolbar"
-          style="margin-top:10px"
-        >
+        <div class="section-title">
+
+          <div>
+
+            <h3>
+              Текущий поддон
+            </h3>
+
+            <div class="muted">
+              Если поддон указан,
+              сканирование разрешено
+              только для коробок этого поддона.
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div class="toolbar">
 
           <input
             id="currentPallet"
+            class="search"
+            style="max-width:300px"
             placeholder="Например: А"
             value="${escapeHtml(
               state.currentPallet
             )}"
           >
 
+
           <button
-            class="sp-btn secondary"
+            class="ghost"
             id="clearPallet"
+            type="button"
           >
             Сбросить
           </button>
 
         </div>
 
-        <div class="sp-muted">
-
-          Если поддон указан,
-          сканирование разрешено
-          только для коробок этого поддона.
-
-        </div>
-
       </div>
 
 
-      <div>
+      <!-- СКАНЕР -->
+
+      <div
+        class="panel"
+        style="margin-top:14px"
+      >
+
+        <div class="section-title">
+
+          <div>
+
+            <h3>
+              Сканирование
+            </h3>
+
+            <div class="muted">
+              Отсканируйте штрихкод коробки
+            </div>
+
+          </div>
+
+        </div>
+
 
         <input
           id="scannerInput"
-          class="sp-scanner-input"
+          class="search"
+          style="width:100%; font-size:16px"
           inputmode="none"
           autocomplete="off"
           autocorrect="off"
@@ -4446,112 +4497,208 @@ function assemblyView() {
           placeholder="Сканируйте штрихкод..."
         >
 
+
+        <div
+          id="scannerResult"
+          class="notice"
+          style="margin-top:12px; margin-bottom:0"
+        >
+          Готов к сканированию.
+        </div>
+
       </div>
 
+
+      <!-- РУЧНАЯ КОМПЛЕКТАЦИЯ -->
 
       <div
-        id="scannerResult"
-        class="sp-card"
+        class="panel"
+        style="margin-top:14px"
       >
-        Готов к сканированию.
+
+        <div class="section-title">
+
+          <div>
+
+            <h3>
+              Ручная комплектация
+            </h3>
+
+            <div class="muted">
+              Можно поставить галочки и
+              скомплектовать коробки без сканера.
+            </div>
+
+          </div>
+
+
+          <div
+            id="assemblySelectedCount"
+            class="muted"
+          >
+            Выбрано: ${selectedCount}
+          </div>
+
+        </div>
+
+
+        <div class="toolbar">
+
+          <button
+            class="ghost"
+            id="selectAllAssembly"
+            type="button"
+          >
+            ☑ Выбрать все
+          </button>
+
+
+          <button
+            class="primary"
+            id="completeSelectedAssembly"
+            type="button"
+          >
+            ✓ Скомплектовать выбранные
+          </button>
+
+        </div>
+
       </div>
 
 
-      <!-- ПАНЕЛЬ РУЧНОЙ КОМПЛЕКТАЦИИ -->
+      <!-- ТАБЛИЦА -->
 
       <div
-        class="sp-toolbar"
-        style="
-          margin: 15px 0;
-          display:flex;
-          gap:10px;
-          align-items:center;
-          flex-wrap:wrap;
-        "
+        class="panel"
+        style="margin-top:14px"
       >
 
-        <button
-          class="sp-btn"
-          id="selectAllAssembly"
-          type="button"
-        >
-          ☑ Выбрать все
-        </button>
+        <div class="section-title">
 
-        <button
-          class="sp-btn"
-          id="completeSelectedAssembly"
-          type="button"
-        >
-          ✓ Скомплектовать выбранные
-        </button>
+          <div>
 
-        <span
-          id="assemblySelectedCount"
-          class="sp-muted"
-        >
-          Выбрано: 0
-        </span>
+            <h3>
+              Коробки в подборе
+            </h3>
 
-      </div>
+            <div class="muted">
+              Всего: ${picking.length}
+            </div>
+
+          </div>
+
+        </div>
 
 
-      <div class="sp-table-wrap">
+        <div class="table-wrap">
 
-        <table class="sp-table">
+          <table class="data-table">
 
-          <thead>
+            <thead>
 
-            <tr>
+              <tr>
 
-              <th style="width:50px; text-align:center;">
-                <input
-                  type="checkbox"
-                  id="selectAllAssemblyCheckbox"
-                  title="Выбрать все"
+                <th
+                  style="
+                    width:45px;
+                    text-align:center;
+                  "
                 >
-              </th>
 
-              <th>Штрихкод</th>
-              <th>Артикул</th>
-              <th>Зона/ряд</th>
-              <th>Поддон</th>
-              <th>Склад</th>
-              <th>Статус</th>
+                  <input
+                    type="checkbox"
+                    id="selectAllAssemblyCheckbox"
+                    title="Выбрать все"
+                  >
 
-            </tr>
+                </th>
 
-          </thead>
+                <th>
+                  Штрихкод
+                </th>
+
+                <th>
+                  Артикул
+                </th>
+
+                <th>
+                  Зона/ряд
+                </th>
+
+                <th>
+                  Поддон
+                </th>
+
+                <th>
+                  Склад
+                </th>
+
+                <th>
+                  Статус
+                </th>
+
+              </tr>
+
+            </thead>
 
 
-          <tbody>
+            <tbody>
 
-            ${
-              picking.length
-                ? picking
-                    .slice(0, 300)
-                    .map(pickingRow)
-                    .join('')
-                : `
+              ${
+                picking.length
 
-                  <tr>
+                  ? picking
+                      .slice(0, 300)
+                      .map(pickingRow)
+                      .join('')
 
-                    <td colspan="7">
+                  : `
 
-                      <div class="sp-empty">
-                        В подборе пока ничего нет
-                      </div>
+                    <tr>
 
-                    </td>
+                      <td
+                        colspan="7"
+                      >
 
-                  </tr>
+                        <div class="empty">
 
-                `
-            }
+                          В подборе пока
+                          ничего нет
 
-          </tbody>
+                        </div>
 
-        </table>
+                      </td>
+
+                    </tr>
+
+                  `
+              }
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+
+        ${
+          picking.length > 300
+
+            ? `
+
+              <div
+                class="muted"
+                style="
+                  margin-top:10px;
+                "
+              >
+                Показаны первые 300 коробок.
+              </div>
+
+            `
+
+            : ''
+        }
 
       </div>
 
