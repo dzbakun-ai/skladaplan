@@ -14664,6 +14664,13 @@ function updateAssemblyBadges() {
 
 function setupNavigation() {
 
+  /*
+    ОСНОВНАЯ НАВИГАЦИЯ
+
+    Обрабатываем все кнопки,
+    у которых есть data-page.
+  */
+
   $all(
     '[data-page]'
   )
@@ -14678,12 +14685,39 @@ function setupNavigation() {
               button.dataset.page
             );
 
+
+            /*
+              На телефоне после перехода
+              автоматически закрываем
+              боковое меню.
+            */
+
+            if (
+              window.innerWidth <= 700
+            ) {
+
+              document
+                .querySelector(
+                  '.sidebar'
+                )
+                ?.classList.remove(
+                  'open'
+                );
+
+            }
+
           }
         );
 
       }
     );
 
+
+  /*
+    КНОПКА МОБИЛЬНОГО МЕНЮ
+
+    Открывает / закрывает боковую панель.
+  */
 
   $('#mobileMenu')
     ?.addEventListener(
@@ -14701,6 +14735,38 @@ function setupNavigation() {
       }
     );
 
+
+  /*
+    КНОПКА «ЕЩЁ»
+
+    На мобильном открывает
+    полноценное боковое меню.
+  */
+
+  $('#mobileMore')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        document
+          .querySelector(
+            '.sidebar'
+          )
+          ?.classList.add(
+            'open'
+          );
+
+      }
+    );
+
+
+  /*
+    СТАРЫЕ КНОПКИ ЭКСПОРТА
+
+    Оставляем обработчики безопасными.
+    Если кнопок нет в index.html —
+    ничего не происходит.
+  */
 
   $('#exportBtn')
     ?.addEventListener(
