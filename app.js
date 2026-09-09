@@ -6508,7 +6508,7 @@ async function shipSelectedCollected() {
           id
         )
         .eq(
-          '"Статус"',
+          'Статус',
           STATUSES.COLLECTED
         )
         .select(
