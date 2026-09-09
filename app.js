@@ -4762,6 +4762,104 @@ function dashboardView() {
 
 
   return `
+    <div class="sp-card" style="margin-bottom:20px;">
+
+      <div style="
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-start;
+        gap:20px;
+        flex-wrap:wrap;
+        margin-bottom:16px;
+      ">
+
+        <div>
+
+          <h2 style="
+            margin:0 0 6px;
+            font-size:20px;
+          ">
+            📦 Новая заявка
+          </h2>
+
+          <div class="sp-muted">
+            Вставьте штрихкоды из заявки.
+            Каждый повторяющийся штрихкод означает
+            отдельную физическую коробку.
+          </div>
+
+        </div>
+
+        <div style="
+          padding:8px 12px;
+          background:#f5f5f5;
+          border-radius:10px;
+          font-size:12px;
+          color:#666;
+        ">
+          1 штрихкод = 1 коробка
+        </div>
+
+      </div>
+
+
+      <textarea
+        id="requestBarcodes"
+        placeholder="Вставьте сюда штрихкоды заявки...
+
+Например:
+4810122595003
+4810122595003
+4810122595003
+4810122659354
+4810122659354"
+        style="
+          width:100%;
+          min-height:180px;
+          box-sizing:border-box;
+          resize:vertical;
+          border:1px solid #ddd;
+          border-radius:12px;
+          padding:14px;
+          font-family:monospace;
+          font-size:14px;
+          line-height:1.6;
+          outline:none;
+        "
+      ></textarea>
+
+
+      <div style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:12px;
+        flex-wrap:wrap;
+        margin-top:14px;
+      ">
+
+        <div class="sp-muted">
+          Можно вставить список из Excel,
+          Google Sheets или текстового файла.
+        </div>
+
+
+        <button
+          class="sp-btn success"
+          id="createPickingBtn"
+          onclick="createPickingFromRequest()"
+          style="
+            min-width:220px;
+            min-height:46px;
+            font-size:14px;
+          "
+        >
+          📦 Сформировать подбор
+        </button>
+
+      </div>
+
+    </div>
 
     <div class="sp-grid">
 
