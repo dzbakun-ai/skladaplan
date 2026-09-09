@@ -4706,8 +4706,10 @@ function dashboardView() {
     );
 
 
-  const picking =
-    getPickingBoxes().length;
+const picking =
+  countStatus(
+    STATUSES.PICK
+  );
 
 
   const collected =
