@@ -2988,6 +2988,180 @@ async function deleteSelectedBoxes() {
   со статусом "На складе" и переводит
   нужное количество в "КПодбору".
 */
+
+function importRequestExcel(event) {
+
+  const file =
+    event.target.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  const reader =
+    new FileReader();
+
+  reader.onload =
+    function(e) {
+
+      try {
+
+        const data =
+          new Uint8Array(
+            e.target.result
+          );
+
+        const workbook =
+          XLSX.read(
+            data,
+            {
+              type: 'array'
+            }
+          );
+
+        const sheetName =
+          workbook.SheetNames[0];
+
+        const sheet =
+          workbook.Sheets[
+            sheetName
+          ];
+
+        const rows =
+          XLSX.utils.sheet_to_json(
+            sheet,
+            {
+              header: 1,
+              defval: '',
+              raw: true
+            }
+          );
+
+
+        /*
+          Собираем все значения
+          из Excel и пытаемся найти
+          штрихкоды.
+
+          Пока не привязываемся
+          к конкретному названию
+          столбца.
+        */
+
+        const barcodes = [];
+
+
+        for (
+          const row of rows
+        ) {
+
+          if (
+            !Array.isArray(row)
+          ) {
+            continue;
+          }
+
+
+          for (
+            const cell of row
+          ) {
+
+            const barcode =
+              normalizeBarcode(
+                cell
+              );
+
+
+            /*
+              Для нашего склада
+              штрихкод — 13 цифр.
+            */
+            if (
+              /^\d{13}$/.test(
+                barcode
+              )
+            ) {
+
+              barcodes.push(
+                barcode
+              );
+
+            }
+
+          }
+
+        }
+
+
+        if (!barcodes.length) {
+
+          alert(
+            'В файле не найдено 13-значных штрихкодов.'
+          );
+
+          return;
+        }
+
+
+        /*
+          Записываем найденные
+          штрихкоды в поле заявки.
+        */
+        const input =
+          document.querySelector(
+            '#requestBarcodes'
+          );
+
+
+        if (!input) {
+
+          alert(
+            'Поле заявки не найдено.'
+          );
+
+          return;
+        }
+
+
+        input.value =
+          barcodes.join('\n');
+
+
+        toast(
+          `Импортировано штрихкодов: ${barcodes.length}`
+        );
+
+
+        /*
+          Возвращаем возможность
+          повторно выбрать тот же файл.
+        */
+        event.target.value = '';
+
+      }
+
+      catch (error) {
+
+        console.error(
+          'Ошибка импорта заявки:',
+          error
+        );
+
+        alert(
+          'Не удалось прочитать файл заявки.'
+        );
+
+      }
+
+    };
+
+
+  reader.readAsArrayBuffer(
+    file
+  );
+
+}
+
 async function createPickingFromRequest() {
 
   const input =
@@ -4804,6 +4978,30 @@ const picking =
 
       </div>
 
+<div style="
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-bottom:12px;
+">
+
+  <button
+    type="button"
+    class="ghost"
+    onclick="document.getElementById('requestExcelInput').click()"
+  >
+    📥 Импорт заявки Excel
+  </button>
+
+  <input
+    type="file"
+    id="requestExcelInput"
+    accept=".xlsx,.xls,.csv"
+    style="display:none"
+    onchange="importRequestExcel(event)"
+  >
+
+</div>
 
       <textarea
         id="requestBarcodes"
