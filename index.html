@@ -3,100 +3,367 @@
 
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta
+  name="viewport"
+  content="width=device-width,initial-scale=1"
+>
 
-<title>SKLADAPLAN — Local WMS</title>
+<title>SKLADAPLAN — WMS</title>
 
 <link rel="stylesheet" href="style.css">
+
 </head>
 
 <body>
 
 <div class="app">
 
-  <!-- SIDEBAR -->
+  <!-- =====================================================
+       SIDEBAR
+       ===================================================== -->
+
   <aside class="sidebar">
 
-    <div class="brand">
-      <div class="logo">S</div>
+    <!-- BRAND -->
 
-      <div>
-        <b>SKLADAPLAN</b>
-        <span>LOCAL WMS</span>
+    <div class="brand">
+
+      <div class="logo">
+        S
       </div>
+
+      <div class="brand-text">
+
+        <b>
+          SKLADAPLAN
+        </b>
+
+        <span>
+          WAREHOUSE MANAGEMENT
+        </span>
+
+      </div>
+
     </div>
 
-    <nav>
 
-      <button
-        class="nav active"
-        data-page="dashboard"
-      >
-        ⌂
-        <span>Главная</span>
-      </button>
+    <!-- NAVIGATION -->
 
-      <button
-        class="nav"
-        data-page="base"
-      >
-        ▦
-        <span>База</span>
-      </button>
+    <nav class="sidebar-nav">
 
-      <button
-        class="nav"
-        data-page="assembly"
-      >
-        ✓
-        <span>Сборка</span>
-        <em id="assemblyBadge"></em>
-      </button>
 
-      <button
-        class="nav"
-        data-page="received"
-      >
-        ↓
-        <span>Принято</span>
-      </button>
+      <!-- =================================================
+           ОСНОВНАЯ РАБОТА
+           ================================================= -->
 
-      <button
-        class="nav"
-        data-page="collected"
-      >
-        ✓
-        <span>Собрано</span>
-      </button>
+      <div class="nav-section">
 
-      <button
-        class="nav"
-        data-page="shipped"
-      >
-        ↑
-        <span>Убыло</span>
-      </button>
+        <div class="nav-section-title">
+          ОСНОВНАЯ РАБОТА
+        </div>
 
-      <button
-        class="nav"
-        data-page="tools"
-      >
-        ⚙
-        <span>Инструменты</span>
-      </button>
+
+        <button
+          class="nav"
+          data-page="dashboard"
+        >
+
+          <span class="nav-icon">
+            ⌂
+          </span>
+
+          <span>
+            Главная
+          </span>
+
+        </button>
+
+
+        <button
+          class="nav"
+          data-page="base"
+        >
+
+          <span class="nav-icon">
+            ▦
+          </span>
+
+          <span>
+            База
+          </span>
+
+        </button>
+
+
+        <button
+          class="nav"
+          data-page="received"
+        >
+
+          <span class="nav-icon">
+            ↓
+          </span>
+
+          <span>
+            Приёмка
+          </span>
+
+        </button>
+
+
+        <button
+          class="nav"
+          data-page="assembly"
+        >
+
+          <span class="nav-icon">
+            ✓
+          </span>
+
+          <span>
+            Сборка
+          </span>
+
+          <em id="assemblyBadge"></em>
+
+        </button>
+
+
+        <button
+          class="nav"
+          data-page="collected"
+        >
+
+          <span class="nav-icon">
+            ✓
+          </span>
+
+          <span>
+            Собрано
+          </span>
+
+        </button>
+
+
+        <button
+          class="nav"
+          data-page="shipped"
+        >
+
+          <span class="nav-icon">
+            ↑
+          </span>
+
+          <span>
+            Убыло
+          </span>
+
+        </button>
+
+      </div>
+
+
+      <!-- =================================================
+           ИНСТРУМЕНТЫ
+           ================================================= -->
+
+      <div class="nav-section">
+
+        <div class="nav-section-title">
+          ИНСТРУМЕНТЫ
+        </div>
+
+
+        <button
+          class="nav"
+          data-page="tools"
+          data-tool="compare"
+        >
+
+          <span class="nav-icon">
+            ⇄
+          </span>
+
+          <span>
+            Сравнение
+          </span>
+
+        </button>
+
+
+        <button
+          class="nav"
+          data-page="tools"
+          data-tool="split"
+        >
+
+          <span class="nav-icon">
+            ÷
+          </span>
+
+          <span>
+            Деление
+          </span>
+
+        </button>
+
+
+        <button
+          class="nav"
+          data-page="tools"
+          data-tool="sum"
+        >
+
+          <span class="nav-icon">
+            Σ
+          </span>
+
+          <span>
+            Сумма
+          </span>
+
+        </button>
+
+
+        <button
+          class="nav"
+          data-page="tools"
+          data-tool="inventory"
+        >
+
+          <span class="nav-icon">
+            ⊙
+          </span>
+
+          <span>
+            Инвентаризация
+          </span>
+
+        </button>
+
+
+        <button
+          class="nav"
+          data-page="tools"
+          data-tool="excel"
+        >
+
+          <span class="nav-icon">
+            ↓
+          </span>
+
+          <span>
+            Excel
+          </span>
+
+        </button>
+
+
+        <button
+          class="nav"
+          data-page="tools"
+          data-tool="data"
+        >
+
+          <span class="nav-icon">
+            ◫
+          </span>
+
+          <span>
+            Данные
+          </span>
+
+        </button>
+
+      </div>
+
+
+      <!-- =================================================
+           СПРАВОЧНАЯ ИНФОРМАЦИЯ
+           ================================================= -->
+
+      <div class="nav-section">
+
+        <div class="nav-section-title">
+          СПРАВОЧНАЯ ИНФОРМАЦИЯ
+        </div>
+
+
+        <button
+          class="nav"
+          data-page="tools"
+          data-tool="map-soh"
+        >
+
+          <span class="nav-icon">
+            ◇
+          </span>
+
+          <span>
+            Карта СОХ
+          </span>
+
+        </button>
+
+
+        <button
+          class="nav"
+          data-page="tools"
+          data-tool="map-ns"
+        >
+
+          <span class="nav-icon">
+            ◇
+          </span>
+
+          <span>
+            Карта НС
+          </span>
+
+        </button>
+
+
+        <button
+          class="nav"
+          data-page="tools"
+          data-tool="help"
+        >
+
+          <span class="nav-icon">
+            ?
+          </span>
+
+          <span>
+            Справка
+          </span>
+
+        </button>
+
+      </div>
 
     </nav>
+
+
+    <!-- SIDEBAR FOOT -->
 
     <div class="sidebar-foot">
 
       <div class="offline">
+
         <i></i>
+
         Онлайн-режим
+
       </div>
 
+
       <small>
-        Автор проекта<br>
-        Дмитрий Бакун @dmitribakun
+
+        SKLADAPLAN<br>
+
+        Автор проекта —
+        Дмитрий Бакун
+
       </small>
 
     </div>
@@ -104,10 +371,16 @@
   </aside>
 
 
-  <!-- MAIN -->
+  <!-- =====================================================
+       MAIN
+       ===================================================== -->
+
   <main>
 
     <header class="topbar">
+
+
+      <!-- MOBILE MENU -->
 
       <button
         class="mobile-menu"
@@ -117,20 +390,30 @@
         ☰
       </button>
 
-      <div>
+
+      <!-- PAGE TITLE -->
+
+      <div class="topbar-title">
 
         <div class="crumb">
+
           SKLADAPLAN /
+
           <span id="pageTitle">
             Главная
           </span>
+
         </div>
+
 
         <h1 id="heading">
           Главный экран склада
         </h1>
 
       </div>
+
+
+      <!-- TOP ACTIONS -->
 
       <div class="top-actions">
 
@@ -140,6 +423,7 @@
         >
           Экспорт JSON
         </button>
+
 
         <button
           class="primary"
@@ -154,6 +438,7 @@
 
 
     <!-- PAGE CONTENT -->
+
     <section id="content"></section>
 
   </main>
@@ -161,75 +446,152 @@
 </div>
 
 
-<!-- MOBILE NAV -->
+<!-- =====================================================
+     MOBILE NAVIGATION
+     ===================================================== -->
+
 <nav
   class="mobile-nav"
   id="mobileNav"
 >
 
+
   <button
-    class="mobile-nav-btn active"
+    class="mobile-nav-btn"
     data-page="dashboard"
   >
-    ⌂
-    <span>Главная</span>
+
+    <span>
+      ⌂
+    </span>
+
+    <small>
+      Главная
+    </small>
+
   </button>
+
 
   <button
     class="mobile-nav-btn"
     data-page="base"
   >
-    ▦
-    <span>База</span>
+
+    <span>
+      ▦
+    </span>
+
+    <small>
+      База
+    </small>
+
   </button>
+
+
+  <button
+    class="mobile-nav-btn"
+    data-page="received"
+  >
+
+    <span>
+      ↓
+    </span>
+
+    <small>
+      Приёмка
+    </small>
+
+  </button>
+
 
   <button
     class="mobile-nav-btn"
     data-page="assembly"
   >
-    ✓
-    <span>Сборка</span>
+
+    <span>
+      ✓
+    </span>
+
+    <small>
+      Сборка
+    </small>
+
     <em id="mobileAssemblyBadge"></em>
+
   </button>
+
 
   <button
     class="mobile-nav-btn"
     data-page="collected"
   >
-    ✓
-    <span>Собрано</span>
+
+    <span>
+      ✓
+    </span>
+
+    <small>
+      Собрано
+    </small>
+
   </button>
+
+
+  <button
+    class="mobile-nav-btn"
+    data-page="shipped"
+  >
+
+    <span>
+      ↑
+    </span>
+
+    <small>
+      Убыло
+    </small>
+
+  </button>
+
 
   <button
     class="mobile-nav-btn"
     data-page="tools"
   >
-    ⚙
-    <span>Ещё</span>
+
+    <span>
+      ⋯
+    </span>
+
+    <small>
+      Ещё
+    </small>
+
   </button>
 
 </nav>
 
 
-<!-- ========================================= -->
-<!-- SUPABASE -->
-<!-- ========================================= -->
+<!-- =====================================================
+     SUPABASE
+     ===================================================== -->
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 
-<!-- ========================================= -->
-<!-- EXCEL / XLSX -->
-<!-- ========================================= -->
+<!-- =====================================================
+     XLSX
+     ===================================================== -->
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 
-<!-- ========================================= -->
-<!-- SKLADAPLAN APP -->
-<!-- ========================================= -->
+<!-- =====================================================
+     SKLADAPLAN
+     ===================================================== -->
 
 <script src="app.js"></script>
 
 </body>
+
 </html>
