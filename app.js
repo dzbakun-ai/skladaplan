@@ -5,11 +5,13 @@
 
 'use strict';
 
+
 /* =========================================================
    SUPABASE
    ========================================================= */
 
-const SUPABASE_URL = 'https://ithhecprdosvjiddoalq.supabase.co';
+const SUPABASE_URL =
+  'https://ithhecprdosvjiddoalq.supabase.co';
 
 const SUPABASE_KEY =
   'sb_publishable_0dB5DQt2_ysOohx42IN4rA_mnypLeOR';
@@ -27,19 +29,39 @@ const supabaseClient =
 
 const PAGE_SIZE = 100;
 
-const EXCEL_CHUNK_SIZE = 500;
+
+/*
+  Большой Excel:
+
+  1000 строк за один INSERT.
+  До 3 пачек одновременно.
+
+  Если Supabase не принимает пачку,
+  она автоматически дробится.
+*/
+const EXCEL_CHUNK_SIZE = 1000;
+const EXCEL_PARALLEL_CHUNKS = 3;
+const EXCEL_MIN_FALLBACK_CHUNK = 50;
+
 
 const BOX_SELECT =
   'id,barcode,article,quantity_in_box,zone_row,pallet,status,date,warehouse,column_9,direction,pick,worker,created_at,updated_at';
 
 
 const STATUSES = {
+
   STOCK: 'На складе',
+
   RESERVED: 'Зарезервирована',
+
   PICK: 'КПодбору',
+
   COLLECTED: 'Скомплектовано',
+
   SHIPPED: 'Отгружено',
+
   EMPTY: 'Пустая'
+
 };
 
 
@@ -79,6 +101,22 @@ const state = {
 
   excelSheetName: '',
 
+  excelHeaders: [],
+
+  excelImporting: false,
+
+  excelImportCancelled: false,
+
+  excelImportStartedAt: null,
+
+  excelImportImported: 0,
+
+  excelImportFailed: 0,
+
+  excelImportProcessed: 0,
+
+  excelImportTotal: 0,
+
   user: null,
 
   session: null
@@ -91,35 +129,54 @@ const state = {
    ========================================================= */
 
 function $(selector) {
+
   return document.querySelector(selector);
+
 }
 
 
 function $all(selector) {
+
   return [...document.querySelectorAll(selector)];
+
 }
 
 
 function escapeHtml(value) {
 
-  if (value === null || value === undefined) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+
     return '';
+
   }
 
+
   return String(value)
+
     .replaceAll('&', '&amp;')
+
     .replaceAll('<', '&lt;')
+
     .replaceAll('>', '&gt;')
+
     .replaceAll('"', '&quot;')
+
     .replaceAll("'", '&#039;');
+
 }
 
 
 function normalizeText(value) {
 
   return String(value ?? '')
+
     .trim()
+
     .replace(/\s+/g, ' ');
+
 }
 
 
@@ -129,16 +186,26 @@ function normalizeBarcode(value) {
     value === null ||
     value === undefined
   ) {
+
     return '';
+
   }
 
-  let str = String(value).trim();
+
+  let str =
+    String(value).trim();
+
 
   if (!str) {
+
     return '';
+
   }
 
-  str = str.replace(/\s+/g, '');
+
+  str =
+    str.replace(/\s+/g, '');
+
 
   /*
     Excel can give:
@@ -148,51 +215,87 @@ function normalizeBarcode(value) {
     4.810122659354E+12
   */
 
-  str = str.replace(',', '.');
+  str =
+    str.replace(',', '.');
 
-  if (/^\d+\.0+$/.test(str)) {
-    str = str.split('.')[0];
+
+  if (
+    /^\d+\.0+$/.test(str)
+  ) {
+
+    str =
+      str.split('.')[0];
+
   }
 
-  if (/^\d+e\+\d+$/i.test(str)) {
 
-    const number = Number(str);
+  if (
+    /^\d+e\+\d+$/i.test(str)
+  ) {
 
-    if (Number.isFinite(number)) {
-      str = String(Math.trunc(number));
+    const number =
+      Number(str);
+
+
+    if (
+      Number.isFinite(number)
+    ) {
+
+      str =
+        String(Math.trunc(number));
+
     }
+
   }
+
 
   return str;
+
 }
 
 
 function normalizeHeader(value) {
 
   return String(value ?? '')
+
     .replace(/^\uFEFF/, '')
+
     .trim()
+
     .toLowerCase()
+
     .replace(/\s+/g, '')
+
     .replace(/[\/\\_.-]/g, '')
+
     .replace(/ё/g, 'е');
+
 }
 
 
 function formatDate(value) {
 
   if (!value) {
+
     return '';
+
   }
 
-  const str = String(value).trim();
+
+  const str =
+    String(value).trim();
+
 
   if (!str) {
+
     return '';
+
   }
+
 
   /*
     ISO:
+
     2026-06-25
     2026-06-25T00:00:00
   */
@@ -202,9 +305,11 @@ function formatDate(value) {
       /^(\d{4})-(\d{2})-(\d{2})/
     );
 
+
   if (iso) {
 
     return `${iso[3]}.${iso[2]}.${iso[1]}`;
+
   }
 
 
@@ -217,19 +322,30 @@ function formatDate(value) {
       /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/
     );
 
+
   if (ru) {
 
-    let year = ru[3];
+    let year =
+      ru[3];
 
-    if (year.length === 2) {
-      year = `20${year}`;
+
+    if (
+      year.length === 2
+    ) {
+
+      year =
+        `20${year}`;
+
     }
 
+
     return `${String(ru[1]).padStart(2, '0')}.${String(ru[2]).padStart(2, '0')}.${year}`;
+
   }
 
 
   return str;
+
 }
 
 
@@ -240,24 +356,42 @@ function toISODate(value) {
     value === undefined ||
     value === ''
   ) {
+
     return null;
+
   }
 
 
-  if (value instanceof Date) {
+  if (
+    value instanceof Date
+  ) {
 
-    if (Number.isNaN(value.getTime())) {
+    if (
+      Number.isNaN(
+        value.getTime()
+      )
+    ) {
+
       return null;
+
     }
 
-    return value.toISOString().slice(0, 10);
+
+    return value
+      .toISOString()
+      .slice(0, 10);
+
   }
 
 
-  const str = String(value).trim();
+  const str =
+    String(value).trim();
+
 
   if (!str) {
+
     return null;
+
   }
 
 
@@ -271,7 +405,9 @@ function toISODate(value) {
     Number(str) < 80000
   ) {
 
-    const serial = Number(str);
+    const serial =
+      Number(str);
+
 
     const date =
       new Date(
@@ -279,7 +415,11 @@ function toISODate(value) {
         serial * 86400000
       );
 
-    return date.toISOString().slice(0, 10);
+
+    return date
+      .toISOString()
+      .slice(0, 10);
+
   }
 
 
@@ -292,15 +432,25 @@ function toISODate(value) {
       /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/
     );
 
+
   if (match) {
 
-    let year = match[3];
+    let year =
+      match[3];
 
-    if (year.length === 2) {
-      year = `20${year}`;
+
+    if (
+      year.length === 2
+    ) {
+
+      year =
+        `20${year}`;
+
     }
 
+
     return `${year}-${String(match[2]).padStart(2, '0')}-${String(match[1]).padStart(2, '0')}`;
+
   }
 
 
@@ -313,21 +463,33 @@ function toISODate(value) {
       /^(\d{4})-(\d{1,2})-(\d{1,2})/
     );
 
+
   if (match) {
 
     return `${match[1]}-${String(match[2]).padStart(2, '0')}-${String(match[3]).padStart(2, '0')}`;
+
   }
 
 
-  const parsed = new Date(str);
+  const parsed =
+    new Date(str);
 
-  if (!Number.isNaN(parsed.getTime())) {
 
-    return parsed.toISOString().slice(0, 10);
+  if (
+    !Number.isNaN(
+      parsed.getTime()
+    )
+  ) {
+
+    return parsed
+      .toISOString()
+      .slice(0, 10);
+
   }
 
 
   return null;
+
 }
 
 
@@ -337,15 +499,20 @@ function excelBoolean(value) {
     value === true ||
     value === 1
   ) {
+
     return true;
+
   }
+
 
   const str =
     String(value ?? '')
       .trim()
       .toLowerCase();
 
+
   return [
+
     'true',
     'истина',
     'да',
@@ -355,7 +522,9 @@ function excelBoolean(value) {
     '✓',
     '✔',
     'истинно'
+
   ].includes(str);
+
 }
 
 
@@ -367,11 +536,17 @@ function downloadBlob(
   const url =
     URL.createObjectURL(blob);
 
+
   const a =
     document.createElement('a');
 
-  a.href = url;
-  a.download = fileName;
+
+  a.href =
+    url;
+
+  a.download =
+    fileName;
+
 
   document.body.appendChild(a);
 
@@ -379,10 +554,13 @@ function downloadBlob(
 
   a.remove();
 
+
   setTimeout(
-    () => URL.revokeObjectURL(url),
+    () =>
+      URL.revokeObjectURL(url),
     1000
   );
+
 }
 
 
@@ -401,11 +579,17 @@ function downloadJSON(
         )
       ],
       {
-        type: 'application/json;charset=utf-8'
+        type:
+          'application/json;charset=utf-8'
       }
     );
 
-  downloadBlob(blob, fileName);
+
+  downloadBlob(
+    blob,
+    fileName
+  );
+
 }
 
 
@@ -414,6 +598,7 @@ function todayFileDate() {
   return new Date()
     .toISOString()
     .slice(0, 10);
+
 }
 
 
@@ -429,13 +614,16 @@ function toast(
   let container =
     $('#toastContainer');
 
+
   if (!container) {
 
     container =
       document.createElement('div');
 
+
     container.id =
       'toastContainer';
+
 
     container.style.cssText = `
       position:fixed;
@@ -448,12 +636,17 @@ function toast(
       max-width:380px;
     `;
 
-    document.body.appendChild(container);
+
+    document.body.appendChild(
+      container
+    );
+
   }
 
 
   const item =
     document.createElement('div');
+
 
   item.style.cssText = `
     padding:13px 16px;
@@ -465,16 +658,21 @@ function toast(
     line-height:1.4;
   `;
 
+
   item.textContent =
     message;
 
-  container.appendChild(item);
+
+  container.appendChild(
+    item
+  );
 
 
   setTimeout(
     () => item.remove(),
     4000
   );
+
 }
 
 
@@ -484,15 +682,22 @@ function toast(
 
 function ensureAppStyles() {
 
-  if ($('#skladaplanRuntimeStyles')) {
+  if (
+    $('#skladaplanRuntimeStyles')
+  ) {
+
     return;
+
   }
+
 
   const style =
     document.createElement('style');
 
+
   style.id =
     'skladaplanRuntimeStyles';
+
 
   style.textContent = `
 
@@ -831,6 +1036,73 @@ function ensureAppStyles() {
       color:#777;
     }
 
+    /* =========================================
+       EXCEL IMPORT PROGRESS
+       ========================================= */
+
+    .sp-import-progress {
+      display:grid;
+      gap:18px;
+    }
+
+    .sp-import-progress-title {
+      font-size:18px;
+      font-weight:700;
+    }
+
+    .sp-import-percent {
+      font-size:42px;
+      font-weight:800;
+      line-height:1;
+    }
+
+    .sp-import-progress-bar {
+      width:100%;
+      height:12px;
+      background:#ededed;
+      border-radius:999px;
+      overflow:hidden;
+    }
+
+    .sp-import-progress-fill {
+      height:100%;
+      width:0%;
+      background:#111;
+      border-radius:999px;
+      transition:width .2s ease;
+    }
+
+    .sp-import-stats {
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:10px;
+    }
+
+    .sp-import-stat {
+      padding:12px;
+      background:#f7f7f7;
+      border-radius:10px;
+    }
+
+    .sp-import-stat-label {
+      font-size:12px;
+      color:#777;
+      margin-bottom:5px;
+    }
+
+    .sp-import-stat-value {
+      font-size:18px;
+      font-weight:700;
+    }
+
+    .sp-import-message {
+      padding:12px 14px;
+      background:#f7f7f7;
+      border-radius:10px;
+      font-size:13px;
+      color:#555;
+    }
+
     @media(max-width:700px) {
 
       .sp-form {
@@ -854,11 +1126,19 @@ function ensureAppStyles() {
         font-size:24px;
       }
 
+      .sp-import-stats {
+        grid-template-columns:1fr;
+      }
+
     }
 
   `;
 
-  document.head.appendChild(style);
+
+  document.head.appendChild(
+    style
+  );
+
 }
 
 
@@ -871,19 +1151,25 @@ function showLogin() {
   let login =
     $('#spLogin');
 
+
   if (login) {
+
     return;
+
   }
 
 
   login =
     document.createElement('div');
 
+
   login.id =
     'spLogin';
 
+
   login.className =
     'sp-login';
+
 
   login.innerHTML = `
 
@@ -903,23 +1189,29 @@ function showLogin() {
 
         <label>
           Email
+
           <input
             id="loginEmail"
             type="email"
             autocomplete="username"
             required
           >
+
         </label>
+
 
         <label>
           Пароль
+
           <input
             id="loginPassword"
             type="password"
             autocomplete="current-password"
             required
           >
+
         </label>
+
 
         <button type="submit">
           Войти
@@ -931,7 +1223,10 @@ function showLogin() {
 
   `;
 
-  document.body.appendChild(login);
+
+  document.body.appendChild(
+    login
+  );
 
 
   $('#loginForm')
@@ -939,6 +1234,7 @@ function showLogin() {
       'submit',
       loginUser
     );
+
 }
 
 
@@ -946,17 +1242,27 @@ async function loginUser(event) {
 
   event.preventDefault();
 
+
   const email =
-    $('#loginEmail').value.trim();
+    $('#loginEmail')
+      .value
+      .trim();
+
 
   const password =
-    $('#loginPassword').value;
+    $('#loginPassword')
+      .value;
 
 
   const button =
-    event.target.querySelector('button');
+    event.target.querySelector(
+      'button'
+    );
 
-  button.disabled = true;
+
+  button.disabled =
+    true;
+
 
   button.textContent =
     'Вход...';
@@ -973,7 +1279,9 @@ async function loginUser(event) {
       });
 
 
-  button.disabled = false;
+  button.disabled =
+    false;
+
 
   button.textContent =
     'Войти';
@@ -987,18 +1295,23 @@ async function loginUser(event) {
     );
 
     return;
+
   }
 
 
   state.session =
     data.session;
 
+
   state.user =
     data.user;
 
+
   $('#spLogin')?.remove();
 
+
   await startAuthenticatedApp();
+
 }
 
 
@@ -1006,16 +1319,33 @@ async function logout() {
 
   await supabaseClient.auth.signOut();
 
-  state.session = null;
-  state.user = null;
-  state.boxes = [];
+
+  state.session =
+    null;
+
+
+  state.user =
+    null;
+
+
+  state.boxes =
+    [];
+
+
   state.selectedIds.clear();
 
-  $('#content').innerHTML = '';
+
+  $('#content').innerHTML =
+    '';
+
 
   showLogin();
 
-  toast('Вы вышли из системы');
+
+  toast(
+    'Вы вышли из системы'
+  );
+
 }
 
 
@@ -1025,20 +1355,28 @@ async function logout() {
 
 async function loadBoxesFromSupabase() {
 
-  state.loading = true;
+  state.loading =
+    true;
+
 
   try {
 
     const all = [];
 
-    const pageSize = 1000;
+    const pageSize =
+      1000;
 
-    let from = 0;
+    let from =
+      0;
+
 
     while (true) {
 
       const to =
-        from + pageSize - 1;
+        from +
+        pageSize -
+        1;
+
 
       const {
         data,
@@ -1050,52 +1388,82 @@ async function loadBoxesFromSupabase() {
           .order('id', {
             ascending: true
           })
-          .range(from, to);
+          .range(
+            from,
+            to
+          );
 
 
       if (error) {
+
         throw error;
+
       }
 
 
-      if (!data || data.length === 0) {
+      if (
+        !data ||
+        data.length === 0
+      ) {
+
         break;
+
       }
 
 
-      all.push(...data);
+      all.push(
+        ...data
+      );
 
-      if (data.length < pageSize) {
+
+      if (
+        data.length <
+        pageSize
+      ) {
+
         break;
+
       }
 
-      from += pageSize;
+
+      from +=
+        pageSize;
+
     }
 
 
-    state.boxes = all;
+    state.boxes =
+      all;
 
-    /*
-      Удаляем выбранные id,
-      которых больше нет.
-    */
 
     const existingIds =
       new Set(
-        all.map(row => String(row.id))
+        all.map(
+          row =>
+            String(row.id)
+        )
       );
+
 
     state.selectedIds =
       new Set(
         [...state.selectedIds]
-          .filter(id => existingIds.has(String(id)))
+          .filter(
+            id =>
+              existingIds.has(
+                String(id)
+              )
+          )
       );
 
 
   } finally {
 
-    state.loading = false;
+    state.loading =
+      false;
+
   }
+
 }
 
 
@@ -1105,12 +1473,17 @@ async function loadBoxesFromSupabase() {
 
 function addLocalBox(row) {
 
-  state.boxes.push(row);
+  state.boxes.push(
+    row
+  );
+
 
   state.boxes.sort(
     (a, b) =>
-      Number(a.id) - Number(b.id)
+      Number(a.id) -
+      Number(b.id)
   );
+
 }
 
 
@@ -1125,17 +1498,27 @@ function updateLocalBox(
 
   const index =
     state.boxes.findIndex(
-      row => String(row.id) === String(id)
+      row =>
+        String(row.id) ===
+        String(id)
     );
 
+
   if (index === -1) {
+
     return;
+
   }
 
+
   state.boxes[index] = {
+
     ...state.boxes[index],
+
     ...changes
+
   };
+
 }
 
 
@@ -1148,12 +1531,15 @@ function removeLocalBox(id) {
   state.boxes =
     state.boxes.filter(
       row =>
-        String(row.id) !== String(id)
+        String(row.id) !==
+        String(id)
     );
+
 
   state.selectedIds.delete(
     String(id)
   );
+
 }
 
 
@@ -1161,7 +1547,9 @@ function removeLocalBox(id) {
    SUPABASE PAYLOAD
    ========================================================= */
 
-function boxToPayload(formData) {
+function boxToPayload(
+  formData
+) {
 
   return {
 
@@ -1193,7 +1581,8 @@ function boxToPayload(formData) {
     status:
       normalizeText(
         formData.status
-      ) || STATUSES.STOCK,
+      ) ||
+      STATUSES.STOCK,
 
     date:
       toISODate(
@@ -1206,6 +1595,7 @@ function boxToPayload(formData) {
       ) || null
 
   };
+
 }
 
 
@@ -1221,45 +1611,59 @@ function getFilteredBoxes() {
       .toLowerCase();
 
 
-  return state.boxes.filter(row => {
+  return state.boxes.filter(
+    row => {
 
-    if (
-      state.baseWarehouse &&
-      row.warehouse !== state.baseWarehouse
-    ) {
-      return false;
+      if (
+        state.baseWarehouse &&
+        row.warehouse !==
+          state.baseWarehouse
+      ) {
+
+        return false;
+
+      }
+
+
+      if (
+        state.baseStatus &&
+        row.status !==
+          state.baseStatus
+      ) {
+
+        return false;
+
+      }
+
+
+      if (!search) {
+
+        return true;
+
+      }
+
+
+      return [
+
+        row.barcode,
+        row.article,
+        row.zone_row,
+        row.pallet,
+        row.status,
+        row.warehouse,
+        formatDate(row.date)
+
+      ]
+
+        .join(' ')
+
+        .toLowerCase()
+
+        .includes(search);
+
     }
+  );
 
-
-    if (
-      state.baseStatus &&
-      row.status !== state.baseStatus
-    ) {
-      return false;
-    }
-
-
-    if (!search) {
-      return true;
-    }
-
-
-    return [
-
-      row.barcode,
-      row.article,
-      row.zone_row,
-      row.pallet,
-      row.status,
-      row.warehouse,
-      formatDate(row.date)
-
-    ]
-      .join(' ')
-      .toLowerCase()
-      .includes(search);
-
-  });
 }
 
 
@@ -1273,19 +1677,27 @@ function baseView() {
     Math.max(
       1,
       Math.ceil(
-        filtered.length / PAGE_SIZE
+        filtered.length /
+        PAGE_SIZE
       )
     );
 
 
-  if (state.basePage > totalPages) {
-    state.basePage = totalPages;
+  if (
+    state.basePage >
+    totalPages
+  ) {
+
+    state.basePage =
+      totalPages;
+
   }
 
 
   const start =
     (state.basePage - 1) *
     PAGE_SIZE;
+
 
   const rows =
     filtered.slice(
@@ -1297,7 +1709,10 @@ function baseView() {
   const warehouses =
     [...new Set(
       state.boxes
-        .map(row => row.warehouse)
+        .map(
+          row =>
+            row.warehouse
+        )
         .filter(Boolean)
     )]
       .sort();
@@ -1306,7 +1721,10 @@ function baseView() {
   const statuses =
     [...new Set(
       state.boxes
-        .map(row => row.status)
+        .map(
+          row =>
+            row.status
+        )
         .filter(Boolean)
     )]
       .sort();
@@ -1323,6 +1741,7 @@ function baseView() {
         value="${escapeHtml(state.baseSearch)}"
       >
 
+
       <select id="baseWarehouse">
 
         <option value="">
@@ -1331,12 +1750,19 @@ function baseView() {
 
         ${warehouses.map(
           warehouse => `
+
             <option
               value="${escapeHtml(warehouse)}"
-              ${warehouse === state.baseWarehouse ? 'selected' : ''}
+              ${
+                warehouse ===
+                state.baseWarehouse
+                  ? 'selected'
+                  : ''
+              }
             >
               ${escapeHtml(warehouse)}
             </option>
+
           `
         ).join('')}
 
@@ -1351,12 +1777,19 @@ function baseView() {
 
         ${statuses.map(
           status => `
+
             <option
               value="${escapeHtml(status)}"
-              ${status === state.baseStatus ? 'selected' : ''}
+              ${
+                status ===
+                state.baseStatus
+                  ? 'selected'
+                  : ''
+              }
             >
               ${escapeHtml(status)}
             </option>
+
           `
         ).join('')}
 
@@ -1374,7 +1807,11 @@ function baseView() {
       <button
         class="sp-btn success"
         id="markPickBtn"
-        ${state.selectedIds.size ? '' : 'disabled'}
+        ${
+          state.selectedIds.size
+            ? ''
+            : 'disabled'
+        }
       >
         В подбор (${state.selectedIds.size})
       </button>
@@ -1383,7 +1820,11 @@ function baseView() {
       <button
         class="sp-btn danger"
         id="deleteSelectedBtn"
-        ${state.selectedIds.size ? '' : 'disabled'}
+        ${
+          state.selectedIds.size
+            ? ''
+            : 'disabled'
+        }
       >
         Удалить выбранные
       </button>
@@ -1391,10 +1832,20 @@ function baseView() {
     </div>
 
 
-    <div class="sp-muted" style="margin-bottom:10px">
-      Найдено: <b>${filtered.length}</b>
-      · Всего коробок: <b>${state.boxes.length}</b>
-      · Страница ${state.basePage} из ${totalPages}
+    <div
+      class="sp-muted"
+      style="margin-bottom:10px"
+    >
+      Найдено:
+      <b>${filtered.length}</b>
+
+      · Всего коробок:
+      <b>${state.boxes.length}</b>
+
+      · Страница
+      ${state.basePage}
+      из
+      ${totalPages}
     </div>
 
 
@@ -1432,19 +1883,28 @@ function baseView() {
 
         </thead>
 
+
         <tbody>
 
           ${
             rows.length
-              ? rows.map(baseRow).join('')
+              ? rows.map(
+                  baseRow
+                ).join('')
               : `
+
                 <tr>
+
                   <td colspan="10">
+
                     <div class="sp-empty">
                       Нет данных
                     </div>
+
                   </td>
+
                 </tr>
+
               `
           }
 
@@ -1458,26 +1918,38 @@ function baseView() {
     <div class="sp-pagination">
 
       <div>
+
         Показано
         ${rows.length}
         из
         ${filtered.length}
+
       </div>
+
 
       <div class="sp-pagination-buttons">
 
         <button
           class="sp-btn secondary"
           id="basePrev"
-          ${state.basePage <= 1 ? 'disabled' : ''}
+          ${
+            state.basePage <= 1
+              ? 'disabled'
+              : ''
+          }
         >
           ←
         </button>
 
+
         <button
           class="sp-btn secondary"
           id="baseNext"
-          ${state.basePage >= totalPages ? 'disabled' : ''}
+          ${
+            state.basePage >= totalPages
+              ? 'disabled'
+              : ''
+          }
         >
           →
         </button>
@@ -1487,6 +1959,7 @@ function baseView() {
     </div>
 
   `;
+
 }
 
 
@@ -1495,8 +1968,11 @@ function baseRow(row) {
   const id =
     String(row.id);
 
+
   const selected =
-    state.selectedIds.has(id);
+    state.selectedIds.has(
+      id
+    );
 
 
   return `
@@ -1512,44 +1988,63 @@ function baseRow(row) {
           type="checkbox"
           class="base-check"
           data-id="${escapeHtml(id)}"
-          ${selected ? 'checked' : ''}
+          ${
+            selected
+              ? 'checked'
+              : ''
+          }
         >
 
       </td>
 
+
       <td>
-        <b>${escapeHtml(row.barcode)}</b>
+        <b>
+          ${escapeHtml(row.barcode)}
+        </b>
       </td>
+
 
       <td>
         ${escapeHtml(row.article)}
       </td>
 
+
       <td>
         ${escapeHtml(row.quantity_in_box)}
       </td>
+
 
       <td>
         ${escapeHtml(row.zone_row)}
       </td>
 
+
       <td>
         ${escapeHtml(row.pallet)}
       </td>
 
+
       <td>
+
         <span class="sp-status">
           ${escapeHtml(row.status)}
         </span>
+
       </td>
 
+
       <td>
-        ${escapeHtml(formatDate(row.date))}
+        ${escapeHtml(
+          formatDate(row.date)
+        )}
       </td>
+
 
       <td>
         ${escapeHtml(row.warehouse)}
       </td>
+
 
       <td>
 
@@ -1565,6 +2060,7 @@ function baseRow(row) {
     </tr>
 
   `;
+
 }
 
 
@@ -1578,9 +2074,11 @@ function setupBase() {
         state.baseSearch =
           event.target.value;
 
-        state.basePage = 1;
+        state.basePage =
+          1;
 
         render();
+
       }
     );
 
@@ -1593,9 +2091,11 @@ function setupBase() {
         state.baseWarehouse =
           event.target.value;
 
-        state.basePage = 1;
+        state.basePage =
+          1;
 
         render();
+
       }
     );
 
@@ -1608,9 +2108,11 @@ function setupBase() {
         state.baseStatus =
           event.target.value;
 
-        state.basePage = 1;
+        state.basePage =
+          1;
 
         render();
+
       }
     );
 
@@ -1620,12 +2122,16 @@ function setupBase() {
       'click',
       () => {
 
-        if (state.basePage > 1) {
+        if (
+          state.basePage > 1
+        ) {
 
           state.basePage--;
 
           render();
+
         }
+
       }
     );
 
@@ -1638,6 +2144,7 @@ function setupBase() {
         state.basePage++;
 
         render();
+
       }
     );
 
@@ -1645,7 +2152,8 @@ function setupBase() {
   $('#addBoxBtn')
     ?.addEventListener(
       'click',
-      () => openBoxModal()
+      () =>
+        openBoxModal()
     );
 
 
@@ -1664,46 +2172,63 @@ function setupBase() {
 
 
   $all('.base-check')
-    .forEach(check => {
+    .forEach(
+      check => {
 
-      check.addEventListener(
-        'change',
-        event => {
+        check.addEventListener(
+          'change',
+          event => {
 
-          const id =
-            String(
-              event.target.dataset.id
-            );
+            const id =
+              String(
+                event.target.dataset.id
+              );
 
 
-          if (event.target.checked) {
-            state.selectedIds.add(id);
-          } else {
-            state.selectedIds.delete(id);
+            if (
+              event.target.checked
+            ) {
+
+              state.selectedIds.add(
+                id
+              );
+
+            } else {
+
+              state.selectedIds.delete(
+                id
+              );
+
+            }
+
+
+            render();
+
           }
+        );
 
-
-          render();
-        }
-      );
-
-    });
+      }
+    );
 
 
   $all('.edit-box')
-    .forEach(button => {
+    .forEach(
+      button => {
 
-      button.addEventListener(
-        'click',
-        () => {
+        button.addEventListener(
+          'click',
+          () => {
 
-          openBoxModal(
-            button.dataset.id
-          );
-        }
-      );
+            openBoxModal(
+              button.dataset.id
+            );
 
-    });
+          }
+        );
+
+      }
+    );
+
 }
 
 
@@ -1715,13 +2240,18 @@ function closeBoxModal() {
 
   $('#boxModal')?.remove();
 
-  state.editingId = null;
+  state.editingId =
+    null;
+
 }
 
 
-function openBoxModal(id = null) {
+function openBoxModal(
+  id = null
+) {
 
   closeBoxModal();
+
 
   state.editingId =
     id !== null
@@ -1733,7 +2263,8 @@ function openBoxModal(id = null) {
     id !== null
       ? state.boxes.find(
           item =>
-            String(item.id) === String(id)
+            String(item.id) ===
+            String(id)
         )
       : null;
 
@@ -1741,11 +2272,14 @@ function openBoxModal(id = null) {
   const modal =
     document.createElement('div');
 
+
   modal.id =
     'boxModal';
 
+
   modal.className =
     'sp-modal-backdrop';
+
 
   modal.innerHTML = `
 
@@ -1754,12 +2288,15 @@ function openBoxModal(id = null) {
       <div class="sp-modal-head">
 
         <h2 style="margin:0">
+
           ${
             row
               ? 'Редактирование коробки'
               : 'Добавить коробку'
           }
+
         </h2>
+
 
         <button
           class="sp-modal-close"
@@ -1777,69 +2314,102 @@ function openBoxModal(id = null) {
       >
 
         <label>
+
           Штрихкод
+
           <input
             id="boxBarcode"
             required
-            value="${escapeHtml(row?.barcode ?? '')}"
+            value="${escapeHtml(
+              row?.barcode ?? ''
+            )}"
           >
+
         </label>
 
 
         <label>
+
           Артикул
+
           <input
             id="boxArticle"
-            value="${escapeHtml(row?.article ?? '')}"
+            value="${escapeHtml(
+              row?.article ?? ''
+            )}"
           >
+
         </label>
 
 
         <label>
+
           Кол-во в коробке
+
           <input
             id="boxQuantity"
-            value="${escapeHtml(row?.quantity_in_box ?? '')}"
+            value="${escapeHtml(
+              row?.quantity_in_box ?? ''
+            )}"
           >
+
         </label>
 
 
         <label>
+
           Зона/ряд
+
           <input
             id="boxZone"
-            value="${escapeHtml(row?.zone_row ?? '')}"
+            value="${escapeHtml(
+              row?.zone_row ?? ''
+            )}"
           >
+
         </label>
 
 
         <label>
+
           Поддон
+
           <input
             id="boxPallet"
-            value="${escapeHtml(row?.pallet ?? '')}"
+            value="${escapeHtml(
+              row?.pallet ?? ''
+            )}"
           >
+
         </label>
 
 
         <label>
+
           Статус
 
           <select id="boxStatus">
 
-            ${Object.values(STATUSES)
+            ${Object.values(
+              STATUSES
+            )
               .map(
                 status => `
+
                   <option
                     value="${escapeHtml(status)}"
                     ${
-                      (row?.status ?? STATUSES.STOCK) === status
+                      (
+                        row?.status ??
+                        STATUSES.STOCK
+                      ) === status
                         ? 'selected'
                         : ''
                     }
                   >
                     ${escapeHtml(status)}
                   </option>
+
                 `
               )
               .join('')}
@@ -1850,23 +2420,33 @@ function openBoxModal(id = null) {
 
 
         <label>
+
           Дата размещения
+
           <input
             id="boxDate"
             type="date"
             value="${escapeHtml(
-              toISODate(row?.date) ?? ''
+              toISODate(
+                row?.date
+              ) ?? ''
             )}"
           >
+
         </label>
 
 
         <label>
+
           Склад
+
           <input
             id="boxWarehouse"
-            value="${escapeHtml(row?.warehouse ?? '')}"
+            value="${escapeHtml(
+              row?.warehouse ?? ''
+            )}"
           >
+
         </label>
 
 
@@ -1879,6 +2459,7 @@ function openBoxModal(id = null) {
           >
             Отмена
           </button>
+
 
           <button
             type="submit"
@@ -1897,7 +2478,9 @@ function openBoxModal(id = null) {
   `;
 
 
-  document.body.appendChild(modal);
+  document.body.appendChild(
+    modal
+  );
 
 
   $('#closeBoxModal')
@@ -1932,10 +2515,14 @@ function openBoxModal(id = null) {
       if (
         event.target === modal
       ) {
+
         closeBoxModal();
+
       }
+
     }
   );
+
 }
 
 
@@ -1947,7 +2534,10 @@ async function saveBox(event) {
   const button =
     $('#saveBoxBtn');
 
-  button.disabled = true;
+
+  button.disabled =
+    true;
+
 
   button.textContent =
     'Сохранение...';
@@ -1985,14 +2575,19 @@ async function saveBox(event) {
 
 
     const payload =
-      boxToPayload(formData);
+      boxToPayload(
+        formData
+      );
 
 
-    if (!payload.barcode) {
+    if (
+      !payload.barcode
+    ) {
 
       throw new Error(
         'Штрихкод обязателен'
       );
+
     }
 
 
@@ -2000,7 +2595,9 @@ async function saveBox(event) {
       INSERT
     */
 
-    if (!state.editingId) {
+    if (
+      !state.editingId
+    ) {
 
       const {
         data,
@@ -2014,29 +2611,29 @@ async function saveBox(event) {
 
 
       if (error) {
+
         throw error;
+
       }
 
 
-      /*
-        ВАЖНО:
+      addLocalBox(
+        data
+      );
 
-        не reloadAndRender(),
-        а просто добавляем новую строку
-        локально.
-      */
-
-      addLocalBox(data);
 
       closeBoxModal();
 
       render();
 
+
       toast(
         'Коробка добавлена'
       );
 
+
       return;
+
     }
 
 
@@ -2060,7 +2657,9 @@ async function saveBox(event) {
 
 
     if (error) {
+
       throw error;
+
     }
 
 
@@ -2074,6 +2673,7 @@ async function saveBox(event) {
 
     render();
 
+
     toast(
       'Коробка сохранена'
     );
@@ -2086,17 +2686,23 @@ async function saveBox(event) {
       error
     );
 
+
     toast(
       error.message ||
       'Ошибка сохранения',
       'error'
     );
 
-    button.disabled = false;
+
+    button.disabled =
+      false;
+
 
     button.textContent =
       'Сохранить';
+
   }
+
 }
 
 
@@ -2104,14 +2710,18 @@ async function saveBox(event) {
    DELETE
    ========================================================= */
 
-async function deleteBox(id) {
+async function deleteBox(
+  id
+) {
 
   if (
     !confirm(
       'Удалить эту коробку?'
     )
   ) {
+
     return;
+
   }
 
 
@@ -2121,7 +2731,10 @@ async function deleteBox(id) {
     await supabaseClient
       .from('boxes')
       .delete()
-      .eq('id', id);
+      .eq(
+        'id',
+        id
+      );
 
 
   if (error) {
@@ -2132,16 +2745,22 @@ async function deleteBox(id) {
     );
 
     return;
+
   }
 
 
-  removeLocalBox(id);
+  removeLocalBox(
+    id
+  );
+
 
   render();
+
 
   toast(
     'Коробка удалена'
   );
+
 }
 
 
@@ -2151,8 +2770,12 @@ async function deleteSelectedBoxes() {
     [...state.selectedIds];
 
 
-  if (!ids.length) {
+  if (
+    !ids.length
+  ) {
+
     return;
+
   }
 
 
@@ -2161,7 +2784,9 @@ async function deleteSelectedBoxes() {
       `Удалить выбранные коробки: ${ids.length}?`
     )
   ) {
+
     return;
+
   }
 
 
@@ -2185,20 +2810,26 @@ async function deleteSelectedBoxes() {
     );
 
     return;
+
   }
 
 
   ids.forEach(
-    id => removeLocalBox(id)
+    id =>
+      removeLocalBox(id)
   );
+
 
   state.selectedIds.clear();
 
+
   render();
+
 
   toast(
     `Удалено коробок: ${ids.length}`
   );
+
 }
 
 
@@ -2212,12 +2843,17 @@ async function markSelectedForPicking() {
     [...state.selectedIds];
 
 
-  if (!ids.length) {
+  if (
+    !ids.length
+  ) {
+
     return;
+
   }
 
 
-  let done = 0;
+  let done =
+    0;
 
 
   for (
@@ -2231,19 +2867,29 @@ async function markSelectedForPicking() {
       await supabaseClient
         .from('boxes')
         .update({
-          status: STATUSES.PICK,
-          pick: true
+          status:
+            STATUSES.PICK,
+          pick:
+            true
         })
-        .eq('id', id)
-        .select(BOX_SELECT)
+        .eq(
+          'id',
+          id
+        )
+        .select(
+          BOX_SELECT
+        )
         .single();
 
 
     if (error) {
 
-      console.error(error);
+      console.error(
+        error
+      );
 
       continue;
+
     }
 
 
@@ -2252,17 +2898,22 @@ async function markSelectedForPicking() {
       data
     );
 
+
     done++;
+
   }
 
 
   state.selectedIds.clear();
 
+
   render();
+
 
   toast(
     `Добавлено в подбор: ${done}`
   );
+
 }
 
 
@@ -2278,6 +2929,7 @@ function getPickingBoxes() {
       row.status === STATUSES.PICK ||
       row.status === STATUSES.RESERVED
   );
+
 }
 
 
@@ -2290,7 +2942,8 @@ function assemblyView() {
   const collected =
     state.boxes.filter(
       row =>
-        row.status === STATUSES.COLLECTED
+        row.status ===
+        STATUSES.COLLECTED
     ).length;
 
 
@@ -2334,13 +2987,20 @@ function assemblyView() {
           Текущий поддон
         </b>
 
-        <div class="sp-toolbar" style="margin-top:10px">
+
+        <div
+          class="sp-toolbar"
+          style="margin-top:10px"
+        >
 
           <input
             id="currentPallet"
             placeholder="Например: А"
-            value="${escapeHtml(state.currentPallet)}"
+            value="${escapeHtml(
+              state.currentPallet
+            )}"
           >
+
 
           <button
             class="sp-btn secondary"
@@ -2351,9 +3011,13 @@ function assemblyView() {
 
         </div>
 
+
         <div class="sp-muted">
-          Если поддон указан, сканирование разрешено
+
+          Если поддон указан,
+          сканирование разрешено
           только для коробок этого поддона.
+
         </div>
 
       </div>
@@ -2401,6 +3065,7 @@ function assemblyView() {
 
           </thead>
 
+
           <tbody>
 
             ${
@@ -2410,13 +3075,19 @@ function assemblyView() {
                     .map(pickingRow)
                     .join('')
                 : `
+
                   <tr>
+
                     <td colspan="6">
+
                       <div class="sp-empty">
                         В подборе пока ничего нет
                       </div>
+
                     </td>
+
                   </tr>
+
                 `
             }
 
@@ -2429,6 +3100,7 @@ function assemblyView() {
     </div>
 
   `;
+
 }
 
 
@@ -2461,14 +3133,17 @@ function pickingRow(row) {
       </td>
 
       <td>
+
         <span class="sp-status">
           ${escapeHtml(row.status)}
         </span>
+
       </td>
 
     </tr>
 
   `;
+
 }
 
 
@@ -2477,12 +3152,14 @@ function setupAssembly() {
   const pallet =
     $('#currentPallet');
 
+
   pallet?.addEventListener(
     'input',
     event => {
 
       state.currentPallet =
         event.target.value.trim();
+
     }
   );
 
@@ -2492,11 +3169,13 @@ function setupAssembly() {
       'click',
       () => {
 
-        state.currentPallet = '';
+        state.currentPallet =
+          '';
 
         render();
 
         focusScanner();
+
       }
     );
 
@@ -2520,14 +3199,19 @@ function setupAssembly() {
 
         event.preventDefault();
 
+
         const barcode =
           scanner.value;
 
-        scanner.value = '';
+
+        scanner.value =
+          '';
+
 
         await processScan(
           barcode
         );
+
       }
 
     }
@@ -2552,6 +3236,7 @@ function setupAssembly() {
     focusScanner,
     100
   );
+
 }
 
 
@@ -2560,13 +3245,18 @@ function focusScanner() {
   const scanner =
     $('#scannerInput');
 
+
   if (!scanner) {
+
     return;
+
   }
+
 
   scanner.focus({
     preventScroll: true
   });
+
 }
 
 
@@ -2575,51 +3265,70 @@ async function processScan(
 ) {
 
   barcode =
-    normalizeBarcode(barcode);
+    normalizeBarcode(
+      barcode
+    );
 
 
   if (!barcode) {
+
     return;
+
   }
 
 
   const candidates =
     state.boxes.filter(
       row =>
-        normalizeBarcode(row.barcode) === barcode &&
+        normalizeBarcode(
+          row.barcode
+        ) === barcode &&
         (
           row.pick === true ||
-          row.status === STATUSES.PICK ||
-          row.status === STATUSES.RESERVED
+          row.status ===
+            STATUSES.PICK ||
+          row.status ===
+            STATUSES.RESERVED
         )
     );
 
 
-  if (!candidates.length) {
+  if (
+    !candidates.length
+  ) {
 
     showScannerResult(
       `Штрихкод ${barcode} не найден среди коробок к подбору.`,
       'error'
     );
 
+
     beep(false);
 
     focusScanner();
 
     return;
+
   }
 
 
-  let box = null;
+  let box =
+    null;
 
 
-  if (state.currentPallet) {
+  if (
+    state.currentPallet
+  ) {
 
     box =
       candidates.find(
         row =>
-          normalizeText(row.pallet).toLowerCase() ===
-          normalizeText(state.currentPallet).toLowerCase()
+          normalizeText(
+            row.pallet
+          ).toLowerCase() ===
+          normalizeText(
+            state.currentPallet
+          ).toLowerCase()
       );
 
 
@@ -2630,16 +3339,20 @@ async function processScan(
         'error'
       );
 
+
       beep(false);
 
       focusScanner();
 
       return;
+
     }
 
   } else {
 
-    box = candidates[0];
+    box =
+      candidates[0];
+
   }
 
 
@@ -2658,31 +3371,39 @@ async function processScan(
           false,
 
         worker:
-          state.user?.email || null
+          state.user?.email ||
+          null
 
       })
       .eq(
         'id',
         box.id
       )
-      .select(BOX_SELECT)
+      .select(
+        BOX_SELECT
+      )
       .single();
 
 
   if (error) {
 
-    console.error(error);
+    console.error(
+      error
+    );
+
 
     showScannerResult(
       error.message,
       'error'
     );
 
+
     beep(false);
 
     focusScanner();
 
     return;
+
   }
 
 
@@ -2700,17 +3421,15 @@ async function processScan(
 
   beep(true);
 
+
   render();
 
-
-  /*
-    После render() снова получаем scannerInput.
-  */
 
   setTimeout(
     focusScanner,
     50
   );
+
 }
 
 
@@ -2722,18 +3441,23 @@ function showScannerResult(
   const element =
     $('#scannerResult');
 
+
   if (!element) {
+
     return;
+
   }
 
 
   element.textContent =
     message;
 
+
   element.style.border =
     type === 'error'
       ? '2px solid #b42318'
       : '2px solid #18794e';
+
 }
 
 
@@ -2741,7 +3465,9 @@ function showScannerResult(
    BEEP
    ========================================================= */
 
-function beep(success = true) {
+function beep(
+  success = true
+) {
 
   try {
 
@@ -2751,7 +3477,9 @@ function beep(success = true) {
 
 
     if (!AudioContext) {
+
       return;
+
     }
 
 
@@ -2762,6 +3490,7 @@ function beep(success = true) {
     const oscillator =
       context.createOscillator();
 
+
     const gain =
       context.createGain();
 
@@ -2770,13 +3499,16 @@ function beep(success = true) {
       gain
     );
 
+
     gain.connect(
       context.destination
     );
 
 
     oscillator.frequency.value =
-      success ? 1000 : 250;
+      success
+        ? 1000
+        : 250;
 
 
     oscillator.type =
@@ -2788,24 +3520,35 @@ function beep(success = true) {
       context.currentTime
     );
 
+
     gain.gain.exponentialRampToValueAtTime(
       0.12,
-      context.currentTime + 0.01
+      context.currentTime +
+      0.01
     );
+
 
     gain.gain.exponentialRampToValueAtTime(
       0.0001,
-      context.currentTime + (
-        success ? 0.12 : 0.25
+      context.currentTime +
+      (
+        success
+          ? 0.12
+          : 0.25
       )
     );
 
 
     oscillator.start();
 
+
     oscillator.stop(
       context.currentTime +
-      (success ? 0.13 : 0.26)
+      (
+        success
+          ? 0.13
+          : 0.26
+      )
     );
 
   } catch (error) {
@@ -2814,7 +3557,9 @@ function beep(success = true) {
       'Audio error:',
       error
     );
+
   }
+
 }
 
 
@@ -2827,7 +3572,8 @@ function collectedView() {
   const rows =
     state.boxes.filter(
       row =>
-        row.status === STATUSES.COLLECTED
+        row.status ===
+        STATUSES.COLLECTED
     );
 
 
@@ -2844,7 +3590,11 @@ function collectedView() {
       <button
         class="sp-btn success"
         id="shipCollectedBtn"
-        ${rows.length ? '' : 'disabled'}
+        ${
+          rows.length
+            ? ''
+            : 'disabled'
+        }
       >
         Отгрузить выбранные
       </button>
@@ -2873,21 +3623,30 @@ function collectedView() {
 
         </thead>
 
+
         <tbody>
 
           ${
             rows.length
               ? rows
-                  .map(collectedRow)
+                  .map(
+                    collectedRow
+                  )
                   .join('')
               : `
+
                 <tr>
+
                   <td colspan="8">
+
                     <div class="sp-empty">
                       Собранных коробок нет
                     </div>
+
                   </td>
+
                 </tr>
+
               `
           }
 
@@ -2898,6 +3657,7 @@ function collectedView() {
     </div>
 
   `;
+
 }
 
 
@@ -2921,37 +3681,49 @@ function collectedRow(row) {
 
       </td>
 
+
       <td>
-        <b>${escapeHtml(row.barcode)}</b>
+        <b>
+          ${escapeHtml(row.barcode)}
+        </b>
       </td>
+
 
       <td>
         ${escapeHtml(row.article)}
       </td>
 
+
       <td>
         ${escapeHtml(row.zone_row)}
       </td>
+
 
       <td>
         ${escapeHtml(row.pallet)}
       </td>
 
+
       <td>
         ${escapeHtml(row.warehouse)}
       </td>
+
 
       <td>
         ${escapeHtml(row.worker)}
       </td>
 
+
       <td>
-        ${escapeHtml(formatDate(row.date))}
+        ${escapeHtml(
+          formatDate(row.date)
+        )}
       </td>
 
     </tr>
 
   `;
+
 }
 
 
@@ -2962,6 +3734,7 @@ function setupCollected() {
       'click',
       shipSelectedCollected
     );
+
 }
 
 
@@ -2986,7 +3759,9 @@ async function shipSelectedCollected() {
       'error'
     );
 
+
     return;
+
   }
 
 
@@ -2995,11 +3770,14 @@ async function shipSelectedCollected() {
       `Отгрузить выбранные коробки: ${ids.length}?`
     )
   ) {
+
     return;
+
   }
 
 
-  let shipped = 0;
+  let shipped =
+    0;
 
 
   for (
@@ -3013,22 +3791,31 @@ async function shipSelectedCollected() {
       await supabaseClient
         .from('boxes')
         .update({
-          status: STATUSES.SHIPPED
+          status:
+            STATUSES.SHIPPED
         })
-        .eq('id', id)
+        .eq(
+          'id',
+          id
+        )
         .eq(
           'status',
           STATUSES.COLLECTED
         )
-        .select(BOX_SELECT)
+        .select(
+          BOX_SELECT
+        )
         .single();
 
 
     if (error) {
 
-      console.error(error);
+      console.error(
+        error
+      );
 
       continue;
+
     }
 
 
@@ -3037,15 +3824,19 @@ async function shipSelectedCollected() {
       data
     );
 
+
     shipped++;
+
   }
 
 
   render();
 
+
   toast(
     `Отгружено: ${shipped}`
   );
+
 }
 
 
@@ -3059,7 +3850,8 @@ function receivedView() {
     state.boxes
       .filter(
         row =>
-          row.status === STATUSES.STOCK
+          row.status ===
+          STATUSES.STOCK
       )
       .slice(-300)
       .reverse();
@@ -3074,12 +3866,15 @@ function receivedView() {
       </div>
 
       <div class="sp-big-number">
+
         ${
           state.boxes.filter(
             row =>
-              row.status === STATUSES.STOCK
+              row.status ===
+              STATUSES.STOCK
           ).length
         }
+
       </div>
 
     </div>
@@ -3107,6 +3902,7 @@ function receivedView() {
 
         </thead>
 
+
         <tbody>
 
           ${rows.map(
@@ -3115,27 +3911,41 @@ function receivedView() {
               <tr>
 
                 <td>
-                  <b>${escapeHtml(row.barcode)}</b>
+                  <b>
+                    ${escapeHtml(
+                      row.barcode
+                    )}
+                  </b>
                 </td>
 
                 <td>
-                  ${escapeHtml(row.article)}
+                  ${escapeHtml(
+                    row.article
+                  )}
                 </td>
 
                 <td>
-                  ${escapeHtml(row.zone_row)}
+                  ${escapeHtml(
+                    row.zone_row
+                  )}
                 </td>
 
                 <td>
-                  ${escapeHtml(row.pallet)}
+                  ${escapeHtml(
+                    row.pallet
+                  )}
                 </td>
 
                 <td>
-                  ${escapeHtml(row.warehouse)}
+                  ${escapeHtml(
+                    row.warehouse
+                  )}
                 </td>
 
                 <td>
-                  ${escapeHtml(formatDate(row.date))}
+                  ${escapeHtml(
+                    formatDate(row.date)
+                  )}
                 </td>
 
               </tr>
@@ -3150,6 +3960,7 @@ function receivedView() {
     </div>
 
   `;
+
 }
 
 
@@ -3163,7 +3974,8 @@ function shippedView() {
     state.boxes
       .filter(
         row =>
-          row.status === STATUSES.SHIPPED
+          row.status ===
+          STATUSES.SHIPPED
       )
       .slice(-500)
       .reverse();
@@ -3178,12 +3990,15 @@ function shippedView() {
       </div>
 
       <div class="sp-big-number">
+
         ${
           state.boxes.filter(
             row =>
-              row.status === STATUSES.SHIPPED
+              row.status ===
+              STATUSES.SHIPPED
           ).length
         }
+
       </div>
 
     </div>
@@ -3211,6 +4026,7 @@ function shippedView() {
 
         </thead>
 
+
         <tbody>
 
           ${rows.map(
@@ -3219,27 +4035,41 @@ function shippedView() {
               <tr>
 
                 <td>
-                  <b>${escapeHtml(row.barcode)}</b>
+                  <b>
+                    ${escapeHtml(
+                      row.barcode
+                    )}
+                  </b>
                 </td>
 
                 <td>
-                  ${escapeHtml(row.article)}
+                  ${escapeHtml(
+                    row.article
+                  )}
                 </td>
 
                 <td>
-                  ${escapeHtml(row.zone_row)}
+                  ${escapeHtml(
+                    row.zone_row
+                  )}
                 </td>
 
                 <td>
-                  ${escapeHtml(row.pallet)}
+                  ${escapeHtml(
+                    row.pallet
+                  )}
                 </td>
 
                 <td>
-                  ${escapeHtml(row.warehouse)}
+                  ${escapeHtml(
+                    row.warehouse
+                  )}
                 </td>
 
                 <td>
-                  ${escapeHtml(formatDate(row.date))}
+                  ${escapeHtml(
+                    formatDate(row.date)
+                  )}
                 </td>
 
               </tr>
@@ -3254,6 +4084,7 @@ function shippedView() {
     </div>
 
   `;
+
 }
 
 
@@ -3298,7 +4129,10 @@ function dashboardView() {
   const warehouses =
     new Set(
       state.boxes
-        .map(row => row.warehouse)
+        .map(
+          row =>
+            row.warehouse
+        )
         .filter(Boolean)
     ).size;
 
@@ -3306,7 +4140,10 @@ function dashboardView() {
   const articles =
     new Set(
       state.boxes
-        .map(row => row.article)
+        .map(
+          row =>
+            row.article
+        )
         .filter(Boolean)
     ).size;
 
@@ -3314,7 +4151,10 @@ function dashboardView() {
   const pallets =
     new Set(
       state.boxes
-        .map(row => row.pallet)
+        .map(
+          row =>
+            row.pallet
+        )
         .filter(Boolean)
     ).size;
 
@@ -3448,6 +4288,7 @@ function dashboardView() {
         Последние операции
       </h3>
 
+
       <div class="sp-table-wrap">
 
         <table class="sp-table">
@@ -3466,6 +4307,7 @@ function dashboardView() {
 
           </thead>
 
+
           <tbody>
 
             ${
@@ -3478,25 +4320,37 @@ function dashboardView() {
                     <tr>
 
                       <td>
-                        ${escapeHtml(row.barcode)}
+                        ${escapeHtml(
+                          row.barcode
+                        )}
                       </td>
 
                       <td>
-                        ${escapeHtml(row.article)}
+                        ${escapeHtml(
+                          row.article
+                        )}
                       </td>
 
                       <td>
-                        ${escapeHtml(row.zone_row)}
+                        ${escapeHtml(
+                          row.zone_row
+                        )}
                       </td>
 
                       <td>
-                        ${escapeHtml(row.pallet)}
+                        ${escapeHtml(
+                          row.pallet
+                        )}
                       </td>
 
                       <td>
+
                         <span class="sp-status">
-                          ${escapeHtml(row.status)}
+                          ${escapeHtml(
+                            row.status
+                          )}
                         </span>
+
                       </td>
 
                     </tr>
@@ -3515,15 +4369,20 @@ function dashboardView() {
     </div>
 
   `;
+
 }
 
 
-function countStatus(status) {
+function countStatus(
+  status
+) {
 
   return state.boxes.filter(
     row =>
-      row.status === status
+      row.status ===
+      status
   ).length;
+
 }
 
 
@@ -3544,10 +4403,13 @@ function toolsView() {
         </h3>
 
         <p class="sp-muted">
+
           Добавить коробки из XLS/XLSX.
-          Каждая строка Excel считается отдельной
-          физической коробкой.
+          Каждая строка Excel считается
+          отдельной физической коробкой.
+
         </p>
+
 
         <button
           class="sp-btn"
@@ -3569,6 +4431,7 @@ function toolsView() {
           Скачать текущую базу коробок.
         </p>
 
+
         <button
           class="sp-btn secondary"
           id="exportJsonBtn"
@@ -3589,6 +4452,7 @@ function toolsView() {
           Создать локальную копию текущей базы.
         </p>
 
+
         <button
           class="sp-btn secondary"
           id="backupToolsBtn"
@@ -3606,8 +4470,11 @@ function toolsView() {
         </h3>
 
         <p class="sp-muted">
-          ${escapeHtml(state.user?.email || '')}
+          ${escapeHtml(
+            state.user?.email || ''
+          )}
         </p>
+
 
         <button
           class="sp-btn danger"
@@ -3621,6 +4488,7 @@ function toolsView() {
     </div>
 
   `;
+
 }
 
 
@@ -3652,6 +4520,7 @@ function setupTools() {
       'click',
       logout
     );
+
 }
 
 
@@ -3666,9 +4535,11 @@ function exportJSON() {
     `skladaplan-${todayFileDate()}.json`
   );
 
+
   toast(
     'JSON экспортирован'
   );
+
 }
 
 
@@ -3676,13 +4547,15 @@ function backupDatabase() {
 
   const backup = {
 
-    app: 'SKLADAPLAN',
+    app:
+      'SKLADAPLAN',
 
     created_at:
       new Date().toISOString(),
 
     user:
-      state.user?.email || null,
+      state.user?.email ||
+      null,
 
     boxes:
       state.boxes
@@ -3695,9 +4568,11 @@ function backupDatabase() {
     `skladaplan-backup-${todayFileDate()}.json`
   );
 
+
   toast(
     'Backup создан'
   );
+
 }
 
 
@@ -3717,6 +4592,7 @@ const EXCEL_MAP = {
 
   ],
 
+
   article: [
 
     'артикул',
@@ -3724,6 +4600,7 @@ const EXCEL_MAP = {
     'sku'
 
   ],
+
 
   quantity_in_box: [
 
@@ -3734,6 +4611,7 @@ const EXCEL_MAP = {
     'количество'
 
   ],
+
 
   zone_row: [
 
@@ -3746,6 +4624,7 @@ const EXCEL_MAP = {
 
   ],
 
+
   pallet: [
 
     'поддон',
@@ -3754,12 +4633,14 @@ const EXCEL_MAP = {
 
   ],
 
+
   status: [
 
     'статус',
     'status'
 
   ],
+
 
   date: [
 
@@ -3770,12 +4651,14 @@ const EXCEL_MAP = {
 
   ],
 
+
   warehouse: [
 
     'склад',
     'warehouse'
 
   ],
+
 
   column_9: [
 
@@ -3784,12 +4667,14 @@ const EXCEL_MAP = {
 
   ],
 
+
   direction: [
 
     'направление',
     'direction'
 
   ],
+
 
   pick: [
 
@@ -3798,6 +4683,7 @@ const EXCEL_MAP = {
     'pick'
 
   ],
+
 
   worker: [
 
@@ -3810,30 +4696,77 @@ const EXCEL_MAP = {
 };
 
 
+/*
+  Находим колонки один раз.
+
+  Это важно для больших Excel:
+  раньше findExcelColumn()
+  запускался для каждого поля
+  каждой строки.
+*/
+
+function buildExcelColumnMap(
+  headers
+) {
+
+  const map = {};
+
+
+  for (
+    const field of Object.keys(
+      EXCEL_MAP
+    )
+  ) {
+
+    map[field] =
+      findExcelColumn(
+        headers,
+        EXCEL_MAP[field]
+      );
+
+  }
+
+
+  return map;
+
+}
+
+
 function findExcelColumn(
   headers,
   aliases
 ) {
 
+  const normalizedHeaders =
+    headers.map(
+      header => ({
+        original:
+          header,
+        normalized:
+          normalizeHeader(header)
+      })
+    );
+
+
   for (
-    const header of headers
+    const alias of aliases
   ) {
 
-    const normalized =
-      normalizeHeader(header);
+    const normalizedAlias =
+      normalizeHeader(alias);
 
 
-    for (
-      const alias of aliases
-    ) {
+    const found =
+      normalizedHeaders.find(
+        item =>
+          item.normalized ===
+          normalizedAlias
+      );
 
-      if (
-        normalized ===
-        normalizeHeader(alias)
-      ) {
 
-        return header;
-      }
+    if (found) {
+
+      return found.original;
 
     }
 
@@ -3841,25 +4774,32 @@ function findExcelColumn(
 
 
   return null;
+
 }
 
 
+/*
+  convertExcelRow теперь получает
+  заранее подготовленный columnMap.
+*/
+
 function convertExcelRow(
   row,
-  headers
+  columnMap
 ) {
 
-  function valueFor(field) {
+  function valueFor(
+    field
+  ) {
 
     const column =
-      findExcelColumn(
-        headers,
-        EXCEL_MAP[field] || []
-      );
+      columnMap[field];
+
 
     return column
       ? row[column]
       : '';
+
   }
 
 
@@ -3870,14 +4810,17 @@ function convertExcelRow(
 
 
   if (!barcode) {
+
     return null;
+
   }
 
 
   const status =
     normalizeText(
       valueFor('status')
-    ) || STATUSES.STOCK;
+    ) ||
+    STATUSES.STOCK;
 
 
   return {
@@ -3891,7 +4834,9 @@ function convertExcelRow(
 
     quantity_in_box:
       normalizeText(
-        valueFor('quantity_in_box')
+        valueFor(
+          'quantity_in_box'
+        )
       ) || null,
 
     zone_row:
@@ -3937,16 +4882,21 @@ function convertExcelRow(
       ) || null
 
   };
+
 }
 
 
 function openExcelImport() {
 
   const input =
-    document.createElement('input');
+    document.createElement(
+      'input'
+    );
+
 
   input.type =
     'file';
+
 
   input.accept =
     '.xlsx,.xls';
@@ -3959,8 +4909,13 @@ function openExcelImport() {
 
 
   input.click();
+
 }
 
+
+/* =========================================================
+   READ EXCEL
+   ========================================================= */
 
 async function handleExcelFile(
   event
@@ -3971,12 +4926,15 @@ async function handleExcelFile(
 
 
   if (!file) {
+
     return;
+
   }
 
 
   if (
-    typeof XLSX === 'undefined'
+    typeof XLSX ===
+    'undefined'
   ) {
 
     toast(
@@ -3984,11 +4942,22 @@ async function handleExcelFile(
       'error'
     );
 
+
     return;
+
   }
 
 
   try {
+
+    toast(
+      'Читаю Excel-файл...'
+    );
+
+
+    /*
+      Читаем файл один раз.
+    */
 
     const buffer =
       await file.arrayBuffer();
@@ -4008,11 +4977,27 @@ async function handleExcelFile(
       workbook.SheetNames[0];
 
 
+    if (!sheetName) {
+
+      throw new Error(
+        'В Excel нет листов'
+      );
+
+    }
+
+
     const sheet =
       workbook.Sheets[
         sheetName
       ];
 
+
+    /*
+      raw:false оставляем специально,
+      чтобы даты и числа Excel
+      корректно преобразовывались
+      в строки для нормализации.
+    */
 
     const rows =
       XLSX.utils.sheet_to_json(
@@ -4031,7 +5016,9 @@ async function handleExcelFile(
         'error'
       );
 
+
       return;
+
     }
 
 
@@ -4041,56 +5028,160 @@ async function handleExcelFile(
       );
 
 
-    const converted = [];
+    /*
+      ВАЖНО:
+      определяем соответствие колонок
+      только один раз.
+    */
 
-    let errors = 0;
+    const columnMap =
+      buildExcelColumnMap(
+        headers
+      );
+
+
+    /*
+      Штрихкод обязателен.
+    */
+
+    if (!columnMap.barcode) {
+
+      toast(
+        'Не найдена колонка "Штрихкод"',
+        'error'
+      );
+
+
+      return;
+
+    }
+
+
+    const converted =
+      new Array(
+        rows.length
+      );
+
+
+    let validCount =
+      0;
+
+
+    let errors =
+      0;
+
+
+    /*
+      Обрабатываем строки блоками,
+      чтобы браузер не зависал на
+      больших файлах.
+    */
+
+    const PARSE_BLOCK =
+      2000;
 
 
     for (
-      const row of rows
+      let start = 0;
+      start < rows.length;
+      start += PARSE_BLOCK
     ) {
 
-      try {
+      const end =
+        Math.min(
+          start +
+            PARSE_BLOCK,
+          rows.length
+        );
 
-        const convertedRow =
-          convertExcelRow(
-            row,
-            headers
+
+      for (
+        let i = start;
+        i < end;
+        i++
+      ) {
+
+        try {
+
+          const convertedRow =
+            convertExcelRow(
+              rows[i],
+              columnMap
+            );
+
+
+          if (!convertedRow) {
+
+            errors++;
+
+            continue;
+
+          }
+
+
+          converted[
+            validCount
+          ] =
+            convertedRow;
+
+
+          validCount++;
+
+        } catch (error) {
+
+          console.error(
+            'Excel row error:',
+            error
           );
 
 
-        if (!convertedRow) {
-
           errors++;
 
-          continue;
         }
 
+      }
 
-        converted.push(
-          convertedRow
+
+      /*
+        Даём браузеру возможность
+        обновить интерфейс.
+      */
+
+      if (
+        end < rows.length
+      ) {
+
+        await new Promise(
+          resolve =>
+            setTimeout(
+              resolve,
+              0
+            )
         );
 
-      } catch (error) {
-
-        console.error(
-          error
-        );
-
-        errors++;
       }
 
     }
 
 
+    converted.length =
+      validCount;
+
+
     state.excelRows =
       converted;
+
 
     state.excelFileName =
       file.name;
 
+
     state.excelSheetName =
       sheetName;
+
+
+    state.excelHeaders =
+      headers;
 
 
     showExcelPreview(
@@ -4107,12 +5198,15 @@ async function handleExcelFile(
       error
     );
 
+
     toast(
       error.message ||
       'Ошибка чтения Excel',
       'error'
     );
+
   }
+
 }
 
 
@@ -4126,7 +5220,8 @@ function showExcelPreview(
   headers
 ) {
 
-  $('#excelImportModal')?.remove();
+  $('#excelImportModal')
+    ?.remove();
 
 
   const previewRows =
@@ -4135,10 +5230,14 @@ function showExcelPreview(
 
 
   const modal =
-    document.createElement('div');
+    document.createElement(
+      'div'
+    );
+
 
   modal.id =
     'excelImportModal';
+
 
   modal.className =
     'sp-modal-backdrop';
@@ -4154,6 +5253,7 @@ function showExcelPreview(
           Импорт Excel
         </h2>
 
+
         <button
           class="sp-modal-close"
           id="closeExcelModal"
@@ -4167,37 +5267,53 @@ function showExcelPreview(
       <div class="sp-card">
 
         <b>
-          ${escapeHtml(state.excelFileName)}
+          ${escapeHtml(
+            state.excelFileName
+          )}
         </b>
 
         <br>
 
         Лист:
+
         <b>
-          ${escapeHtml(state.excelSheetName)}
+          ${escapeHtml(
+            state.excelSheetName
+          )}
         </b>
 
         <br><br>
 
         Строк в Excel:
-        <b>${sourceRows}</b>
+
+        <b>
+          ${sourceRows}
+        </b>
 
         <br>
 
         Готово к импорту:
-        <b>${state.excelRows.length}</b>
+
+        <b>
+          ${state.excelRows.length}
+        </b>
 
         <br>
 
         Ошибок:
-        <b>${errors}</b>
+
+        <b>
+          ${errors}
+        </b>
 
       </div>
 
 
       <p class="sp-muted">
+
         Будет добавлена каждая строка Excel.
         Дубликаты штрихкодов НЕ объединяются.
+
       </p>
 
 
@@ -4221,6 +5337,7 @@ function showExcelPreview(
 
           </thead>
 
+
           <tbody>
 
             ${
@@ -4230,37 +5347,52 @@ function showExcelPreview(
                   <tr>
 
                     <td>
-                      ${escapeHtml(row.barcode)}
+                      ${escapeHtml(
+                        row.barcode
+                      )}
                     </td>
 
                     <td>
-                      ${escapeHtml(row.article)}
+                      ${escapeHtml(
+                        row.article
+                      )}
                     </td>
 
                     <td>
-                      ${escapeHtml(row.zone_row)}
+                      ${escapeHtml(
+                        row.zone_row
+                      )}
                     </td>
 
                     <td>
-                      ${escapeHtml(row.pallet)}
+                      ${escapeHtml(
+                        row.pallet
+                      )}
                     </td>
 
                     <td>
-                      ${escapeHtml(row.status)}
+                      ${escapeHtml(
+                        row.status
+                      )}
                     </td>
 
                     <td>
-                      ${escapeHtml(formatDate(row.date))}
+                      ${escapeHtml(
+                        formatDate(row.date)
+                      )}
                     </td>
 
                     <td>
-                      ${escapeHtml(row.warehouse)}
+                      ${escapeHtml(
+                        row.warehouse
+                      )}
                     </td>
 
                   </tr>
 
                 `
               ).join('')
+
             }
 
           </tbody>
@@ -4279,12 +5411,18 @@ function showExcelPreview(
           Отмена
         </button>
 
+
         <button
           class="sp-btn"
           id="startExcelImport"
-          ${state.excelRows.length ? '' : 'disabled'}
+          ${
+            state.excelRows.length
+              ? ''
+              : 'disabled'
+          }
         >
-          Импортировать ${state.excelRows.length}
+          Импортировать
+          ${state.excelRows.length}
         </button>
 
       </div>
@@ -4294,7 +5432,9 @@ function showExcelPreview(
   `;
 
 
-  document.body.appendChild(modal);
+  document.body.appendChild(
+    modal
+  );
 
 
   $('#closeExcelModal')
@@ -4316,133 +5456,1053 @@ function showExcelPreview(
       'click',
       importExcelRows
     );
+
 }
 
 
 /* =========================================================
-   EXCEL IMPORT TO SUPABASE
+   EXCEL IMPORT PROGRESS HELPERS
+   ========================================================= */
+
+function formatImportNumber(
+  value
+) {
+
+  return Number(
+    value || 0
+  ).toLocaleString(
+    'ru-RU'
+  );
+
+}
+
+
+function formatImportTime(
+  seconds
+) {
+
+  if (
+    !Number.isFinite(seconds) ||
+    seconds <= 0
+  ) {
+
+    return '—';
+
+  }
+
+
+  seconds =
+    Math.ceil(seconds);
+
+
+  const hours =
+    Math.floor(
+      seconds / 3600
+    );
+
+
+  const minutes =
+    Math.floor(
+      (seconds % 3600) / 60
+    );
+
+
+  const secs =
+    seconds % 60;
+
+
+  if (hours > 0) {
+
+    return `${hours}ч ${minutes}м`;
+
+  }
+
+
+  if (minutes > 0) {
+
+    return `${minutes}м ${secs}с`;
+
+  }
+
+
+  return `${secs}с`;
+
+}
+
+
+function updateExcelImportProgress(
+  message = ''
+) {
+
+  const total =
+    state.excelImportTotal;
+
+
+  const processed =
+    state.excelImportProcessed;
+
+
+  const percent =
+    total > 0
+      ? Math.min(
+          100,
+          (
+            processed /
+            total
+          ) *
+          100
+        )
+      : 0;
+
+
+  const elapsed =
+    state.excelImportStartedAt
+      ? (
+          Date.now() -
+          state.excelImportStartedAt
+        ) / 1000
+      : 0;
+
+
+  const speed =
+    elapsed > 0
+      ? processed /
+        elapsed
+      : 0;
+
+
+  const remaining =
+    speed > 0
+      ? (
+          total -
+          processed
+        ) / speed
+      : 0;
+
+
+  const percentElement =
+    $('#excelImportPercent');
+
+
+  const fill =
+    $('#excelImportProgressFill');
+
+
+  const processedElement =
+    $('#excelImportProcessed');
+
+
+  const successElement =
+    $('#excelImportSuccess');
+
+
+  const failedElement =
+    $('#excelImportFailed');
+
+
+  const speedElement =
+    $('#excelImportSpeed');
+
+
+  const etaElement =
+    $('#excelImportEta');
+
+
+  const messageElement =
+    $('#excelImportMessage');
+
+
+  if (percentElement) {
+
+    percentElement.textContent =
+      `${percent.toFixed(1)}%`;
+
+  }
+
+
+  if (fill) {
+
+    fill.style.width =
+      `${percent}%`;
+
+  }
+
+
+  if (processedElement) {
+
+    processedElement.textContent =
+      `${formatImportNumber(
+        processed
+      )} / ${formatImportNumber(
+        total
+      )}`;
+
+  }
+
+
+  if (successElement) {
+
+    successElement.textContent =
+      formatImportNumber(
+        state.excelImportImported
+      );
+
+  }
+
+
+  if (failedElement) {
+
+    failedElement.textContent =
+      formatImportNumber(
+        state.excelImportFailed
+      );
+
+  }
+
+
+  if (speedElement) {
+
+    speedElement.textContent =
+      speed > 0
+        ? `${speed.toFixed(0)} стр/с`
+        : '—';
+
+  }
+
+
+  if (etaElement) {
+
+    etaElement.textContent =
+      remaining > 0
+        ? formatImportTime(
+            remaining
+          )
+        : '—';
+
+  }
+
+
+  if (
+    messageElement &&
+    message
+  ) {
+
+    messageElement.textContent =
+      message;
+
+  }
+
+}
+
+
+function showExcelImportProgress() {
+
+  $('#excelImportModal')
+    ?.remove();
+
+
+  const modal =
+    document.createElement(
+      'div'
+    );
+
+
+  modal.id =
+    'excelImportModal';
+
+
+  modal.className =
+    'sp-modal-backdrop';
+
+
+  modal.innerHTML = `
+
+    <div class="sp-modal">
+
+      <div class="sp-modal-head">
+
+        <h2 style="margin:0">
+          Импорт Excel
+        </h2>
+
+      </div>
+
+
+      <div class="sp-import-progress">
+
+        <div class="sp-import-progress-title">
+
+          Загружаем
+          ${escapeHtml(
+            state.excelFileName
+          )}
+
+        </div>
+
+
+        <div
+          class="sp-import-percent"
+          id="excelImportPercent"
+        >
+          0.0%
+        </div>
+
+
+        <div
+          class="sp-import-progress-bar"
+        >
+
+          <div
+            class="sp-import-progress-fill"
+            id="excelImportProgressFill"
+          ></div>
+
+        </div>
+
+
+        <div class="sp-import-stats">
+
+          <div class="sp-import-stat">
+
+            <div class="sp-import-stat-label">
+              Обработано
+            </div>
+
+            <div
+              class="sp-import-stat-value"
+              id="excelImportProcessed"
+            >
+              0 / 0
+            </div>
+
+          </div>
+
+
+          <div class="sp-import-stat">
+
+            <div class="sp-import-stat-label">
+              Успешно
+            </div>
+
+            <div
+              class="sp-import-stat-value"
+              id="excelImportSuccess"
+            >
+              0
+            </div>
+
+          </div>
+
+
+          <div class="sp-import-stat">
+
+            <div class="sp-import-stat-label">
+              Ошибок
+            </div>
+
+            <div
+              class="sp-import-stat-value"
+              id="excelImportFailed"
+            >
+              0
+            </div>
+
+          </div>
+
+
+          <div class="sp-import-stat">
+
+            <div class="sp-import-stat-label">
+              Скорость
+            </div>
+
+            <div
+              class="sp-import-stat-value"
+              id="excelImportSpeed"
+            >
+              —
+            </div>
+
+          </div>
+
+
+          <div class="sp-import-stat">
+
+            <div class="sp-import-stat-label">
+              Осталось
+            </div>
+
+            <div
+              class="sp-import-stat-value"
+              id="excelImportEta"
+            >
+              —
+            </div>
+
+          </div>
+
+
+          <div class="sp-import-stat">
+
+            <div class="sp-import-stat-label">
+              Параллельных потоков
+            </div>
+
+            <div
+              class="sp-import-stat-value"
+            >
+              ${EXCEL_PARALLEL_CHUNKS}
+            </div>
+
+          </div>
+
+        </div>
+
+
+        <div
+          class="sp-import-message"
+          id="excelImportMessage"
+        >
+          Подготавливаем импорт...
+        </div>
+
+
+        <div class="sp-form-actions">
+
+          <button
+            class="sp-btn danger"
+            id="cancelRunningExcelImport"
+          >
+            Остановить импорт
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+
+
+  document.body.appendChild(
+    modal
+  );
+
+
+  $('#cancelRunningExcelImport')
+    .addEventListener(
+      'click',
+      () => {
+
+        state.excelImportCancelled =
+          true;
+
+
+        const button =
+          $('#cancelRunningExcelImport');
+
+
+        if (button) {
+
+          button.disabled =
+            true;
+
+          button.textContent =
+            'Останавливаем...';
+
+        }
+
+
+        updateExcelImportProgress(
+          'Останавливаем импорт. Завершаем текущие запросы...'
+        );
+
+      }
+    );
+
+
+  updateExcelImportProgress();
+
+}
+
+
+/* =========================================================
+   INSERT ONE EXCEL CHUNK
+   ========================================================= */
+
+async function insertExcelChunk(
+  chunk
+) {
+
+  if (
+    !chunk.length
+  ) {
+
+    return {
+
+      imported: 0,
+
+      failed: 0
+
+    };
+
+  }
+
+
+  /*
+    Если пользователь нажал остановить,
+    не начинаем новую пачку.
+  */
+
+  if (
+    state.excelImportCancelled
+  ) {
+
+    return {
+
+      imported: 0,
+
+      failed: 0,
+
+      cancelled: true
+
+    };
+
+  }
+
+
+  /*
+    Основная попытка:
+    одна большая INSERT-операция.
+  */
+
+  const {
+    error
+  } =
+    await supabaseClient
+      .from('boxes')
+      .insert(chunk);
+
+
+  if (!error) {
+
+    return {
+
+      imported:
+        chunk.length,
+
+      failed: 0
+
+    };
+
+  }
+
+
+  console.warn(
+    `Excel chunk failed (${chunk.length}).`,
+    error
+  );
+
+
+  /*
+    Если большая пачка не прошла,
+    не отправляем сразу 1000 строк
+    по одной.
+
+    Сначала делим пополам.
+  */
+
+  if (
+    chunk.length >
+    EXCEL_MIN_FALLBACK_CHUNK
+  ) {
+
+    const middle =
+      Math.floor(
+        chunk.length / 2
+      );
+
+
+    const first =
+      chunk.slice(
+        0,
+        middle
+      );
+
+
+    const second =
+      chunk.slice(
+        middle
+      );
+
+
+    const firstResult =
+      await insertExcelChunk(
+        first
+      );
+
+
+    if (
+      state.excelImportCancelled
+    ) {
+
+      return {
+
+        imported:
+          firstResult.imported,
+
+        failed:
+          firstResult.failed,
+
+        cancelled:
+          true
+
+      };
+
+    }
+
+
+    const secondResult =
+      await insertExcelChunk(
+        second
+      );
+
+
+    return {
+
+      imported:
+        firstResult.imported +
+        secondResult.imported,
+
+      failed:
+        firstResult.failed +
+        secondResult.failed,
+
+      cancelled:
+        secondResult.cancelled
+
+    };
+
+  }
+
+
+  /*
+    Совсем маленькая проблемная пачка.
+
+    Теперь действительно проверяем
+    строки по одной.
+
+    Это крайний fallback,
+    а не обычный режим.
+  */
+
+  let imported =
+    0;
+
+
+  let failed =
+    0;
+
+
+  for (
+    const row of chunk
+  ) {
+
+    if (
+      state.excelImportCancelled
+    ) {
+
+      break;
+
+    }
+
+
+    const {
+      error: rowError
+    } =
+      await supabaseClient
+        .from('boxes')
+        .insert(row);
+
+
+    if (rowError) {
+
+      console.error(
+        'Excel row import error:',
+        rowError,
+        row
+      );
+
+
+      failed++;
+
+    } else {
+
+      imported++;
+
+    }
+
+
+    /*
+      Обновляем общий прогресс
+      и во время построчного fallback.
+    */
+
+    state.excelImportProcessed++;
+
+
+    if (!rowError) {
+
+      state.excelImportImported++;
+
+    } else {
+
+      state.excelImportFailed++;
+
+    }
+
+
+    updateExcelImportProgress(
+      'Обрабатывается небольшая проблемная пачка...'
+    );
+
+  }
+
+
+  /*
+    ВАЖНО:
+
+    Здесь строки уже были учтены
+    в processed.
+
+    Поэтому возвращаем только
+    imported/failed для статистики,
+    но вызывающий код не должен
+    увеличивать processed повторно.
+  */
+
+  return {
+
+    imported,
+
+    failed,
+
+    processedInternally:
+      imported + failed,
+
+    cancelled:
+      state.excelImportCancelled
+
+  };
+
+}
+
+
+/* =========================================================
+   EXCEL IMPORT
    ========================================================= */
 
 async function importExcelRows() {
+
+  if (
+    state.excelImporting
+  ) {
+
+    return;
+
+  }
+
 
   const rows =
     [...state.excelRows];
 
 
   if (!rows.length) {
+
     return;
+
   }
 
 
-  const button =
-    $('#startExcelImport');
+  state.excelImporting =
+    true;
 
 
-  button.disabled = true;
+  state.excelImportCancelled =
+    false;
 
 
-  let imported = 0;
+  state.excelImportStartedAt =
+    Date.now();
 
-  let failed = 0;
+
+  state.excelImportImported =
+    0;
+
+
+  state.excelImportFailed =
+    0;
+
+
+  state.excelImportProcessed =
+    0;
+
+
+  state.excelImportTotal =
+    rows.length;
+
+
+  showExcelImportProgress();
+
+
+  /*
+    Разбиваем весь Excel
+    на большие пачки.
+  */
+
+  const chunks = [];
+
+
+  for (
+    let i = 0;
+    i < rows.length;
+    i += EXCEL_CHUNK_SIZE
+  ) {
+
+    chunks.push(
+      rows.slice(
+        i,
+        i +
+          EXCEL_CHUNK_SIZE
+      )
+    );
+
+  }
 
 
   try {
 
+    /*
+      Обрабатываем максимум
+      EXCEL_PARALLEL_CHUNKS
+      пачек одновременно.
+    */
+
     for (
-      let i = 0;
-      i < rows.length;
-      i += EXCEL_CHUNK_SIZE
+      let index = 0;
+      index < chunks.length;
+      index += EXCEL_PARALLEL_CHUNKS
     ) {
 
-      const chunk =
-        rows.slice(
-          i,
-          i + EXCEL_CHUNK_SIZE
+      if (
+        state.excelImportCancelled
+      ) {
+
+        break;
+
+      }
+
+
+      const batch =
+        chunks.slice(
+          index,
+          index +
+            EXCEL_PARALLEL_CHUNKS
         );
 
 
-      button.textContent =
-        `Импорт ${Math.min(
-          i + chunk.length,
-          rows.length
-        )} / ${rows.length}`;
+      updateExcelImportProgress(
+        `Загружаем пачки ${index + 1}–${Math.min(
+          index +
+            batch.length,
+          chunks.length
+        )} из ${chunks.length}...`
+      );
 
 
-      const {
-        error
-      } =
-        await supabaseClient
-          .from('boxes')
-          .insert(chunk);
+      /*
+        Запускаем пачки параллельно.
+      */
 
-
-      if (error) {
-
-        console.error(
-          'Excel chunk error:',
-          error
+      const results =
+        await Promise.all(
+          batch.map(
+            chunk =>
+              insertExcelChunk(
+                chunk
+              )
+          )
         );
+
+
+      /*
+        Учитываем результаты.
+
+        processedInternally используется
+        только для маленького fallback,
+        где строки уже были учтены
+        внутри insertExcelChunk().
+      */
+
+      for (
+        const result of results
+      ) {
+
+        state.excelImportImported +=
+          result.imported || 0;
+
+
+        state.excelImportFailed +=
+          result.failed || 0;
+
+
+        const internallyProcessed =
+          result.processedInternally ||
+          0;
+
+
+        const regularProcessed =
+          (
+            result.imported || 0
+          ) +
+          (
+            result.failed || 0
+          ) -
+          internallyProcessed;
+
 
         /*
-          Если пачка не прошла целиком,
-          пробуем построчно, чтобы
-          один плохой ряд не убил весь импорт.
+          Если данные были импортированы
+          обычной пачкой, увеличиваем
+          processed здесь.
+
+          Если использовался построчный
+          fallback, он уже увеличил
+          processed сам.
         */
 
-        for (
-          const row of chunk
-        ) {
+        state.excelImportProcessed +=
+          regularProcessed;
 
-          const {
-            error: rowError
-          } =
-            await supabaseClient
-              .from('boxes')
-              .insert(row);
+      }
 
 
-          if (rowError) {
-            failed++;
-          } else {
-            imported++;
-          }
+      updateExcelImportProgress(
+        state.excelImportCancelled
+          ? 'Импорт остановлен.'
+          : 'Пачка загружена.'
+      );
 
-        }
 
-      } else {
+      /*
+        Небольшая пауза между группами.
+        Даём браузеру и сети передохнуть.
+      */
 
-        imported +=
-          chunk.length;
+      if (
+        !state.excelImportCancelled &&
+        index +
+          EXCEL_PARALLEL_CHUNKS <
+          chunks.length
+      ) {
+
+        await new Promise(
+          resolve =>
+            setTimeout(
+              resolve,
+              50
+            )
+        );
+
       }
 
     }
 
 
+    const cancelled =
+      state.excelImportCancelled;
+
+
+    /*
+      Сохраняем статистику до закрытия
+      progress modal.
+    */
+
+    const imported =
+      state.excelImportImported;
+
+
+    const failed =
+      state.excelImportFailed;
+
+
+    const processed =
+      state.excelImportProcessed;
+
+
+    /*
+      Закрываем progress.
+    */
+
     $('#excelImportModal')
       ?.remove();
 
 
-    state.excelRows = [];
+    state.excelRows =
+      [];
+
+
+    state.excelImporting =
+      false;
 
 
     /*
-      Здесь один reload оправдан:
-      импорт может добавить десятки тысяч строк.
+      Один reload после всего импорта.
+
+      Это важно: не делаем reload
+      после каждой пачки.
     */
 
     await loadBoxesFromSupabase();
 
+
     state.currentPage =
       'base';
+
 
     state.basePage =
       1;
 
+
     render();
 
 
-    toast(
-      `Импортировано: ${imported}. Ошибок: ${failed}.`
+    if (cancelled) {
+
+      toast(
+        `Импорт остановлен. Добавлено: ${imported}. Ошибок: ${failed}.`
+      );
+
+    } else {
+
+      toast(
+        `Импорт завершён. Добавлено: ${imported}. Ошибок: ${failed}.`
+      );
+
+    }
+
+
+    console.log(
+      'Excel import finished:',
+      {
+        total:
+          rows.length,
+        processed,
+        imported,
+        failed,
+        cancelled
+      }
     );
 
 
@@ -4453,17 +6513,34 @@ async function importExcelRows() {
       error
     );
 
-    button.disabled = false;
 
-    button.textContent =
-      'Повторить импорт';
+    state.excelImporting =
+      false;
+
+
+    const button =
+      $('#cancelRunningExcelImport');
+
+
+    if (button) {
+
+      button.disabled =
+        false;
+
+      button.textContent =
+        'Повторить';
+
+    }
+
 
     toast(
       error.message ||
       'Ошибка импорта',
       'error'
     );
+
   }
+
 }
 
 
@@ -4474,38 +6551,79 @@ async function importExcelRows() {
 const PAGE_META = {
 
   dashboard: {
-    title: 'Главная',
-    heading: 'Главный экран склада'
+
+    title:
+      'Главная',
+
+    heading:
+      'Главный экран склада'
+
   },
+
 
   base: {
-    title: 'База',
-    heading: 'База коробок'
+
+    title:
+      'База',
+
+    heading:
+      'База коробок'
+
   },
+
 
   assembly: {
-    title: 'Сборка',
-    heading: 'Комплектация заказа'
+
+    title:
+      'Сборка',
+
+    heading:
+      'Комплектация заказа'
+
   },
+
 
   received: {
-    title: 'Принято',
-    heading: 'Принятые коробки'
+
+    title:
+      'Принято',
+
+    heading:
+      'Принятые коробки'
+
   },
+
 
   collected: {
-    title: 'Собрано',
-    heading: 'Скомплектованные коробки'
+
+    title:
+      'Собрано',
+
+    heading:
+      'Скомплектованные коробки'
+
   },
+
 
   shipped: {
-    title: 'Убыло',
-    heading: 'Отгруженные коробки'
+
+    title:
+      'Убыло',
+
+    heading:
+      'Отгруженные коробки'
+
   },
 
+
   tools: {
-    title: 'Инструменты',
-    heading: 'Инструменты SKLADAPLAN'
+
+    title:
+      'Инструменты',
+
+    heading:
+      'Инструменты SKLADAPLAN'
+
   }
 
 };
@@ -4518,7 +6636,10 @@ function goToPage(
   if (
     !PAGE_META[page]
   ) {
-    page = 'dashboard';
+
+    page =
+      'dashboard';
+
   }
 
 
@@ -4533,6 +6654,7 @@ function goToPage(
 
 
   render();
+
 }
 
 
@@ -4547,7 +6669,9 @@ function render() {
 
 
   if (!content) {
+
     return;
+
   }
 
 
@@ -4566,17 +6690,18 @@ function render() {
     meta.heading;
 
 
-  $all('.nav').forEach(
-    button => {
+  $all('.nav')
+    .forEach(
+      button => {
 
-      button.classList.toggle(
-        'active',
-        button.dataset.page ===
-        state.currentPage
-      );
+        button.classList.toggle(
+          'active',
+          button.dataset.page ===
+          state.currentPage
+        );
 
-    }
-  );
+      }
+    );
 
 
   $all('.mobile-nav-btn')
@@ -4598,52 +6723,71 @@ function render() {
   ) {
 
     case 'base':
+
       content.innerHTML =
         baseView();
+
       setupBase();
+
       break;
 
 
     case 'assembly':
+
       content.innerHTML =
         assemblyView();
+
       setupAssembly();
+
       break;
 
 
     case 'received':
+
       content.innerHTML =
         receivedView();
+
       break;
 
 
     case 'collected':
+
       content.innerHTML =
         collectedView();
+
       setupCollected();
+
       break;
 
 
     case 'shipped':
+
       content.innerHTML =
         shippedView();
+
       break;
 
 
     case 'tools':
+
       content.innerHTML =
         toolsView();
+
       setupTools();
+
       break;
 
 
     default:
+
       content.innerHTML =
         dashboardView();
+
   }
 
 
   updateAssemblyBadges();
+
 }
 
 
@@ -4670,6 +6814,7 @@ function updateAssemblyBadges() {
     badge.textContent =
       count || '';
 
+
     badge.style.cssText = `
       margin-left:auto;
       background:#111;
@@ -4678,6 +6823,7 @@ function updateAssemblyBadges() {
       padding:2px 7px;
       font-size:11px;
     `;
+
   }
 
 
@@ -4685,6 +6831,7 @@ function updateAssemblyBadges() {
 
     mobileBadge.textContent =
       count || '';
+
 
     mobileBadge.style.cssText = `
       margin-left:3px;
@@ -4694,7 +6841,9 @@ function updateAssemblyBadges() {
       padding:1px 5px;
       font-size:10px;
     `;
+
   }
+
 }
 
 
@@ -4706,22 +6855,23 @@ function setupNavigation() {
 
   $all(
     '[data-page]'
-  ).forEach(
-    button => {
+  )
+    .forEach(
+      button => {
 
-      button.addEventListener(
-        'click',
-        () => {
+        button.addEventListener(
+          'click',
+          () => {
 
-          goToPage(
-            button.dataset.page
-          );
+            goToPage(
+              button.dataset.page
+            );
 
-        }
-      );
+          }
+        );
 
-    }
-  );
+      }
+    );
 
 
   $('#mobileMenu')
@@ -4730,7 +6880,9 @@ function setupNavigation() {
       () => {
 
         document
-          .querySelector('.sidebar')
+          .querySelector(
+            '.sidebar'
+          )
           ?.classList.toggle(
             'open'
           );
@@ -4751,6 +6903,7 @@ function setupNavigation() {
       'click',
       backupDatabase
     );
+
 }
 
 
@@ -4769,18 +6922,21 @@ async function startAuthenticatedApp() {
 
   if (content) {
 
-    content.innerHTML =
-      `
-        <div class="sp-loading">
-          Загружаем базу SKLADAPLAN...
-        </div>
-      `;
+    content.innerHTML = `
+
+      <div class="sp-loading">
+        Загружаем базу SKLADAPLAN...
+      </div>
+
+    `;
+
   }
 
 
   try {
 
     await loadBoxesFromSupabase();
+
 
     render();
 
@@ -4803,12 +6959,14 @@ async function startAuthenticatedApp() {
             Ошибка подключения к Supabase
           </h2>
 
+
           <p>
             ${escapeHtml(
               error.message ||
               'Неизвестная ошибка'
             )}
           </p>
+
 
           <button
             class="sp-btn"
@@ -4820,8 +6978,11 @@ async function startAuthenticatedApp() {
         </div>
 
       `;
+
     }
+
   }
+
 }
 
 
@@ -4832,6 +6993,7 @@ async function startAuthenticatedApp() {
 async function startApp() {
 
   ensureAppStyles();
+
 
   setupNavigation();
 
@@ -4854,26 +7016,33 @@ async function startApp() {
       error
     );
 
+
     showLogin();
 
     return;
+
   }
 
 
   state.session =
     data.session;
 
+
   state.user =
-    data.session?.user || null;
+    data.session?.user ||
+    null;
 
 
-  if (!data.session) {
+  if (
+    !data.session
+  ) {
 
     showLogin();
 
   } else {
 
     await startAuthenticatedApp();
+
   }
 
 
@@ -4895,36 +7064,51 @@ async function startApp() {
 
 
         if (
-          event === 'SIGNED_OUT'
+          event ===
+          'SIGNED_OUT'
         ) {
 
-          state.session = null;
+          state.session =
+            null;
 
-          state.user = null;
 
-          state.boxes = [];
+          state.user =
+            null;
+
+
+          state.boxes =
+            [];
+
 
           showLogin();
 
+
           return;
+
         }
 
 
         if (
-          event === 'SIGNED_IN'
+          event ===
+          'SIGNED_IN'
         ) {
 
           state.session =
             session;
 
+
           state.user =
-            session?.user || null;
+            session?.user ||
+            null;
+
 
           await startAuthenticatedApp();
+
         }
 
       }
     );
+
 }
 
 
