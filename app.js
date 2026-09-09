@@ -111,6 +111,10 @@ const state = {
   receivingScanning: false,
   receivingLoading: false,
 
+  receivingDataLoading: false,
+  receivingDataLoaded: false,
+  receivingDataError: '',
+
   /*
     Состояние загрузки справочников приёмки.
 
@@ -2777,21 +2781,47 @@ async function loadBoxesFromSupabase() {
 async function loadReceivingData() {
 
   /*
-    Не запускаем несколько одинаковых
-    запросов одновременно.
+    Защита от повторной параллельной загрузки.
   */
-  if (state.receivingDataLoading) {
+
+  if (
+    state.receivingDataLoading
+  ) {
+
     return;
+
   }
 
-  state.receivingDataLoading = true;
-  state.receivingDataError = '';
+
+  state.receivingDataLoading =
+    true;
+
+  state.receivingDataError =
+    '';
+
 
   try {
 
     /*
-      Сначала загружаем склады.
+      =====================================================
+      СКЛАДЫ
+      =====================================================
+
+      ВАЖНО:
+
+      Здесь специально НЕ используем:
+
+        .eq('is_active', true)
+
+      Потому что нам сейчас нужно получить
+      реальные записи из таблицы warehouses
+      независимо от значения is_active.
+
+      Это также защищает интерфейс от ситуации,
+      когда старые/тестовые записи имеют NULL
+      или другое значение в is_active.
     */
+
     const {
       data: warehouses,
       error: warehousesError
@@ -2799,22 +2829,30 @@ async function loadReceivingData() {
       await supabaseClient
         .from('warehouses')
         .select('*')
-        .eq('is_active', true)
         .order('id', {
           ascending: true
         });
 
 
-    if (warehousesError) {
+    if (
+      warehousesError
+    ) {
+
       throw new Error(
-        `Не удалось загрузить склады: ${warehousesError.message}`
+        `Ошибка загрузки складов: ${warehousesError.message}`
       );
+
     }
 
 
     /*
-      Затем загружаем места.
+      =====================================================
+      МЕСТА
+      =====================================================
+
+      Аналогично не фильтруем is_active.
     */
+
     const {
       data: locations,
       error: locationsError
@@ -2822,7 +2860,6 @@ async function loadReceivingData() {
       await supabaseClient
         .from('locations')
         .select('*')
-        .eq('is_active', true)
         .order('warehouse_id', {
           ascending: true
         })
@@ -2831,19 +2868,23 @@ async function loadReceivingData() {
         });
 
 
-    if (locationsError) {
+    if (
+      locationsError
+    ) {
+
       throw new Error(
-        `Не удалось загрузить места: ${locationsError.message}`
+        `Ошибка загрузки мест: ${locationsError.message}`
       );
+
     }
 
 
     /*
-      Поддоны загружаем отдельно.
-
-      Ошибка поддонов НЕ должна ломать
-      всю форму приёмки.
+      =====================================================
+      ПОДДОНЫ
+      =====================================================
     */
+
     const {
       data: pallets,
       error: palletsError
@@ -2856,25 +2897,77 @@ async function loadReceivingData() {
         });
 
 
-    state.receivingWarehouses =
-      warehouses || [];
-
-    state.receivingLocations =
-      locations || [];
-
-    state.receivingPallets =
+    if (
       palletsError
-        ? []
-        : (pallets || []);
+    ) {
+
+      /*
+        Поддоны не должны блокировать
+        выбор склада и места.
+
+        Поэтому показываем пустой список,
+        а саму ошибку выводим в консоль.
+      */
+
+      console.warn(
+        'Не удалось загрузить поддоны:',
+        palletsError
+      );
+
+    }
 
 
     /*
-      Если склад ещё не выбран —
-      выбираем первый автоматически.
-
-      Пользователь при этом всё равно
-      сможет открыть список и выбрать другой.
+      =====================================================
+      СОХРАНЯЕМ ДАННЫЕ
+      =====================================================
     */
+
+    state.receivingWarehouses =
+      Array.isArray(warehouses)
+        ? warehouses
+        : [];
+
+
+    state.receivingLocations =
+      Array.isArray(locations)
+        ? locations
+        : [];
+
+
+    state.receivingPallets =
+      Array.isArray(pallets)
+        ? pallets
+        : [];
+
+
+    /*
+      =====================================================
+      ПРОВЕРКА
+      =====================================================
+    */
+
+    console.log(
+      'SKLADAPLAN Приёмка:',
+      {
+        warehouses:
+          state.receivingWarehouses,
+
+        locations:
+          state.receivingLocations,
+
+        pallets:
+          state.receivingPallets
+      }
+    );
+
+
+    /*
+      =====================================================
+      ВЫБИРАЕМ ПЕРВЫЙ СКЛАД
+      =====================================================
+    */
+
     if (
       !state.receivingWarehouseId &&
       state.receivingWarehouses.length
@@ -2887,20 +2980,26 @@ async function loadReceivingData() {
 
 
     /*
-      Проверяем, существует ли выбранный
-      склад после загрузки.
+      =====================================================
+      ПРОВЕРЯЕМ ТЕКУЩИЙ СКЛАД
+      =====================================================
     */
+
     const selectedWarehouse =
       state.receivingWarehouses.find(
-        row =>
-          String(row.id) ===
+        warehouse =>
+          String(
+            warehouse.id
+          ) ===
           String(
             state.receivingWarehouseId
           )
       );
 
 
-    if (!selectedWarehouse) {
+    if (
+      !selectedWarehouse
+    ) {
 
       state.receivingWarehouseId =
         state.receivingWarehouses.length
@@ -2911,13 +3010,17 @@ async function loadReceivingData() {
 
 
     /*
-      Если выбранное место больше не относится
-      к выбранному складу — сбрасываем его.
+      =====================================================
+      ПРОВЕРЯЕМ ТЕКУЩЕЕ МЕСТО
+      =====================================================
     */
+
     const selectedLocation =
       state.receivingLocations.find(
-        row =>
-          String(row.id) ===
+        location =>
+          String(
+            location.id
+          ) ===
           String(
             state.receivingLocationId
           )
@@ -2940,18 +3043,19 @@ async function loadReceivingData() {
     }
 
 
+    /*
+      =====================================================
+      ГОТОВО
+      =====================================================
+    */
+
     state.receivingDataLoaded =
       true;
 
 
-    if (palletsError) {
+    state.receivingDataError =
+      '';
 
-      console.warn(
-        'Поддоны не загрузились:',
-        palletsError
-      );
-
-    }
 
   } catch (error) {
 
@@ -2970,14 +3074,20 @@ async function loadReceivingData() {
     state.receivingPallets =
       [];
 
+
     state.receivingWarehouseId =
       null;
 
     state.receivingLocationId =
       null;
 
+    state.receivingPalletId =
+      null;
+
+
     state.receivingDataLoaded =
       false;
+
 
     state.receivingDataError =
       error.message ||
@@ -2988,6 +3098,7 @@ async function loadReceivingData() {
       state.receivingDataError,
       'error'
     );
+
 
   } finally {
 
