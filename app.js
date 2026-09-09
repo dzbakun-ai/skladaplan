@@ -5590,10 +5590,10 @@ function dashboardView() {
     );
 
 
-const picking =
-  countStatus(
-    STATUSES.PICK
-  );
+  const picking =
+    countStatus(
+      STATUSES.PICK
+    );
 
 
   const collected =
@@ -5648,84 +5648,127 @@ const picking =
 
 
   return `
-    <div class="sp-card" style="margin-bottom:20px;">
 
-      <div style="
-        display:flex;
-        justify-content:space-between;
-        align-items:flex-start;
-        gap:20px;
-        flex-wrap:wrap;
-        margin-bottom:16px;
-      ">
+    <!-- =====================================================
+         НОВАЯ ЗАЯВКА
+         ===================================================== -->
+
+    <div
+      class="sp-card"
+      style="
+        margin-bottom:20px;
+        overflow:hidden;
+      "
+    >
+
+      <!-- HEADER -->
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:flex-start;
+          gap:20px;
+          flex-wrap:wrap;
+          margin-bottom:16px;
+        "
+      >
 
         <div>
 
-          <h2 style="
-            margin:0 0 6px;
-            font-size:20px;
-          ">
+          <h2
+            style="
+              margin:0 0 6px;
+              font-size:20px;
+            "
+          >
             📦 Новая заявка
           </h2>
 
           <div class="sp-muted">
-            Вставьте штрихкоды из заявки.
-            Каждый повторяющийся штрихкод означает
-            отдельную физическую коробку.
+            Импортируйте Excel или вставьте заявку вручную.
+            Система сама определит количество физических коробок.
           </div>
 
         </div>
 
-        <div style="
-          padding:8px 12px;
-          background:#f5f5f5;
-          border-radius:10px;
-          font-size:12px;
-          color:#666;
-        ">
+
+        <div
+          style="
+            padding:8px 12px;
+            background:#f5f5f5;
+            border-radius:10px;
+            font-size:12px;
+            color:#666;
+            white-space:nowrap;
+          "
+        >
           1 штрихкод = 1 коробка
         </div>
 
       </div>
 
-<div style="
-  display:flex;
-  gap:10px;
-  flex-wrap:wrap;
-  margin-bottom:12px;
-">
 
-  <button
-    type="button"
-    class="ghost"
-    onclick="document.getElementById('requestExcelInput').click()"
-  >
-    📥 Импорт заявки Excel
-  </button>
+      <!-- ===================================================
+           IMPORT
+           =================================================== -->
 
-  <input
-    type="file"
-    id="requestExcelInput"
-    accept=".xlsx,.xls,.csv"
-    style="display:none"
-    onchange="importRequestExcel(event)"
-  >
+      <div
+        style="
+          display:flex;
+          gap:10px;
+          flex-wrap:wrap;
+          margin-bottom:12px;
+        "
+      >
 
-</div>
+        <button
+          type="button"
+          class="ghost"
+          onclick="
+            document
+              .getElementById('requestExcelInput')
+              .click()
+          "
+        >
+          📥 Импорт заявки Excel
+        </button>
+
+
+        <input
+          type="file"
+          id="requestExcelInput"
+          accept=".xlsx,.xls,.csv"
+          style="display:none"
+          onchange="importRequestExcel(event)"
+        >
+
+      </div>
+
+
+      <!-- ===================================================
+           TEXTAREA
+           =================================================== -->
 
       <textarea
         id="requestBarcodes"
-        placeholder="Вставьте сюда штрихкоды заявки...
+        placeholder="Вставьте заявку сюда...
 
-Например:
+Можно:
 4810122595003
 4810122595003
 4810122595003
-4810122659354
-4810122659354"
+
+или:
+
+4810122595003 - 3
+4810122659354 - 2
+
+Excel:
+Штрихкод | Количество"
         style="
           width:100%;
-          min-height:180px;
+          min-height:150px;
           box-sizing:border-box;
           resize:vertical;
           border:1px solid #ddd;
@@ -5739,18 +5782,182 @@ const picking =
       ></textarea>
 
 
-      <div style="
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        gap:12px;
-        flex-wrap:wrap;
-        margin-top:14px;
-      ">
+      <!-- ===================================================
+           REQUEST PREVIEW
+           =================================================== -->
 
-        <div class="sp-muted">
-          Можно вставить список из Excel,
-          Google Sheets или текстового файла.
+      <div
+        id="requestPreview"
+        style="
+          display:none;
+          margin-top:16px;
+          border:1px solid #e5e5e5;
+          border-radius:14px;
+          overflow:hidden;
+        "
+      >
+
+        <div
+          style="
+            padding:14px 16px;
+            background:#f8f8f8;
+            border-bottom:1px solid #e5e5e5;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:10px;
+            flex-wrap:wrap;
+          "
+        >
+
+          <div>
+
+            <div
+              style="
+                font-weight:600;
+                font-size:14px;
+              "
+            >
+              📋 Предпросмотр заявки
+            </div>
+
+            <div
+              id="requestPreviewSummary"
+              class="sp-muted"
+              style="
+                margin-top:4px;
+                font-size:12px;
+              "
+            >
+              0 позиций · 0 коробок
+            </div>
+
+          </div>
+
+
+          <button
+            type="button"
+            class="ghost"
+            onclick="clearRequestPreview()"
+            style="
+              font-size:12px;
+            "
+          >
+            Очистить
+          </button>
+
+        </div>
+
+
+        <div
+          style="
+            max-height:300px;
+            overflow:auto;
+          "
+        >
+
+          <table
+            class="sp-table"
+            style="
+              margin:0;
+              width:100%;
+            "
+          >
+
+            <thead>
+
+              <tr>
+
+                <th>
+                  Штрихкод
+                </th>
+
+                <th
+                  style="
+                    width:100px;
+                    text-align:center;
+                  "
+                >
+                  Кол-во
+                </th>
+
+                <th
+                  style="
+                    width:50px;
+                  "
+                >
+                </th>
+
+              </tr>
+
+            </thead>
+
+
+            <tbody
+              id="requestPreviewBody"
+            >
+            </tbody>
+
+
+            <tfoot>
+
+              <tr>
+
+                <td
+                  style="
+                    font-weight:600;
+                  "
+                >
+                  ИТОГО
+                </td>
+
+                <td
+                  id="requestPreviewTotal"
+                  style="
+                    text-align:center;
+                    font-weight:700;
+                  "
+                >
+                  0
+                </td>
+
+                <td>
+                </td>
+
+              </tr>
+
+            </tfoot>
+
+          </table>
+
+        </div>
+
+      </div>
+
+
+      <!-- ===================================================
+           ACTIONS
+           =================================================== -->
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          gap:12px;
+          flex-wrap:wrap;
+          margin-top:14px;
+        "
+      >
+
+        <div
+          class="sp-muted"
+          style="
+            font-size:12px;
+          "
+        >
+          Excel должен содержать колонки
+          <b>Штрихкод</b> и <b>Количество</b>.
         </div>
 
 
@@ -5759,7 +5966,7 @@ const picking =
           id="createPickingBtn"
           onclick="createPickingFromRequest()"
           style="
-            min-width:220px;
+            min-width:240px;
             min-height:46px;
             font-size:14px;
           "
@@ -5770,6 +5977,11 @@ const picking =
       </div>
 
     </div>
+
+
+    <!-- =====================================================
+         СТАТИСТИКА
+         ===================================================== -->
 
     <div class="sp-grid">
 
@@ -5892,6 +6104,10 @@ const picking =
     </div>
 
 
+    <!-- =====================================================
+         ПОСЛЕДНИЕ ОПЕРАЦИИ
+         ===================================================== -->
+
     <div class="sp-card">
 
       <h3>
@@ -5907,11 +6123,25 @@ const picking =
 
             <tr>
 
-              <th>Штрихкод</th>
-              <th>Артикул</th>
-              <th>Зона</th>
-              <th>Поддон</th>
-              <th>Статус</th>
+              <th>
+                Штрихкод
+              </th>
+
+              <th>
+                Артикул
+              </th>
+
+              <th>
+                Зона
+              </th>
+
+              <th>
+                Поддон
+              </th>
+
+              <th>
+                Статус
+              </th>
 
             </tr>
 
@@ -5983,6 +6213,442 @@ const picking =
 }
 
 
+/* =========================================================
+   REQUEST PREVIEW
+   ========================================================= */
+
+function updateRequestPreview() {
+
+  const input =
+    document.querySelector(
+      '#requestBarcodes'
+    );
+
+  const preview =
+    document.querySelector(
+      '#requestPreview'
+    );
+
+  const body =
+    document.querySelector(
+      '#requestPreviewBody'
+    );
+
+  const summary =
+    document.querySelector(
+      '#requestPreviewSummary'
+    );
+
+  const totalElement =
+    document.querySelector(
+      '#requestPreviewTotal'
+    );
+
+  const button =
+    document.querySelector(
+      '#createPickingBtn'
+    );
+
+
+  if (
+    !input ||
+    !preview ||
+    !body
+  ) {
+
+    return;
+  }
+
+
+  const raw =
+    input.value || '';
+
+
+  /*
+    Если поле пустое —
+    скрываем предпросмотр.
+  */
+
+  if (!raw.trim()) {
+
+    preview.style.display =
+      'none';
+
+    if (button) {
+
+      button.textContent =
+        '📦 Сформировать подбор';
+
+    }
+
+    return;
+  }
+
+
+  /*
+    Разбираем заявку.
+  */
+
+  const lines =
+    raw
+      .split(/\r?\n/)
+      .map(
+        line =>
+          line.trim()
+      )
+      .filter(Boolean);
+
+
+  const requested =
+    new Map();
+
+
+  for (
+    const line of lines
+  ) {
+
+    const barcodeMatch =
+      line.match(
+        /\d{13}/
+      );
+
+
+    if (!barcodeMatch) {
+
+      continue;
+    }
+
+
+    const barcode =
+      normalizeBarcode(
+        barcodeMatch[0]
+      );
+
+
+    if (!barcode) {
+
+      continue;
+    }
+
+
+    const rest =
+      line
+        .replace(
+          barcodeMatch[0],
+          ''
+        )
+        .trim();
+
+
+    let quantity =
+      1;
+
+
+    /*
+      Поддерживаем:
+
+      4810122595003 - 3
+      4810122595003 — 3
+      4810122595003 3
+      4810122595003:3
+      */
+
+    const quantityMatch =
+      rest.match(
+        /(?:[-—–:;,]|\s)\s*(\d+(?:[.,]\d+)?)\s*$/
+      );
+
+
+    if (
+      quantityMatch
+    ) {
+
+      quantity =
+        Number(
+          String(
+            quantityMatch[1]
+          ).replace(
+            ',',
+            '.'
+          )
+        );
+
+    }
+
+
+    if (
+      !Number.isFinite(
+        quantity
+      ) ||
+      quantity <= 0
+    ) {
+
+      continue;
+    }
+
+
+    quantity =
+      Math.floor(
+        quantity
+      );
+
+
+    if (
+      quantity <= 0
+    ) {
+
+      continue;
+    }
+
+
+    requested.set(
+      barcode,
+      (
+        requested.get(
+          barcode
+        ) || 0
+      ) + quantity
+    );
+
+  }
+
+
+  /*
+    Очищаем таблицу.
+  */
+
+  body.innerHTML =
+    '';
+
+
+  let totalQuantity =
+    0;
+
+
+  /*
+    Если удалось распознать
+    позиции — строим таблицу.
+  */
+
+  requested.forEach(
+    (
+      quantity,
+      barcode
+    ) => {
+
+      totalQuantity +=
+        quantity;
+
+
+      const tr =
+        document.createElement(
+          'tr'
+        );
+
+
+      tr.innerHTML = `
+
+        <td>
+          ${escapeHtml(
+            barcode
+          )}
+        </td>
+
+        <td
+          style="
+            text-align:center;
+            font-weight:600;
+          "
+        >
+          ${quantity}
+        </td>
+
+        <td
+          style="
+            text-align:center;
+          "
+        >
+
+          <button
+            type="button"
+            class="ghost"
+            onclick="
+              removeRequestBarcode(
+                '${barcode}'
+              )
+            "
+            style="
+              padding:4px 8px;
+              min-width:32px;
+            "
+            title="Удалить"
+          >
+            ×
+          </button>
+
+        </td>
+
+      `;
+
+
+      body.appendChild(
+        tr
+      );
+
+    }
+  );
+
+
+  if (
+    requested.size === 0
+  ) {
+
+    preview.style.display =
+      'none';
+
+    return;
+  }
+
+
+  /*
+    Показываем предпросмотр.
+  */
+
+  preview.style.display =
+    'block';
+
+
+  summary.textContent =
+    `${requested.size} позиций · ${totalQuantity} коробок`;
+
+
+  totalElement.textContent =
+    totalQuantity;
+
+
+  /*
+    Меняем текст кнопки.
+  */
+
+  if (button) {
+
+    button.textContent =
+      `📦 Сформировать подбор · ${totalQuantity}`;
+
+  }
+
+}
+
+
+/* =========================================================
+   REMOVE REQUEST POSITION
+   ========================================================= */
+
+function removeRequestBarcode(
+  barcodeToRemove
+) {
+
+  const input =
+    document.querySelector(
+      '#requestBarcodes'
+    );
+
+
+  if (!input) {
+    return;
+  }
+
+
+  const lines =
+    input.value
+      .split(/\r?\n/)
+      .filter(Boolean);
+
+
+  const result =
+    [];
+
+
+  for (
+    const line of lines
+  ) {
+
+    const match =
+      line.match(
+        /\d{13}/
+      );
+
+
+    if (!match) {
+
+      result.push(
+        line
+      );
+
+      continue;
+    }
+
+
+    const barcode =
+      normalizeBarcode(
+        match[0]
+      );
+
+
+    if (
+      barcode ===
+      barcodeToRemove
+    ) {
+
+      continue;
+    }
+
+
+    result.push(
+      line
+    );
+
+  }
+
+
+  input.value =
+    result.join('\n');
+
+
+  updateRequestPreview();
+
+}
+
+
+/* =========================================================
+   CLEAR REQUEST
+   ========================================================= */
+
+function clearRequestPreview() {
+
+  const input =
+    document.querySelector(
+      '#requestBarcodes'
+    );
+
+
+  if (input) {
+
+    input.value =
+      '';
+
+  }
+
+
+  updateRequestPreview();
+
+}
+
+
+/* =========================================================
+   STATUS COUNTER
+   ========================================================= */
+
 function countStatus(
   status
 ) {
@@ -5994,7 +6660,6 @@ function countStatus(
   ).length;
 
 }
-
 
 /* =========================================================
    TOOLS
