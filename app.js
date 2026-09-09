@@ -4788,13 +4788,10 @@ function convertExcelRow(
   columnMap
 ) {
 
-  function valueFor(
-    field
-  ) {
+  function valueFor(field) {
 
     const column =
       columnMap[field];
-
 
     return column
       ? row[column]
@@ -4802,81 +4799,56 @@ function convertExcelRow(
 
   }
 
-
   const barcode =
     normalizeBarcode(
       valueFor('barcode')
     );
 
-
   if (!barcode) {
-
     return null;
-
   }
-
-
-  const status =
-    normalizeText(
-      valueFor('status')
-    ) ||
-    STATUSES.STOCK;
-
 
   return {
 
-    barcode,
+    "Штрихкод":
+      barcode,
 
-    article:
+    "Артикул":
       normalizeText(
         valueFor('article')
       ) || null,
 
-    quantity_in_box:
+    "Кол-во в коробке":
       normalizeText(
-        valueFor(
-          'quantity_in_box'
-        )
+        valueFor('quantity_in_box')
       ) || null,
 
-    zone_row:
+    "Зона/ряд":
       normalizeText(
         valueFor('zone_row')
       ) || null,
 
-    pallet:
+    "Поддон":
       normalizeText(
         valueFor('pallet')
       ) || null,
 
-    status,
+    "Статус":
+      normalizeText(
+        valueFor('status')
+      ) || STATUSES.STOCK,
 
-    date:
+    "ДатаРазмещения":
       toISODate(
         valueFor('date')
       ),
 
-    warehouse:
+    "Склад":
       normalizeText(
         valueFor('warehouse')
       ) || null,
 
-    column_9:
-      normalizeText(
-        valueFor('column_9')
-      ) || null,
-
-    direction:
-      normalizeText(
-        valueFor('direction')
-      ) || null,
-
-    pick:
-      excelBoolean(
-        valueFor('pick')
-      ),
-
-    worker:
+    "Изменил":
       normalizeText(
         valueFor('worker')
       ) || null
@@ -4884,7 +4856,6 @@ function convertExcelRow(
   };
 
 }
-
 
 function openExcelImport() {
 
