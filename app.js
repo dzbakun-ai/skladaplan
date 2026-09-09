@@ -5835,67 +5835,6 @@ function updateAssemblySelectedCount() {
 
 }
 
-/*
-  Счётчик ручного выбора.
-
-  Показываем одновременно:
-  - количество выбранных групп;
-  - количество физических коробок.
-*/
-
-function updateAssemblySelectedCount() {
-
-  const element =
-    $('#assemblySelectedCount');
-
-
-  if (!element) {
-    return;
-  }
-
-
-  const selectedGroups =
-    state.assemblySelectedGroups
-      ? state.assemblySelectedGroups
-      : new Set();
-
-
-  const groups =
-    getGroupedPickingBoxes();
-
-
-  const selected =
-    groups.filter(
-      group =>
-        selectedGroups.has(
-          group.key
-        )
-    );
-
-
-  const groupCount =
-    selected.length;
-
-
-  const boxCount =
-    selected.reduce(
-      (
-        total,
-        group
-      ) =>
-        total +
-        (
-          Number(group.count) || 0
-        ),
-      0
-    );
-
-
-  element.textContent =
-    `Выбрано: ${groupCount} групп · ${boxCount} коробок`;
-
-}
-
 
 /*
   Счётчик ручного выбора.
