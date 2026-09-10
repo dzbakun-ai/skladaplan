@@ -7044,7 +7044,7 @@ function setupBase() {
             const id =
               button.dataset.id;
 
-            openEditBoxModal(id);
+            openBoxModal(id);
 
           }
         );
