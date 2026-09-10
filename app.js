@@ -7403,12 +7403,17 @@ function importRequestExcel(event) {
 
 }
 
+/* =========================================================
+   CREATE PICKING FROM REQUEST
+   ========================================================= */
+
 async function createPickingFromRequest() {
 
   const input =
     document.querySelector(
       '#requestBarcodes'
     );
+
 
   if (!input) {
 
@@ -7422,7 +7427,9 @@ async function createPickingFromRequest() {
 
 
   const raw =
-    input.value || '';
+    String(
+      input.value || ''
+    );
 
 
   if (!raw.trim()) {
@@ -7435,445 +7442,316 @@ async function createPickingFromRequest() {
     return;
   }
 
-/* =========================================================
-   РАЗБОР ЗАЯВКИ → ФОРМИРОВАНИЕ ПОДБОРА
-   ========================================================= */
 
-const lines =
-  String(raw || '')
-    .split(/\r?\n/)
-    .map(
-      line =>
-        line.trim()
-    )
-    .filter(Boolean);
+  /* =========================================================
+     РАЗБИРАЕМ ЗАЯВКУ
+     ========================================================= */
+
+  const requested =
+    new Map();
 
 
-const requested =
-  new Map();
-
-
-let invalidLines =
-  0;
-
-
-/*
-  =========================================================
-  РАЗБИРАЕМ КАЖДУЮ СТРОКУ
-  =========================================================
-
-  Поддерживаем:
-
-  4810122638540
-  4810122638540 12
-  4810122638540    12
-  4810122638540 - 12
-  4810122638540 — 12
-  4810122638540 : 12
-  4810122638540 ; 12
-*/
-
-
-for (
-  const originalLine of lines
-) {
-
-  /*
-    Сначала пробуем обычный вариант:
-
-    4810122638540 12
-  */
-
-  let line =
-    originalLine
-      .replace(
-        /\s+/g,
-        ' '
+  const lines =
+    raw
+      .split(/\r?\n/)
+      .map(
+        line =>
+          line.trim()
       )
-      .trim();
+      .filter(Boolean);
 
 
-  /*
-    Ищем 13-значный штрихкод.
-  */
-
-  let barcodeMatch =
-    line.match(
-      /\b\d{13}\b/
-    );
-
-
-  let barcode = '';
-  let rest = '';
-
-
-  /*
-    ---------------------------------------------------------
-    Вариант 1
-    Штрихкод уже записан слитно
-    ---------------------------------------------------------
-  */
-
-  if (
-    barcodeMatch
+  for (
+    const originalLine of lines
   ) {
 
-    barcode =
-      normalizeBarcode(
-        barcodeMatch[0]
+    /*
+      Сначала ищем обычный
+      13-значный штрихкод.
+
+      Пример:
+
+      4810122638540 12
+    */
+
+    let barcodeMatch =
+      originalLine.match(
+        /\d{13}/
       );
 
 
-    const barcodeEnd =
-      (
-        barcodeMatch.index || 0
-      ) +
-      barcodeMatch[0].length;
+    let barcode =
+      '';
 
 
-    rest =
-      line
-        .slice(
-          barcodeEnd
-        )
-        .trim();
-
-  }
+    let rest =
+      '';
 
 
-  /*
-    ---------------------------------------------------------
-    Вариант 2
-    Штрихкод записан с пробелами:
+    /*
+      -------------------------------------------------------
+      ВАРИАНТ 1
+      Штрихкод уже слитный
+      -------------------------------------------------------
+    */
 
-    48 101 226 38 540 12
-    ---------------------------------------------------------
-  */
+    if (barcodeMatch) {
 
-  if (
-    !barcode
-  ) {
-
-    const parts =
-      line.match(
-        /\d+/g
-      );
+      barcode =
+        normalizeBarcode(
+          barcodeMatch[0]
+        );
 
 
-    if (
-      parts &&
-      parts.length >= 5
-    ) {
+      const end =
+        (
+          barcodeMatch.index ||
+          0
+        ) +
+        barcodeMatch[0].length;
 
-      /*
-        Первые 5 числовых групп
-        объединяем в штрихкод.
-      */
 
-      const possibleBarcode =
-        parts
+      rest =
+        originalLine
           .slice(
-            0,
-            5
+            end
           )
-          .join('');
+          .trim();
+
+    }
+
+
+    /*
+      -------------------------------------------------------
+      ВАРИАНТ 2
+      Возможен штрихкод с пробелами.
+
+      Например:
+
+      48 101 226 38 540 12
+    */
+
+    if (!barcode) {
+
+      const parts =
+        originalLine.match(
+          /\d+/g
+        );
 
 
       if (
-        /^\d{13}$/.test(
-          possibleBarcode
-        )
+        parts &&
+        parts.length >= 5
       ) {
 
-        barcode =
-          normalizeBarcode(
-            possibleBarcode
-          );
-
-
-        /*
-          Всё после первых 5 групп
-          считаем количеством.
-        */
-
-        rest =
+        const possibleBarcode =
           parts
             .slice(
+              0,
               5
             )
-            .join(' ');
+            .join('');
+
+
+        if (
+          /^\d{13}$/.test(
+            possibleBarcode
+          )
+        ) {
+
+          barcode =
+            normalizeBarcode(
+              possibleBarcode
+            );
+
+
+          rest =
+            parts
+              .slice(
+                5
+              )
+              .join(' ');
+
+        }
 
       }
 
     }
 
-  }
+
+    /*
+      Если штрихкод не распознан.
+    */
+
+    if (!barcode) {
+
+      console.warn(
+        'Не удалось распознать строку заявки:',
+        originalLine
+      );
+
+      continue;
+
+    }
 
 
-  /*
-    Если штрихкод не найден.
-  */
+    /*
+      =======================================================
+      КОЛИЧЕСТВО
+      =======================================================
+    */
 
-  if (
-    !barcode
-  ) {
-
-    invalidLines++;
-
-    console.warn(
-      'Не удалось распознать строку заявки:',
-      originalLine
-    );
-
-    continue;
-
-  }
+    let quantity =
+      1;
 
 
-  /*
-    =========================================================
-    КОЛИЧЕСТВО
-    =========================================================
-  */
+    /*
+      Если после штрихкода
+      есть число — используем его.
 
-  /*
-    По умолчанию:
-    1 физическая коробка.
-  */
+      ВАЖНО:
 
-  let quantity =
-    1;
+      ^ позволяет корректно распознать:
+
+      rest = "12"
+    */
+
+    if (rest) {
+
+      const quantityMatch =
+        rest.match(
+          /^(?:[-—–:;,]\s*)?(\d+(?:[.,]\d+)?)\s*$/
+        );
 
 
-  /*
-    Если после штрихкода
-    есть количество,
-    читаем его.
+      if (
+        quantityMatch
+      ) {
 
-    Например:
+        quantity =
+          Number(
+            String(
+              quantityMatch[1]
+            )
+              .replace(
+                ',',
+                '.'
+              )
+          );
 
-    rest = "12"
-  */
+      }
 
-  if (
-    rest
-  ) {
+    }
 
-    const quantityMatch =
-      rest.match(
-        /(?:^|[-—–:;,]|\s+)\s*(\d+(?:[.,]\d+)?)\s*$/
+
+    /*
+      Проверяем количество.
+    */
+
+    if (
+      !Number.isFinite(
+        quantity
+      ) ||
+      quantity <= 0
+    ) {
+
+      quantity =
+        1;
+
+    }
+
+
+    quantity =
+      Math.floor(
+        quantity
       );
 
 
     if (
-      quantityMatch
+      quantity <= 0
     ) {
 
       quantity =
-        Number(
-          String(
-            quantityMatch[1]
-          )
-            .replace(
-              ',',
-              '.'
-            )
-        );
+        1;
 
     }
 
-  }
 
+    /*
+      Повторные строки складываем.
 
-  /*
-    Проверяем количество.
-  */
+      4810122638540 5
+      4810122638540 7
 
-  if (
-    !Number.isFinite(
-      quantity
-    ) ||
-    quantity <= 0
-  ) {
+      = 12
+    */
 
-    invalidLines++;
-
-    continue;
-
-  }
-
-
-  /*
-    Только целое количество
-    физических коробок.
-  */
-
-  quantity =
-    Math.floor(
+    requested.set(
+      barcode,
+      (
+        requested.get(
+          barcode
+        ) || 0
+      ) +
       quantity
     );
 
-
-  if (
-    quantity <= 0
-  ) {
-
-    invalidLines++;
-
-    continue;
-
   }
 
 
   /*
     =========================================================
-    СУММИРУЕМ ПОВТОРНЫЕ ШТРИХКОДЫ
+    ПРОВЕРКА ЗАЯВКИ
     =========================================================
-
-    4810122638540 5
-    4810122638540 7
-
-    = 12
   */
 
-  requested.set(
-    barcode,
-    (
-      requested.get(
-        barcode
-      ) || 0
-    ) +
-    quantity
-  );
+  if (
+    !requested.size
+  ) {
+
+    toast(
+      'Не удалось распознать ни одного штрихкода',
+      'error'
+    );
+
+    return;
+
+  }
 
 
   console.log(
-    'REQUEST PARSED:',
-    {
-      originalLine,
-      barcode,
-      rest,
-      quantity
-    }
+    'REQUESTED:',
+    [
+      ...requested.entries()
+    ]
   );
 
-}
-
-
-/*
-  =========================================================
-  ЕСЛИ НИЧЕГО НЕ НАШЛИ
-  =========================================================
-*/
-
-if (
-  !requested.size
-) {
-
-  toast(
-    'Не найдено ни одного штрихкода',
-    'error'
-  );
-
-  return;
-
-}
-
-
-/*
-  =========================================================
-  ИЩЕМ ФИЗИЧЕСКИЕ КОРОБКИ
-  =========================================================
-
-  В работу берём только:
-
-  "На складе"
-
-  Не берём:
-
-  "Зарезервирована"
-  "КПодбору"
-  "Скомплектовано"
-  "Отгружено"
-  "Пустая"
-*/
-
-
-const available =
-  state.boxes.filter(
-    row => {
-
-      const barcode =
-        normalizeBarcode(
-          row.barcode
-        );
-
-
-      return (
-        row.status ===
-          STATUSES.STOCK &&
-        barcode
-      );
-
-    }
-  );
-
-
-/*
-  =========================================================
-  КОНКРЕТНЫЕ ID ФИЗИЧЕСКИХ КОРОБОК
-  =========================================================
-*/
-
-const selectedIds =
-  [];
-
-
-/*
-  Защита от повторного
-  использования одной физической коробки.
-*/
-
-const usedIds =
-  new Set();
-
-
-/*
-  Недостаток.
-*/
-
-const missing =
-  [];
-
-
-/*
-  =========================================================
-  ПОДБОР
-  =========================================================
-*/
-
-for (
-  const [
-    barcode,
-    requiredCount
-  ] of requested
-) {
 
   /*
-    Находим все физические
-    коробки с этим штрихкодом.
+    =========================================================
+    ДОСТУПНЫЕ ФИЗИЧЕСКИЕ КОРОБКИ
+    =========================================================
+
+    Берём ТОЛЬКО:
+
+    На складе
+
+    Не берём:
+
+    Зарезервирована
+    КПодбору
+    Скомплектовано
+    Отгружено
+    Пустая
   */
 
-  const candidates =
-    available.filter(
+  const available =
+    state.boxes.filter(
       row => {
 
         if (
-          usedIds.has(
-            String(
-              row.id
-            )
-          )
+          row.status !==
+          STATUSES.STOCK
         ) {
 
           return false;
@@ -7881,10 +7759,10 @@ for (
         }
 
 
-        return (
+        return Boolean(
           normalizeBarcode(
             row.barcode
-          ) === barcode
+          )
         );
 
       }
@@ -7892,111 +7770,392 @@ for (
 
 
   /*
-    Сколько реально можем взять.
+    =========================================================
+    ФИЗИЧЕСКИЕ ID
+    =========================================================
   */
 
-  const foundCount =
-    Math.min(
-      requiredCount,
-      candidates.length
+  const selectedIds =
+    [];
+
+
+  const usedIds =
+    new Set();
+
+
+  const missing =
+    [];
+
+
+  /*
+    =========================================================
+    ПОДБОР
+    =========================================================
+  */
+
+  for (
+    const [
+      barcode,
+      requiredCount
+    ] of requested
+  ) {
+
+    const candidates =
+      available.filter(
+        row => {
+
+          const id =
+            String(
+              row.id
+            );
+
+
+          if (
+            usedIds.has(
+              id
+            )
+          ) {
+
+            return false;
+
+          }
+
+
+          return (
+            normalizeBarcode(
+              row.barcode
+            ) === barcode
+          );
+
+        }
+      );
+
+
+    const foundCount =
+      Math.min(
+        requiredCount,
+        candidates.length
+      );
+
+
+    console.log(
+      'PICK CHECK:',
+      {
+        barcode,
+        requiredCount,
+        candidatesCount:
+          candidates.length,
+        candidateIds:
+          candidates.map(
+            row =>
+              row.id
+          )
+      }
     );
 
 
-  console.log(
-    'PICK CHECK:',
-    {
-      barcode,
-      requiredCount,
-      candidatesCount:
-        candidates.length,
-      candidateIds:
-        candidates.map(
-          box =>
-            box.id
+    /*
+      Берём нужное количество
+      физических коробок.
+    */
+
+    for (
+      let i = 0;
+      i < foundCount;
+      i++
+    ) {
+
+      const box =
+        candidates[i];
+
+
+      const id =
+        String(
+          box.id
+        );
+
+
+      if (
+        usedIds.has(
+          id
         )
+      ) {
+
+        continue;
+
+      }
+
+
+      selectedIds.push(
+        box.id
+      );
+
+
+      usedIds.add(
+        id
+      );
+
+    }
+
+
+    /*
+      Фиксируем недостаток.
+    */
+
+    if (
+      foundCount <
+      requiredCount
+    ) {
+
+      missing.push({
+
+        barcode,
+
+        required:
+          requiredCount,
+
+        found:
+          foundCount,
+
+        missing:
+          requiredCount -
+          foundCount
+
+      });
+
+    }
+
+  }
+
+
+  /*
+    =========================================================
+    ЕСЛИ НИЧЕГО НЕ НАЙДЕНО
+    =========================================================
+  */
+
+  if (
+    !selectedIds.length
+  ) {
+
+    let message =
+      'Не удалось найти подходящие физические коробки.';
+
+
+    if (
+      missing.length
+    ) {
+
+      message +=
+        '\n\n';
+
+
+      missing.forEach(
+        item => {
+
+          message +=
+            `${item.barcode} — нужно ${item.required}, найдено ${item.found}\n`;
+
+        }
+      );
+
+    }
+
+
+    alert(
+      message
+    );
+
+
+    return;
+
+  }
+
+
+  /*
+    =========================================================
+    ПЕРЕВОДИМ КОРОБКИ В К ПОДБОРУ
+    =========================================================
+  */
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+      .from('boxes')
+      .update({
+
+        "Статус":
+          STATUSES.PICK,
+
+        "Изменил":
+          state.user?.email ||
+          null
+
+      })
+      .in(
+        'id',
+        selectedIds
+      )
+      .eq(
+        'Статус',
+        STATUSES.STOCK
+      )
+      .select(
+        BOX_SELECT
+      );
+
+
+  /*
+    =========================================================
+    ОШИБКА SUPABASE
+    =========================================================
+  */
+
+  if (
+    error
+  ) {
+
+    console.error(
+      'Ошибка формирования подбора:',
+      error
+    );
+
+
+    console.error(
+      'Message:',
+      error?.message
+    );
+
+
+    console.error(
+      'Details:',
+      error?.details
+    );
+
+
+    console.error(
+      'Hint:',
+      error?.hint
+    );
+
+
+    console.error(
+      'Code:',
+      error?.code
+    );
+
+
+    toast(
+      error.message ||
+      'Ошибка формирования подбора',
+      'error'
+    );
+
+
+    return;
+
+  }
+
+
+  /*
+    =========================================================
+    ОБНОВЛЯЕМ ЛОКАЛЬНО
+    =========================================================
+  */
+
+  if (
+    Array.isArray(data)
+  ) {
+
+    data.forEach(
+      row => {
+
+        updateLocalBox(
+          row.id,
+          row
+        );
+
+      }
+    );
+
+  }
+
+
+  /*
+    =========================================================
+    ОЧИЩАЕМ ПОЛЕ ЗАЯВКИ
+    =========================================================
+  */
+
+  input.value =
+    '';
+
+
+  /*
+    =========================================================
+    ОБНОВЛЯЕМ ИНТЕРФЕЙС
+    =========================================================
+  */
+
+  render();
+
+
+  /*
+    =========================================================
+    ИТОГИ
+    =========================================================
+  */
+
+  let requestedTotal =
+    0;
+
+
+  requested.forEach(
+    quantity => {
+
+      requestedTotal +=
+        quantity;
+
     }
   );
 
 
-  /*
-    Выбираем физические коробки.
-  */
-
-  for (
-    let i = 0;
-    i < foundCount;
-    i++
-  ) {
-
-    const box =
-      candidates[i];
+  const pickedTotal =
+    Array.isArray(data)
+      ? data.length
+      : selectedIds.length;
 
 
-    selectedIds.push(
-      box.id
+  const missingTotal =
+    missing.reduce(
+      (
+        total,
+        item
+      ) =>
+        total +
+        item.missing,
+      0
     );
 
 
-    usedIds.add(
-      String(
-        box.id
-      )
-    );
-
-  }
-
-
   /*
-    Если не хватило —
-    записываем недостаток.
+    =========================================================
+    РЕЗУЛЬТАТ
+    =========================================================
   */
 
   if (
-    foundCount <
-    requiredCount
+    missingTotal > 0
   ) {
 
-    missing.push({
-
-      barcode,
-
-      required:
-        requiredCount,
-
-      found:
-        foundCount,
-
-      missing:
-        requiredCount -
-        foundCount
-
-    });
-
-  }
-
-}
-
-
-/*
-  =========================================================
-  НИ ОДНОЙ КОРОБКИ НЕ НАШЛИ
-  =========================================================
-*/
-
-if (
-  !selectedIds.length
-) {
-
-  let message =
-    'Не удалось найти подходящие коробки.';
-
-
-  if (
-    missing.length
-  ) {
-
-    message +=
-      '\n\nНе хватает:';
+    let message =
+      `Заявка сформирована частично!\n\n` +
+      `В заявке: ${requestedTotal}\n` +
+      `В подбор: ${pickedTotal}\n` +
+      `Не хватает: ${missingTotal}\n\n` +
+      `Недостаток:`;
 
 
     missing.forEach(
@@ -8008,240 +8167,27 @@ if (
       }
     );
 
-  }
 
-
-  alert(
-    message
-  );
-
-  return;
-
-}
-
-
-/*
-  =========================================================
-  ПЕРЕВОДИМ ФИЗИЧЕСКИЕ КОРОБКИ В К ПОДБОРУ
-  =========================================================
-
-  Используем именно ID физических коробок.
-*/
-
-
-const {
-  data,
-  error
-} =
-  await supabaseClient
-    .from('boxes')
-    .update({
-
-      "Статус":
-        STATUSES.PICK,
-
-      "Изменил":
-        state.user?.email ||
-        null
-
-    })
-    .in(
-      'id',
-      selectedIds
-    )
-    .eq(
-      'Статус',
-      STATUSES.STOCK
-    )
-    .select(
-      BOX_SELECT
+    console.warn(
+      'Недостаток коробок:',
+      missing
     );
 
 
-/*
-  =========================================================
-  ОШИБКА SUPABASE
-  =========================================================
-*/
-
-if (
-  error
-) {
-
-  console.error(
-    'Ошибка формирования подбора:',
-    error
-  );
-
-  console.error(
-    'Message:',
-    error?.message
-  );
-
-  console.error(
-    'Details:',
-    error?.details
-  );
-
-  console.error(
-    'Hint:',
-    error?.hint
-  );
-
-  console.error(
-    'Code:',
-    error?.code
-  );
+    alert(
+      message
+    );
 
 
-  toast(
-    error.message ||
-    'Ошибка формирования подбора',
-    'error'
-  );
+  } else {
 
-  return;
-
-}
-
-
-/*
-  =========================================================
-  ОБНОВЛЯЕМ ЛОКАЛЬНОЕ СОСТОЯНИЕ
-  =========================================================
-*/
-
-if (
-  Array.isArray(data)
-) {
-
-  data.forEach(
-    row => {
-
-      updateLocalBox(
-        row.id,
-        row
-      );
-
-    }
-  );
-
-}
-
-
-/*
-  =========================================================
-  ОЧИЩАЕМ ПОЛЕ ЗАЯВКИ
-  =========================================================
-*/
-
-input.value =
-  '';
-
-
-/*
-  =========================================================
-  ОБНОВЛЯЕМ ИНТЕРФЕЙС
-  =========================================================
-*/
-
-render();
-
-
-/*
-  =========================================================
-  ИТОГИ
-  =========================================================
-*/
-
-let requestedTotal =
-  0;
-
-
-requested.forEach(
-  count => {
-
-    requestedTotal +=
-      count;
+    toast(
+      `Заявка сформирована: ${pickedTotal} коробок отправлено в подбор`
+    );
 
   }
-);
-
-
-const pickedTotal =
-  Array.isArray(data)
-    ? data.length
-    : selectedIds.length;
-
-
-const missingTotal =
-  missing.reduce(
-    (
-      total,
-      item
-    ) =>
-      total +
-      item.missing,
-    0
-  );
-
-
-/*
-  =========================================================
-  РЕЗУЛЬТАТ
-  =========================================================
-*/
-
-let message =
-  `Заявка сформирована!\n\n` +
-  `В заявке: ${requestedTotal}\n` +
-  `В подбор: ${pickedTotal}`;
-
-
-/*
-  Если чего-то не хватило.
-*/
-
-if (
-  missingTotal > 0
-) {
-
-  message +=
-    `\nНе хватает: ${missingTotal}`;
-
-
-  message +=
-    '\n\nНе хватает:';
-
-
-  missing.forEach(
-    item => {
-
-      message +=
-        `\n${item.barcode} — нужно ${item.required}, найдено ${item.found}`;
-
-    }
-  );
-
-
-  console.warn(
-    'Недостаток коробок:',
-    missing
-  );
-
-
-  alert(
-    message
-  );
-
-} else {
-
-  toast(
-    `Заявка сформирована: ${pickedTotal} коробок отправлено в подбор`
-  );
 
 }
-
 
 /* =========================================================
    REQUEST → PICKING END
