@@ -2751,7 +2751,7 @@ async function loadBoxesFromSupabase() {
 
   const result = await supabaseClient
     .from('boxes')
-    .select('*')
+    .select('id')
     .limit(1);
 
   console.log('RESULT:', result);
