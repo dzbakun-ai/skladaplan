@@ -5826,6 +5826,62 @@ function getFilteredBoxes() {
         return false;
       }
 
+      /* ---------------------------------------------------
+         ЗОНА / РЯД
+         --------------------------------------------------- */
+
+      if (
+        state.baseZone &&
+        normalizeText(
+          row.zone_row
+        ) !==
+          normalizeText(
+            state.baseZone
+          )
+      ) {
+
+        return false;
+
+      }
+
+
+      /* ---------------------------------------------------
+         ПОДДОН
+         --------------------------------------------------- */
+
+      if (
+        state.basePallet &&
+        normalizeText(
+          row.pallet
+        ) !==
+          normalizeText(
+            state.basePallet
+          )
+      ) {
+
+        return false;
+
+      }
+
+
+      /* ---------------------------------------------------
+         НАПРАВЛЕНИЕ
+         --------------------------------------------------- */
+
+      if (
+        state.baseDirection &&
+        normalizeText(
+          row.direction
+        ) !==
+          normalizeText(
+            state.baseDirection
+          )
+      ) {
+
+        return false;
+
+      }
+       
 
       /* ---------------------------------------------------
          ПОИСК
