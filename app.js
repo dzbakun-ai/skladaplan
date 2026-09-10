@@ -9001,64 +9001,43 @@ function focusScanner() {
 async function completeSelectedAssembly() {
 
   if (!state.assemblySelectedGroups) {
-    state.assemblySelectedGroups =
-      new Set();
+    state.assemblySelectedGroups = new Set();
   }
 
   if (!state.assemblySelectedIds) {
-    state.assemblySelectedIds =
-      new Set();
+    state.assemblySelectedIds = new Set();
   }
 
+  if (!state.assemblyExpandedGroups) {
+    state.assemblyExpandedGroups = new Set();
+  }
 
-  const ids =
-    new Set(
-      [
-        ...state.assemblySelectedIds
-      ]
-    );
-
-
-  /*
-    Если выбрана целая группа,
-    добавляем все её физические ID.
-  */
-
-  const groups =
-    getGroupedPickingBoxes();
-
-  groups.forEach(
-    group => {
-
-      if (
-        state.assemblySelectedGroups
-          .has(
-            group.key
-          )
-      ) {
-
-        group.ids.forEach(
-          id => {
-
-            ids.add(
-              String(id)
-            );
-
-          }
-        );
-
-      }
-
-    }
+  // Собираем выбранные физические ID
+  const ids = new Set(
+    [...state.assemblySelectedIds].map(id => String(id))
   );
 
+  // Если выбрана целая группа —
+  // добавляем все физические коробки этой группы
+  const groups = getGroupedPickingBoxes();
 
-  const uniqueIds =
-    [
-      ...ids
-    ];
+  groups.forEach(group => {
 
+    if (
+      state.assemblySelectedGroups.has(group.key)
+    ) {
 
+      group.ids.forEach(id => {
+        ids.add(String(id));
+      });
+
+    }
+
+  });
+
+  const uniqueIds = [...ids];
+
+  // Ничего не выбрано
   if (!uniqueIds.length) {
 
     toast(
@@ -9069,33 +9048,20 @@ async function completeSelectedAssembly() {
     return;
   }
 
+  // Проверяем, что коробки всё ещё находятся в КПодбору
+  const validIds = uniqueIds.filter(id => {
 
-  /*
-    Проверяем,
-    что коробки всё ещё
-    находятся в КПодбору.
-  */
-
-  const validIds =
-    uniqueIds.filter(
-      id => {
-
-        const row =
-          state.boxes.find(
-            box =>
-              String(box.id) ===
-              String(id)
-          );
-
-        return (
-          row &&
-          row.status ===
-            STATUSES.PICK
-        );
-
-      }
+    const row = state.boxes.find(
+      box =>
+        String(box.id) === String(id)
     );
 
+    return (
+      row &&
+      row.status === STATUSES.PICK
+    );
+
+  });
 
   if (!validIds.length) {
 
@@ -9104,57 +9070,35 @@ async function completeSelectedAssembly() {
       'error'
     );
 
-    state.assemblySelectedGroups
-      .clear();
-
-    state.assemblySelectedIds
-      .clear();
+    state.assemblySelectedGroups.clear();
+    state.assemblySelectedIds.clear();
+    state.assemblyExpandedGroups.clear();
 
     render();
 
     return;
   }
 
+  // Предлагаем сразу указать направление
+  const direction = prompt(
+    'Направление для скомплектованных коробок (можно оставить пустым):',
+    ''
+  );
 
-  /*
-    Направление можно
-    назначить сразу при комплектации.
-  */
-
-  const direction =
-    prompt(
-      'Направление для скомплектованных коробок (можно оставить пустым):',
-      ''
-    );
-
-
-  if (
-    direction === null
-  ) {
-
+  // Отмена
+  if (direction === null) {
     return;
-
   }
 
-
-  const cleanDirection =
-    normalizeText(
-      direction
-    );
-
+  const cleanDirection = normalizeText(direction);
 
   const updateData = {
-
-    "Статус":
-      STATUSES.COLLECTED,
-
-    "Изменил":
-      state.user?.email ||
-      null
-
+    "Статус": STATUSES.COLLECTED,
+    "Изменил": state.user?.email || null
   };
 
-
+  // Если направление указано —
+  // сохраняем его
   if (cleanDirection) {
 
     updateData["Направление"] =
@@ -9162,131 +9106,23 @@ async function completeSelectedAssembly() {
 
   }
 
-
+  // Переводим выбранные физические коробки
+  // из КПодбору в Скомплектовано
   const {
     data,
     error
-  } =
-    await supabaseClient
-      .from('boxes')
-      .update(
-        updateData
-      )
-      .in(
-        'id',
-        validIds
-      )
-      .eq(
-        'Статус',
-        STATUSES.PICK
-      )
-      .select(
-        BOX_SELECT
-      );
+  } = await supabaseClient
+    .from('boxes')
+    .update(updateData)
+    .in('id', validIds)
+    .eq('Статус', STATUSES.PICK)
+    .select(BOX_SELECT);
 
-
+  // Ошибка Supabase
   if (error) {
 
     console.error(
       'Ошибка комплектации:',
-      error
-    );
-
-    toast(
-      error.message ||
-      'Ошибка комплектации',
-      'error'
-    );
-
-    return;
-
-  }
-
-
-  if (
-    Array.isArray(data)
-  ) {
-
-    data.forEach(
-      row => {
-
-        updateLocalBox(
-          row.id,
-          row
-        );
-
-      }
-    );
-
-  }
-
-
-  const completedCount =
-    Array.isArray(data)
-      ? data.length
-      : validIds.length;
-
-
-  state.assemblySelectedGroups
-    .clear();
-
-  state.assemblySelectedIds
-    .clear();
-
-  state.assemblyExpandedGroups
-    .clear();
-
-
-  render();
-
-
-  toast(
-    cleanDirection
-      ? `Скомплектовано: ${completedCount} · ${cleanDirection}`
-      : `Скомплектовано: ${completedCount}`
-  );
-
-}
-
-
-  /*
-    Переводим выбранные физические
-    коробки из КПодбору
-    в Скомплектовано.
-  */
-
-  const {
-    data,
-    error
-  } =
-    await supabaseClient
-      .from('boxes')
-      .update({
-
-        "Статус":
-          STATUSES.COLLECTED,
-
-        "Изменил":
-          state.user?.email || null
-
-      })
-      .in(
-        'id',
-        validIds
-      )
-      .eq(
-        'Статус',
-        STATUSES.PICK
-      )
-      .select(
-        BOX_SELECT
-      );
-
-
-  if (error) {
-
-    console.error(
-      'Ошибка ручной комплектации:',
       error
     );
 
@@ -9310,7 +9146,6 @@ async function completeSelectedAssembly() {
       error?.code
     );
 
-
     toast(
       error.message ||
       'Ошибка комплектации',
@@ -9318,30 +9153,43 @@ async function completeSelectedAssembly() {
     );
 
     return;
+  }
+
+  // Обновляем локальное состояние
+  if (Array.isArray(data)) {
+
+    data.forEach(row => {
+
+      updateLocalBox(
+        row.id,
+        row
+      );
+
+    });
 
   }
 
-
-  /*
-    Обновляем локальное состояние.
-  */
-
-  if (
+  const completedCount =
     Array.isArray(data)
-  ) {
+      ? data.length
+      : validIds.length;
 
-    data.forEach(
-      row => {
+  // Очищаем выделение
+  state.assemblySelectedGroups.clear();
+  state.assemblySelectedIds.clear();
+  state.assemblyExpandedGroups.clear();
 
-        updateLocalBox(
-          row.id,
-          row
-        );
+  // Перерисовываем интерфейс
+  render();
 
-      }
-    );
+  // Сообщение
+  toast(
+    cleanDirection
+      ? `Скомплектовано: ${completedCount} · ${cleanDirection}`
+      : `Скомплектовано: ${completedCount}`
+  );
 
-  }
+}
 
 
   /*
