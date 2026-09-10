@@ -1,1079 +1,675 @@
 /* =========================================================
    SKLADAPLAN — HELP
-   Стили справки вынесены из app.js
+   Стили страницы справки
    ========================================================= */
+
+
+/* ---------------------------------------------------------
+   Основной контейнер
+   --------------------------------------------------------- */
 
 .help-page {
   width: 100%;
   max-width: 1180px;
   margin: 0 auto;
-  padding: 24px 0 80px;
-  color: var(--text, #f5f5f5);
+  padding: 0 0 48px;
 }
 
 
-/* =========================================================
-   HERO
-   ========================================================= */
+/* ---------------------------------------------------------
+   Hero / заголовок
+   --------------------------------------------------------- */
 
 .help-hero {
-  padding: 34px;
-  margin-bottom: 18px;
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 24px;
-  background:
-    linear-gradient(
-      145deg,
-      rgba(255,255,255,.055),
-      rgba(255,255,255,.018)
-    );
-}
-
-.help-eyebrow {
-  margin-bottom: 12px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .16em;
-  text-transform: uppercase;
-  opacity: .5;
+  margin-bottom: 24px;
 }
 
 .help-hero h1 {
+  margin: 0 0 8px;
+
+  font-size: 28px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.help-hero p {
   margin: 0;
-  font-size: clamp(30px, 5vw, 48px);
-  line-height: 1.05;
-  letter-spacing: -.035em;
-}
 
-.help-hero > p {
-  max-width: 720px;
-  margin: 18px 0 0;
-  font-size: 16px;
-  line-height: 1.65;
-  opacity: .68;
-}
+  max-width: 760px;
 
-.help-rule {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 18px;
-  align-items: center;
-  margin-top: 26px;
-  padding: 16px 18px;
-  border-radius: 16px;
-  background: rgba(255,255,255,.055);
-}
+  color: rgba(255,255,255,.55);
 
-.help-rule strong {
-  font-size: 13px;
-}
-
-.help-rule span {
-  font-size: 13px;
-  opacity: .72;
-}
-
-.help-rule.large {
-  display: block;
-  padding: 20px;
-}
-
-.help-rule.large strong,
-.help-rule.large span {
-  display: block;
-}
-
-.help-rule.large span {
-  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 
-/* =========================================================
-   QUICK NAV
-   ========================================================= */
+/* ---------------------------------------------------------
+   Быстрая навигация
+   --------------------------------------------------------- */
 
 .help-quick-nav {
-  position: sticky;
-  top: 10px;
-  z-index: 10;
-
   display: flex;
-  gap: 7px;
   flex-wrap: wrap;
+  gap: 8px;
 
-  padding: 12px;
-  margin-bottom: 18px;
+  margin: 0 0 28px;
+  padding: 14px;
 
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 16px;
 
-  background: rgba(18,18,18,.84);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background: rgba(255,255,255,.025);
 }
 
-.help-quick-nav a {
+
+/*
+   ВАЖНО:
+   !important нужен из-за глобальных правил a / a:visited
+   в style.css, которые могли окрашивать ссылки в чёрный.
+*/
+
+.help-quick-nav a,
+.help-quick-nav a:visited,
+.help-quick-nav a:active {
   display: inline-flex;
   align-items: center;
 
   min-height: 34px;
   padding: 0 12px;
 
+  border: 1px solid rgba(255,255,255,.08);
   border-radius: 10px;
 
-  color: inherit;
-  text-decoration: none;
+  color: rgba(255,255,255,.72) !important;
+
+  background: rgba(255,255,255,.045) !important;
+
+  text-decoration: none !important;
 
   font-size: 12px;
   font-weight: 600;
 
-  background: rgba(255,255,255,.045);
+  box-shadow: none !important;
 
   transition:
     background .18s ease,
+    border-color .18s ease,
+    color .18s ease,
     transform .18s ease;
 }
 
 .help-quick-nav a:hover {
-  background: rgba(255,255,255,.09);
+  color: rgba(255,255,255,.95) !important;
+
+  background: rgba(255,255,255,.09) !important;
+
+  border-color: rgba(255,255,255,.14);
+
   transform: translateY(-1px);
 }
 
 
-/* =========================================================
-   SECTIONS
-   ========================================================= */
+/* ---------------------------------------------------------
+   Секции
+   --------------------------------------------------------- */
 
 .help-section {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  gap: 20px;
-
-  padding: 30px;
-  margin-bottom: 16px;
+  margin-bottom: 22px;
+  padding: 22px;
 
   border: 1px solid rgba(255,255,255,.07);
-  border-radius: 22px;
+  border-radius: 18px;
 
-  background: rgba(255,255,255,.018);
-
-  scroll-margin-top: 90px;
+  background: rgba(255,255,255,.025);
 }
 
-.help-section-number {
-  font-size: 12px;
-  font-weight: 700;
-  opacity: .3;
-  padding-top: 7px;
-}
-
-.help-section-content {
-  min-width: 0;
+.help-section:last-child {
+  margin-bottom: 0;
 }
 
 .help-section h2 {
-  margin: 0 0 18px;
-  font-size: 25px;
-  letter-spacing: -.025em;
+  margin: 0 0 12px;
+
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 700;
+
+  letter-spacing: -0.02em;
 }
 
 .help-section h3 {
-  margin: 28px 0 12px;
-  font-size: 16px;
+  margin: 20px 0 8px;
+
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 700;
 }
 
 .help-section p {
-  max-width: 900px;
-  margin: 0 0 14px;
+  margin: 0 0 10px;
+
+  color: rgba(255,255,255,.64);
+
+  font-size: 13px;
   line-height: 1.65;
-  font-size: 14px;
-  opacity: .74;
 }
+
+.help-section p:last-child {
+  margin-bottom: 0;
+}
+
+
+/* ---------------------------------------------------------
+   Списки
+   --------------------------------------------------------- */
+
+.help-section ul,
+.help-section ol {
+  margin: 10px 0 0;
+  padding-left: 20px;
+
+  color: rgba(255,255,255,.64);
+
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.help-section li {
+  margin-bottom: 6px;
+}
+
+.help-section li:last-child {
+  margin-bottom: 0;
+}
+
+
+/* ---------------------------------------------------------
+   Выделение
+   --------------------------------------------------------- */
 
 .help-section strong {
-  color: inherit;
+  color: rgba(255,255,255,.92);
+  font-weight: 650;
+}
+
+.help-section em {
+  color: rgba(255,255,255,.78);
 }
 
 
-/* =========================================================
-   INFO GRID
-   ========================================================= */
+/* ---------------------------------------------------------
+   Код / названия полей
+   --------------------------------------------------------- */
 
-.help-info-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 24px;
+.help-section code {
+  display: inline-block;
+
+  padding: 2px 6px;
+
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 6px;
+
+  color: rgba(255,255,255,.82);
+
+  background: rgba(255,255,255,.055);
+
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+
+  font-size: 11px;
 }
 
-.help-info-card {
-  padding: 18px;
-  border-radius: 16px;
+
+/* ---------------------------------------------------------
+   Информационные блоки
+   --------------------------------------------------------- */
+
+.help-note {
+  margin: 16px 0;
+  padding: 14px 16px;
+
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+
   background: rgba(255,255,255,.035);
 }
 
-.help-card-icon {
-  display: block;
-  margin-bottom: 20px;
-
-  font-size: 11px;
-  font-weight: 700;
-
-  opacity: .35;
-}
-
-.help-info-card strong {
-  display: block;
-  margin-bottom: 7px;
-  font-size: 14px;
-}
-
-.help-info-card p {
+.help-note p {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
+
+  color: rgba(255,255,255,.68);
+}
+
+.help-note strong {
+  color: rgba(255,255,255,.94);
 }
 
 
-/* =========================================================
-   FLOW
-   ========================================================= */
+/* ---------------------------------------------------------
+   Важное предупреждение
+   --------------------------------------------------------- */
 
-.help-flow {
-  display: flex;
-  align-items: stretch;
-  gap: 8px;
-  overflow-x: auto;
+.help-warning {
+  margin: 16px 0;
+  padding: 15px 16px;
 
-  padding: 4px 2px 10px;
+  border: 1px solid rgba(255,180,80,.18);
+  border-radius: 12px;
+
+  background: rgba(255,180,80,.055);
 }
 
-.help-flow-item {
-  flex: 1 0 135px;
+.help-warning p {
+  margin: 0;
 
+  color: rgba(255,255,255,.7);
+}
+
+.help-warning strong {
+  color: rgba(255,210,130,.95);
+}
+
+
+/* ---------------------------------------------------------
+   Успешный / рабочий статус
+   --------------------------------------------------------- */
+
+.help-success {
+  margin: 16px 0;
+  padding: 15px 16px;
+
+  border: 1px solid rgba(100,220,150,.14);
+  border-radius: 12px;
+
+  background: rgba(100,220,150,.045);
+}
+
+.help-success p {
+  margin: 0;
+
+  color: rgba(255,255,255,.68);
+}
+
+.help-success strong {
+  color: rgba(150,240,180,.95);
+}
+
+
+/* ---------------------------------------------------------
+   Карточки функций
+   --------------------------------------------------------- */
+
+.help-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(220px, 1fr)
+    );
+
+  gap: 12px;
+
+  margin-top: 16px;
+}
+
+.help-card {
   padding: 16px;
-  border-radius: 15px;
+
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 14px;
+
+  background: rgba(255,255,255,.025);
+
+  transition:
+    background .18s ease,
+    border-color .18s ease,
+    transform .18s ease;
+}
+
+.help-card:hover {
+  background: rgba(255,255,255,.04);
+
+  border-color: rgba(255,255,255,.11);
+
+  transform: translateY(-1px);
+}
+
+.help-card h3 {
+  margin: 0 0 7px;
+
+  font-size: 13px;
+}
+
+.help-card p {
+  margin: 0;
+
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+
+/* ---------------------------------------------------------
+   Статусы
+   --------------------------------------------------------- */
+
+.help-status-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+
+  margin-top: 12px;
+}
+
+.help-status {
+  display: inline-flex;
+  align-items: center;
+
+  min-height: 28px;
+  padding: 0 9px;
+
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 8px;
+
+  color: rgba(255,255,255,.7);
 
   background: rgba(255,255,255,.035);
-}
-
-.help-flow-item span {
-  display: block;
-  margin-bottom: 15px;
-
-  font-size: 10px;
-  font-weight: 700;
-  opacity: .3;
-}
-
-.help-flow-item strong {
-  display: block;
-  font-size: 13px;
-}
-
-.help-flow-item small {
-  display: block;
-  margin-top: 6px;
 
   font-size: 11px;
-  line-height: 1.45;
-  opacity: .55;
-}
-
-.help-flow-arrow {
-  align-self: center;
-  opacity: .25;
+  font-weight: 600;
 }
 
 
-/* =========================================================
-   LIST
-   ========================================================= */
-
-.help-list {
-  display: grid;
-  gap: 1px;
-
-  margin-top: 18px;
-
-  border-radius: 15px;
-  overflow: hidden;
-
-  background: rgba(255,255,255,.06);
-}
-
-.help-list > div {
-  padding: 15px 17px;
-  background: rgba(20,20,20,.94);
-}
-
-.help-list strong {
-  display: block;
-  font-size: 13px;
-}
-
-.help-list span {
-  display: block;
-  margin-top: 5px;
-  font-size: 12px;
-  line-height: 1.5;
-  opacity: .55;
-}
-
-
-/* =========================================================
-   TABLES
-   ========================================================= */
+/* ---------------------------------------------------------
+   Таблицы
+   --------------------------------------------------------- */
 
 .help-table-wrap {
   width: 100%;
+
+  margin-top: 14px;
+
   overflow-x: auto;
-  margin-top: 18px;
-  border-radius: 16px;
+
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 12px;
 }
 
 .help-table {
   width: 100%;
-  min-width: 650px;
+
   border-collapse: collapse;
+
   font-size: 12px;
+}
+
+.help-table th,
+.help-table td {
+  padding: 10px 12px;
+
+  border-bottom: 1px solid rgba(255,255,255,.055);
+
+  text-align: left;
+  vertical-align: top;
 }
 
 .help-table th {
-  padding: 12px 14px;
-  text-align: left;
+  color: rgba(255,255,255,.85);
 
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
+  background: rgba(255,255,255,.035);
 
-  color: inherit;
-  opacity: .45;
-
-  background: rgba(255,255,255,.045);
+  font-weight: 650;
 }
 
 .help-table td {
-  padding: 13px 14px;
-  border-top: 1px solid rgba(255,255,255,.06);
-
-  line-height: 1.45;
-  background: rgba(255,255,255,.018);
+  color: rgba(255,255,255,.62);
 }
 
-.help-table td:first-child {
-  font-weight: 600;
-}
-
-.help-required {
-  display: inline-flex;
-  padding: 4px 7px;
-  border-radius: 7px;
-
-  font-size: 9px;
-  font-weight: 800;
-
-  background: rgba(255,255,255,.1);
+.help-table tr:last-child td {
+  border-bottom: none;
 }
 
 
-/* =========================================================
-   NOTES
-   ========================================================= */
-
-.help-note,
-.help-warning {
-  margin-top: 20px;
-  padding: 17px 18px;
-  border-radius: 15px;
-
-  background: rgba(255,255,255,.035);
-}
-
-.help-warning {
-  background: rgba(255,255,255,.055);
-}
-
-.help-note strong,
-.help-warning strong {
-  display: block;
-  margin-bottom: 7px;
-  font-size: 13px;
-}
-
-.help-note p,
-.help-warning p {
-  margin: 0;
-  font-size: 12px;
-}
-
-
-/* =========================================================
-   STEPS
-   ========================================================= */
+/* ---------------------------------------------------------
+   Шаги процесса
+   --------------------------------------------------------- */
 
 .help-steps {
-  display: grid;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
 
-  padding: 0;
-  margin: 18px 0 0;
+  gap: 10px;
 
-  list-style: none;
-  counter-reset: help-step;
+  margin-top: 14px;
 }
 
-.help-steps li {
-  counter-increment: help-step;
+.help-step {
+  display: flex;
+  align-items: flex-start;
 
-  position: relative;
-
-  padding: 14px 16px 14px 50px;
-
-  border-radius: 14px;
-
-  background: rgba(255,255,255,.035);
-
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.help-steps li::before {
-  content: counter(help-step, decimal-leading-zero);
-
-  position: absolute;
-  left: 16px;
-  top: 14px;
-
-  font-size: 10px;
-  font-weight: 800;
-  opacity: .35;
-}
-
-
-/* =========================================================
-   BULLETS
-   ========================================================= */
-
-.help-bullets {
-  display: grid;
-  gap: 8px;
-
-  margin: 14px 0;
-  padding-left: 20px;
-}
-
-.help-bullets li {
-  padding-left: 4px;
-  font-size: 13px;
-  line-height: 1.55;
-  opacity: .72;
-}
-
-
-/* =========================================================
-   EXAMPLE
-   ========================================================= */
-
-.help-example {
-  display: grid;
-  gap: 6px;
-  margin-top: 18px;
-}
-
-.help-example-row {
-  display: grid;
-  grid-template-columns: 130px minmax(0, 1fr) auto;
-  align-items: center;
   gap: 12px;
 
-  padding: 14px 16px;
-  border-radius: 13px;
+  padding: 13px 14px;
 
-  background: rgba(255,255,255,.035);
-}
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 12px;
 
-.help-example-row > span {
-  font-size: 11px;
-  opacity: .4;
-}
-
-.help-example-row strong {
-  font-size: 12px;
-}
-
-.help-example-arrow {
-  padding-left: 55px;
-  opacity: .3;
-}
-
-.help-example code,
-.help-code-table code {
-  font-family:
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Monaco,
-    Consolas,
-    monospace;
-
-  font-size: 11px;
-}
-
-
-/* =========================================================
-   STATUS
-   ========================================================= */
-
-.help-status-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.help-status-card {
-  padding: 18px;
-  border-radius: 15px;
-  background: rgba(255,255,255,.035);
-}
-
-.help-status-card > span {
-  display: block;
-  margin-bottom: 15px;
-
-  font-size: 18px;
-  font-weight: 700;
-
-  opacity: .55;
-}
-
-.help-status-card strong {
-  display: block;
-  font-size: 13px;
-}
-
-.help-status-card p {
-  margin: 7px 0 0;
-  font-size: 11px;
-}
-
-
-/* =========================================================
-   ALIASES
-   ========================================================= */
-
-.help-alias-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 18px;
-}
-
-.help-alias-grid > div {
-  padding: 15px;
-  border-radius: 13px;
-  background: rgba(255,255,255,.035);
-}
-
-.help-alias-grid strong {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 12px;
-}
-
-.help-alias-grid code {
-  display: block;
-
-  font-family:
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Monaco,
-    Consolas,
-    monospace;
-
-  font-size: 10px;
-  line-height: 1.6;
-
-  opacity: .55;
-}
-
-
-/* =========================================================
-   FORMATS
-   ========================================================= */
-
-.help-format-list {
-  display: grid;
-  gap: 8px;
-}
-
-.help-format-list > div {
-  padding: 15px;
-  border-radius: 13px;
-  background: rgba(255,255,255,.035);
-}
-
-.help-format-list strong {
-  display: block;
-  font-size: 13px;
-}
-
-.help-format-list p {
-  margin: 6px 0 0;
-  font-size: 12px;
-}
-
-
-/* =========================================================
-   EXCEL CODE TABLE
-   ========================================================= */
-
-.help-code-table {
-  min-width: 850px;
-  overflow-x: auto;
-
-  margin-top: 18px;
-
-  border-radius: 15px;
-
-  font-family:
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Monaco,
-    Consolas,
-    monospace;
-
-  font-size: 10px;
-}
-
-.help-code-header,
-.help-code-row {
-  display: grid;
-  grid-template-columns:
-    1.5fr
-    1fr
-    1fr
-    1fr
-    1fr
-    .8fr;
-
-  min-width: 850px;
-}
-
-.help-code-header span,
-.help-code-row span {
-  padding: 11px 12px;
-  border-right: 1px solid rgba(255,255,255,.05);
-}
-
-.help-code-header {
-  background: rgba(255,255,255,.07);
-}
-
-.help-code-header span {
-  font-weight: 700;
-  opacity: .55;
-}
-
-.help-code-row {
   background: rgba(255,255,255,.025);
-  border-top: 1px solid rgba(255,255,255,.05);
 }
 
+.help-step-number {
+  flex: 0 0 28px;
 
-/* =========================================================
-   LOCATION
-   ========================================================= */
-
-.help-location {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+
+  width: 28px;
+  height: 28px;
+
+  border-radius: 50%;
+
+  color: rgba(255,255,255,.85);
+
+  background: rgba(255,255,255,.08);
+
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.help-step-content {
+  flex: 1;
+}
+
+.help-step-content strong {
+  display: block;
+
+  margin-bottom: 3px;
+
+  font-size: 13px;
+}
+
+.help-step-content p {
+  margin: 0;
+
+  font-size: 12px;
+}
+
+
+/* ---------------------------------------------------------
+   Excel
+   --------------------------------------------------------- */
+
+.help-excel {
+  margin-top: 14px;
 
   overflow-x: auto;
-
-  margin: 20px 0;
-  padding: 18px;
-
-  border-radius: 16px;
-  background: rgba(255,255,255,.035);
 }
 
-.help-location > div:not(:nth-child(even)) {
-  min-width: 130px;
-}
+.help-excel table {
+  width: 100%;
 
-.help-location > div:nth-child(even) {
-  opacity: .25;
-}
+  border-collapse: collapse;
 
-.help-location span {
-  display: block;
-  margin-bottom: 6px;
-
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .08em;
-
-  opacity: .35;
-}
-
-.help-location strong {
-  font-size: 13px;
-}
-
-
-/* =========================================================
-   TOOLS
-   ========================================================= */
-
-.help-tools-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.help-tools-grid > div {
-  padding: 17px;
-  border-radius: 14px;
-  background: rgba(255,255,255,.035);
-}
-
-.help-tools-grid strong {
-  display: block;
-  font-size: 13px;
-}
-
-.help-tools-grid span {
-  display: block;
-  margin-top: 7px;
-
-  font-size: 11px;
-  line-height: 1.5;
-  opacity: .55;
-}
-
-
-/* =========================================================
-   ROLES
-   ========================================================= */
-
-.help-role-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.help-role-grid > div {
-  padding: 18px;
-  border-radius: 15px;
-  background: rgba(255,255,255,.035);
-}
-
-.help-role-grid strong {
-  display: block;
-  font-size: 13px;
-}
-
-.help-role-grid p {
-  margin: 8px 0 0;
-  font-size: 11px;
-}
-
-
-/* =========================================================
-   STATUS TABLE
-   ========================================================= */
-
-.help-status-table {
-  display: grid;
-  gap: 1px;
-
-  overflow: hidden;
-  margin-top: 18px;
-
-  border-radius: 15px;
-  background: rgba(255,255,255,.07);
-}
-
-.help-status-row {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  gap: 15px;
-
-  padding: 15px 17px;
-
-  background: rgba(20,20,20,.94);
-}
-
-.help-status-name {
   font-size: 12px;
-  font-weight: 700;
 }
 
-.help-status-row > div:last-child {
-  font-size: 12px;
-  line-height: 1.5;
-  opacity: .6;
+.help-excel th,
+.help-excel td {
+  padding: 9px 11px;
+
+  border: 1px solid rgba(255,255,255,.06);
+
+  text-align: left;
 }
 
-
-/* =========================================================
-   FAQ
-   ========================================================= */
-
-.help-faq {
-  margin-top: 8px;
-
-  border-radius: 14px;
-  overflow: hidden;
+.help-excel th {
+  color: rgba(255,255,255,.85);
 
   background: rgba(255,255,255,.035);
 }
 
-.help-faq summary {
-  cursor: pointer;
-
-  padding: 16px 18px;
-
-  list-style: none;
-
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.help-faq summary::-webkit-details-marker {
-  display: none;
-}
-
-.help-faq summary::after {
-  content: '+';
-
-  float: right;
-
-  font-size: 16px;
-  font-weight: 400;
-
-  opacity: .4;
-}
-
-.help-faq[open] summary::after {
-  content: '−';
-}
-
-.help-faq > div {
-  padding: 0 18px 18px;
-}
-
-.help-faq p {
-  margin: 0;
-  font-size: 12px;
+.help-excel td {
+  color: rgba(255,255,255,.62);
 }
 
 
-/* =========================================================
-   RULES
-   ========================================================= */
+/* ---------------------------------------------------------
+   Горизонтальная линия
+   --------------------------------------------------------- */
 
-.help-rules-list {
-  display: grid;
-  gap: 7px;
-}
+.help-divider {
+  height: 1px;
 
-.help-rules-list > div {
-  display: grid;
-  grid-template-columns: 35px minmax(0, 1fr);
-  gap: 10px;
+  margin: 24px 0;
 
-  align-items: center;
-
-  padding: 14px 15px;
-
-  border-radius: 13px;
-  background: rgba(255,255,255,.035);
-}
-
-.help-rules-list span {
-  font-size: 10px;
-  font-weight: 800;
-  opacity: .3;
-}
-
-.help-rules-list strong {
-  font-size: 12px;
-  line-height: 1.45;
+  background: rgba(255,255,255,.06);
 }
 
 
-/* =========================================================
-   CURRENT FEATURES
-   ========================================================= */
+/* ---------------------------------------------------------
+   Якорные переходы
+   --------------------------------------------------------- */
 
-.help-feature-status {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.help-feature-status > div {
-  position: relative;
-
-  padding: 16px 16px 16px 44px;
-
-  border-radius: 14px;
-
-  background: rgba(255,255,255,.035);
-}
-
-.help-feature-status span {
-  position: absolute;
-  left: 16px;
-  top: 17px;
-
-  font-size: 15px;
-  opacity: .55;
-}
-
-.help-feature-status strong {
-  display: block;
-  font-size: 12px;
-}
-
-.help-feature-status small {
-  display: block;
-  margin-top: 5px;
-
-  font-size: 10px;
-  opacity: .45;
+.help-section[id] {
+  scroll-margin-top: 24px;
 }
 
 
-/* =========================================================
-   FOOTER
-   ========================================================= */
+/* ---------------------------------------------------------
+   Ссылки внутри справки
+   --------------------------------------------------------- */
 
-.help-footer {
-  padding: 35px 10px 10px;
-  text-align: center;
+.help-page a:not(.help-quick-nav a) {
+  color: rgba(255,255,255,.8);
+
+  text-decoration: underline;
+  text-decoration-color: rgba(255,255,255,.2);
+  text-underline-offset: 3px;
+
+  transition:
+    color .18s ease,
+    text-decoration-color .18s ease;
 }
 
-.help-footer-mark {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: .18em;
-  opacity: .25;
-}
+.help-page a:not(.help-quick-nav a):hover {
+  color: rgba(255,255,255,.98);
 
-.help-footer p {
-  max-width: 600px;
-  margin: 14px auto;
-
-  font-size: 11px;
-  line-height: 1.6;
-
-  opacity: .35;
-}
-
-.help-top-link {
-  display: inline-block;
-
-  margin-top: 5px;
-
-  color: inherit;
-  text-decoration: none;
-
-  font-size: 11px;
-  opacity: .55;
+  text-decoration-color: rgba(255,255,255,.5);
 }
 
 
-/* =========================================================
-   MOBILE
-   ========================================================= */
+/* ---------------------------------------------------------
+   Адаптация под мобильные
+   --------------------------------------------------------- */
 
-@media (max-width: 900px) {
+@media (max-width: 700px) {
 
   .help-page {
-    padding: 12px 0 50px;
-  }
-
-  .help-hero {
-    padding: 24px;
-    border-radius: 19px;
-  }
-
-  .help-section {
-    grid-template-columns: 1fr;
-    gap: 8px;
-
-    padding: 22px;
-    border-radius: 19px;
-  }
-
-  .help-section-number {
-    padding: 0;
-  }
-
-  .help-info-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .help-status-grid,
-  .help-role-grid,
-  .help-tools-grid,
-  .help-feature-status {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .help-alias-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .help-status-row {
-    grid-template-columns: 1fr;
-    gap: 7px;
-  }
-
-}
-
-
-@media (max-width: 600px) {
-
-  .help-hero {
-    padding: 20px;
+    padding-bottom: 32px;
   }
 
   .help-hero h1 {
-    font-size: 30px;
+    font-size: 23px;
+  }
+
+  .help-hero p {
+    font-size: 13px;
   }
 
   .help-quick-nav {
-    position: static;
-  }
+    padding: 11px;
 
-  .help-info-grid,
-  .help-status-grid,
-  .help-role-grid,
-  .help-tools-grid,
-  .help-feature-status {
-    grid-template-columns: 1fr;
-  }
-
-  .help-example-row {
-    grid-template-columns: 1fr;
     gap: 6px;
+
+    border-radius: 14px;
   }
 
-  .help-example-arrow {
-    padding-left: 18px;
+  .help-quick-nav a,
+  .help-quick-nav a:visited,
+  .help-quick-nav a:active {
+    min-height: 32px;
+
+    padding: 0 10px;
+
+    font-size: 11px;
   }
 
-  .help-location {
-    align-items: flex-start;
+  .help-section {
+    padding: 17px;
+
+    border-radius: 15px;
+  }
+
+  .help-section h2 {
+    font-size: 16px;
+  }
+
+  .help-section p,
+  .help-section ul,
+  .help-section ol {
+    font-size: 12px;
+  }
+
+  .help-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .help-step {
+    gap: 9px;
+
+    padding: 11px 12px;
+  }
+
+  .help-step-number {
+    flex-basis: 26px;
+
+    width: 26px;
+    height: 26px;
+  }
+
+}
+
+
+/* ---------------------------------------------------------
+   Очень маленькие экраны
+   --------------------------------------------------------- */
+
+@media (max-width: 420px) {
+
+  .help-quick-nav a,
+  .help-quick-nav a:visited,
+  .help-quick-nav a:active {
+    width: 100%;
+
+    justify-content: center;
   }
 
 }
