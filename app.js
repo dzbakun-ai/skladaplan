@@ -79,6 +79,529 @@ const STATUSES = {
 
 };
 
+/* =========================================================
+   USER ROLES & PERMISSIONS
+   ========================================================= */
+
+/*
+  Пользователь с этим email получает
+  режим ТОЛЬКО ПРОСМОТР.
+
+  Все остальные авторизованные пользователи
+  считаются ADMIN.
+*/
+
+const VIEW_ONLY_USERS = new Set([
+  'viewer@skladaplan.ru'
+]);
+
+
+/*
+  =========================================================
+  ROLE
+  ========================================================= */
+
+function getCurrentUserRole() {
+
+  const email =
+    String(
+      state.user?.email || ''
+    )
+      .trim()
+      .toLowerCase();
+
+
+  if (
+    VIEW_ONLY_USERS.has(
+      email
+    )
+  ) {
+
+    return 'viewer';
+
+  }
+
+
+  return 'admin';
+
+}
+
+
+/*
+  =========================================================
+  ROLE HELPERS
+  ========================================================= */
+
+function isViewer() {
+
+  return (
+    getCurrentUserRole() ===
+    'viewer'
+  );
+
+}
+
+
+function isAdmin() {
+
+  return (
+    getCurrentUserRole() ===
+    'admin'
+  );
+
+}
+
+
+function canEdit() {
+
+  return isAdmin();
+
+}
+
+
+/*
+  =========================================================
+  UI — VIEWER MODE
+  =========================================================
+
+  Здесь перечислены элементы,
+  которые могут изменять данные.
+*/
+
+const EDITABLE_ELEMENT_SELECTORS = [
+
+  /* -------------------------------------------------------
+     НОВАЯ ЗАЯВКА / ПОДБОР
+     ------------------------------------------------------- */
+
+  '#createPickingBtn',
+
+  '#requestImportBtn',
+
+  '#importRequestBtn',
+
+  '#requestFile',
+
+  '#requestExcelInput',
+
+  '#requestBarcodes',
+
+
+  /* -------------------------------------------------------
+     БАЗА
+     ------------------------------------------------------- */
+
+  '#addBoxBtn',
+
+  '#deleteSelectedBtn',
+
+  '#markPickBtn',
+
+  '#setDirectionFromBaseBtn',
+
+
+  /* -------------------------------------------------------
+     СБОРКА
+     ------------------------------------------------------- */
+
+  '#completeSelectedAssembly',
+
+  '#removeFromAssemblyBtn',
+
+
+  /* -------------------------------------------------------
+     СОБРАНО
+     ------------------------------------------------------- */
+
+  '#setCollectedDirectionBtn',
+
+  '#shipCollectedBtn',
+
+
+  /* -------------------------------------------------------
+     ОТГРУЗКА
+     ------------------------------------------------------- */
+
+  '#shipBtn',
+
+  '#shipSelectedBtn',
+
+  '#completeShipmentBtn',
+
+
+  /* -------------------------------------------------------
+     ПРИЁМКА
+     ------------------------------------------------------- */
+
+  '#receiveBtn',
+
+  '#receivePalletBtn',
+
+  '#saveReceivingBtn',
+
+  '#scanReceiveBtn',
+
+
+  /* -------------------------------------------------------
+     ПЕРЕМЕЩЕНИЕ
+     ------------------------------------------------------- */
+
+  '#moveBtn',
+
+  '#moveSelectedBtn',
+
+  '#saveMoveBtn'
+
+];
+
+
+/*
+  =========================================================
+  Отключение элементов
+  ========================================================= */
+
+function applyViewerPermissions() {
+
+  /*
+    Пока пользователь не определён,
+    ничего не меняем.
+  */
+
+  if (
+    !state.user
+  ) {
+
+    return;
+
+  }
+
+
+  /*
+    Для ADMIN ничего не блокируем.
+  */
+
+  if (
+    isAdmin()
+  ) {
+
+    document.body.classList.remove(
+      'viewer-mode'
+    );
+
+    return;
+
+  }
+
+
+  /*
+    VIEWER.
+  */
+
+  document.body.classList.add(
+    'viewer-mode'
+  );
+
+
+  EDITABLE_ELEMENT_SELECTORS.forEach(
+    selector => {
+
+      document
+        .querySelectorAll(
+          selector
+        )
+        .forEach(
+          element => {
+
+            /*
+              Делаем элемент визуально
+              и функционально недоступным.
+            */
+
+            if (
+              'disabled' in element
+            ) {
+
+              element.disabled =
+                true;
+
+            }
+
+
+            element.classList.add(
+              'viewer-disabled'
+            );
+
+
+            element.setAttribute(
+              'aria-disabled',
+              'true'
+            );
+
+
+            /*
+              Для input[type=file]
+              блокируем выбор файла.
+            */
+
+            if (
+              element.matches(
+                'input[type="file"]'
+              )
+            ) {
+
+              element.value =
+                '';
+
+            }
+
+          }
+        );
+
+    }
+  );
+
+
+  /*
+    =======================================================
+    ДОПОЛНИТЕЛЬНАЯ ЗАЩИТА
+    Кнопки, которые могут попасть сюда
+    без точного ID.
+    =======================================================
+  */
+
+  document
+    .querySelectorAll(
+      '.viewer-edit-only'
+    )
+    .forEach(
+      element => {
+
+        if (
+          'disabled' in element
+        ) {
+
+          element.disabled =
+            true;
+
+        }
+
+        element.classList.add(
+          'viewer-disabled'
+        );
+
+      }
+    );
+
+}
+
+
+/*
+  =========================================================
+  БЛОКИРОВКА КЛИКОВ В VIEWER MODE
+  =========================================================
+
+  Даже если какой-то элемент
+  оказался без disabled,
+  действие не будет выполнено.
+*/
+
+document.addEventListener(
+  'click',
+  function(event) {
+
+    if (
+      !isViewer()
+    ) {
+
+      return;
+
+    }
+
+
+    const element =
+      event.target.closest(
+        EDITABLE_ELEMENT_SELECTORS.join(',')
+      );
+
+
+    if (
+      !element
+    ) {
+
+      return;
+
+    }
+
+
+    event.preventDefault();
+
+    event.stopPropagation();
+
+
+    toast(
+      'У вас права только на просмотр',
+      'error'
+    );
+
+  },
+  true
+);
+
+
+/*
+  =========================================================
+  БЛОКИРОВКА CHANGE
+  =========================================================
+
+  Нужна для input/file/select,
+  которые могут менять данные.
+*/
+
+document.addEventListener(
+  'change',
+  function(event) {
+
+    if (
+      !isViewer()
+    ) {
+
+      return;
+
+    }
+
+
+    const element =
+      event.target.closest(
+        EDITABLE_ELEMENT_SELECTORS.join(',')
+      );
+
+
+    if (
+      !element
+    ) {
+
+      return;
+
+    }
+
+
+    event.preventDefault();
+
+    event.stopPropagation();
+
+
+    if (
+      'disabled' in element
+    ) {
+
+      element.disabled =
+        true;
+
+    }
+
+
+    toast(
+      'У вас права только на просмотр',
+      'error'
+    );
+
+  },
+  true
+);
+
+
+/*
+  =========================================================
+  АВТОПРИМЕНЕНИЕ ПОСЛЕ render()
+  =========================================================
+
+  SKLADAPLAN постоянно перерисовывает DOM.
+  Поэтому MutationObserver снова применяет
+  права после каждого render().
+*/
+
+let permissionsObserver = null;
+
+
+function initPermissionsObserver() {
+
+  if (
+    permissionsObserver
+  ) {
+
+    return;
+
+  }
+
+
+  const target =
+    document.body;
+
+
+  if (
+    !target
+  ) {
+
+    return;
+
+  }
+
+
+  permissionsObserver =
+    new MutationObserver(
+      function() {
+
+        applyViewerPermissions();
+
+      }
+    );
+
+
+  permissionsObserver.observe(
+    target,
+    {
+      childList: true,
+      subtree: true
+    }
+  );
+
+
+  /*
+    Первичное применение.
+  */
+
+  applyViewerPermissions();
+
+}
+
+
+/*
+  =========================================================
+  USER ROLE BADGE
+  ========================================================= */
+
+function getRoleLabel() {
+
+  return isViewer()
+    ? 'Только просмотр'
+    : 'Администратор';
+
+}
+
+
+/*
+  Можно использовать в интерфейсе:
+
+  ${getRoleLabel()}
+*/
+
+
+/*
+  =========================================================
+  ИНИЦИАЛИЗАЦИЯ
+  ========================================================= */
+
+initPermissionsObserver();
 
 /* =========================================================
    STATE
