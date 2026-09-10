@@ -2747,25 +2747,221 @@ async function logout() {
 
 async function loadBoxesFromSupabase() {
 
-  console.log('=== TEST SUPABASE BOXES ===');
+  state.loading = true;
 
-  const result = await supabaseClient
-    .from('boxes')
-    .select('id')
-    .limit(1);
+  console.log(
+    'SKLADAPLAN: начинаем полную загрузку boxes...'
+  );
 
-  console.log('RESULT:', result);
+  try {
 
-  if (result.error) {
-    console.error('SUPABASE ERROR:', result.error);
-    throw result.error;
+    const all = [];
+
+    /*
+      Загружаем по 1000 строк.
+      Это позволяет получить всю базу,
+      даже если в boxes десятки тысяч записей.
+    */
+
+    const pageSize = 1000;
+
+    let from = 0;
+
+
+    while (true) {
+
+      const to =
+        from +
+        pageSize -
+        1;
+
+
+      console.log(
+        `SKLADAPLAN: загрузка boxes ${from}-${to}...`
+      );
+
+
+      const {
+        data,
+        error
+      } =
+        await supabaseClient
+          .from('boxes')
+          .select(BOX_SELECT)
+          .order('id', {
+            ascending: true
+          })
+          .range(
+            from,
+            to
+          );
+
+
+      /*
+        Ошибка Supabase.
+      */
+
+      if (error) {
+
+        console.error(
+          'SKLADAPLAN: ошибка загрузки boxes:',
+          error
+        );
+
+        throw error;
+
+      }
+
+
+      /*
+        Нет данных.
+        Значит загрузка закончена.
+      */
+
+      if (
+        !data ||
+        data.length === 0
+      ) {
+
+        break;
+
+      }
+
+
+      /*
+        Добавляем страницу
+        в общий массив.
+      */
+
+      all.push(
+        ...data
+      );
+
+
+      console.log(
+        `SKLADAPLAN: получено ${data.length} строк. Всего: ${all.length}`
+      );
+
+
+      /*
+        Если получили меньше 1000,
+        это последняя страница.
+      */
+
+      if (
+        data.length <
+        pageSize
+      ) {
+
+        break;
+
+      }
+
+
+      /*
+        Следующая страница.
+      */
+
+      from +=
+        pageSize;
+
+    }
+
+
+    /*
+      Сохраняем ВСЮ базу коробок
+      в состояние приложения.
+    */
+
+    state.boxes =
+      all;
+
+
+    /*
+      Проверяем существующие выбранные строки.
+    */
+
+    const existingIds =
+      new Set(
+        all.map(
+          row =>
+            String(row.id)
+        )
+      );
+
+
+    /*
+      Оставляем только те выбранные строки,
+      которые действительно есть в базе.
+    */
+
+    if (
+      state.selectedIds
+    ) {
+
+      state.selectedIds =
+        new Set(
+          [...state.selectedIds]
+            .filter(
+              id =>
+                existingIds.has(
+                  String(id)
+                )
+            )
+        );
+
+    }
+
+
+    console.log(
+      '========================================'
+    );
+
+    console.log(
+      `SKLADAPLAN: база boxes полностью загружена`
+    );
+
+    console.log(
+      `SKLADAPLAN: всего коробок: ${all.length}`
+    );
+
+    console.log(
+      '========================================'
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      'SKLADAPLAN: Database load error:',
+      error
+    );
+
+    /*
+      Передаём настоящую ошибку
+      функции запуска приложения.
+    */
+
+    throw error;
+
+
+  } finally {
+
+    /*
+      В любом случае снимаем состояние загрузки.
+    */
+
+    state.loading =
+      false;
+
   }
 
-  console.log('SUPABASE DATA:', result.data);
-
-  state.boxes = result.data || [];
-  state.loading = false;
 }
+
+
+/* =========================================================
+   RECEIVING DATA
+   ========================================================= */
 
 /* =========================================================
    RECEIVING DATA
