@@ -10208,8 +10208,26 @@ function collectedView() {
 
 
       <button
+        class="sp-btn secondary"
+        id="selectAllCollectedBtn"
+        ${
+          rows.length
+            ? ''
+            : 'disabled'
+        }
+      >
+        ☑ Выбрать все
+      </button>
+
+
+      <button
         class="sp-btn"
         id="setCollectedDirectionBtn"
+        ${
+          rows.length
+            ? ''
+            : 'disabled'
+        }
       >
         🏷 Назначить направление
       </button>
@@ -10239,7 +10257,18 @@ function collectedView() {
           <tr>
 
             <th>
-              ✓
+
+              <input
+                type="checkbox"
+                id="selectAllCollectedCheck"
+                title="Выбрать все"
+                ${
+                  rows.length
+                    ? ''
+                    : 'disabled'
+                }
+              >
+
             </th>
 
             <th>
