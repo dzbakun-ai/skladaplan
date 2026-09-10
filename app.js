@@ -52,6 +52,7 @@ const BOX_SELECT =
   'zone_row:"Зона/ряд",' +
   'pallet:"Поддон",' +
   'status:"Статус",' +
+  'direction:"Направление",' +
   'date:"ДатаРазмещения",' +
   'warehouse:"Склад",' +
   'worker:"Изменил",' +
@@ -127,14 +128,30 @@ const state = {
 
   basePage: 1,
 
-  baseSearch: '',
+ baseSearch: '',
+baseWarehouse: '',
+baseZone: '',
+basePallet: '',
+baseStatus: '',
+baseDirection: '',
 
-  baseWarehouse: '',
+selectedIds: new Set(),
 
-  baseStatus: '',
+/*
+  Ручная комплектация.
 
-  selectedIds: new Set(),
+  assemblySelectedGroups
+  = выбранные целиком группы.
 
+  assemblySelectedIds
+  = конкретные физические коробки.
+
+  assemblyExpandedGroups
+  = раскрытые группы с детализацией.
+*/
+assemblySelectedGroups: new Set(),
+assemblySelectedIds: new Set(),
+assemblyExpandedGroups: new Set(),
   editingId: null,
 
   currentPallet: '',
@@ -4627,60 +4644,69 @@ function getFilteredBoxes() {
       .trim()
       .toLowerCase();
 
-
   return state.boxes.filter(
     row => {
 
       if (
         state.baseWarehouse &&
-        row.warehouse !==
-          state.baseWarehouse
+        normalizeText(row.warehouse) !==
+          normalizeText(state.baseWarehouse)
       ) {
-
         return false;
-
       }
 
+      if (
+        state.baseZone &&
+        normalizeText(row.zone_row) !==
+          normalizeText(state.baseZone)
+      ) {
+        return false;
+      }
+
+      if (
+        state.basePallet &&
+        normalizeText(row.pallet) !==
+          normalizeText(state.basePallet)
+      ) {
+        return false;
+      }
 
       if (
         state.baseStatus &&
-        row.status !==
-          state.baseStatus
+        normalizeText(row.status) !==
+          normalizeText(state.baseStatus)
       ) {
-
         return false;
-
       }
 
+      if (
+        state.baseDirection &&
+        normalizeText(row.direction) !==
+          normalizeText(state.baseDirection)
+      ) {
+        return false;
+      }
 
       if (!search) {
-
         return true;
-
       }
 
-
       return [
-
         row.barcode,
         row.article,
         row.zone_row,
         row.pallet,
         row.status,
+        row.direction,
         row.warehouse,
         formatDate(row.date)
 
       ]
-
         .join(' ')
-
         .toLowerCase()
-
         .includes(search);
-
     }
   );
-
 }
 
 
@@ -4688,7 +4714,6 @@ function baseView() {
 
   const filtered =
     getFilteredBoxes();
-
 
   const totalPages =
     Math.max(
@@ -4699,22 +4724,17 @@ function baseView() {
       )
     );
 
-
   if (
     state.basePage >
     totalPages
   ) {
-
     state.basePage =
       totalPages;
-
   }
-
 
   const start =
     (state.basePage - 1) *
     PAGE_SIZE;
-
 
   const rows =
     filtered.slice(
@@ -4722,40 +4742,197 @@ function baseView() {
       start + PAGE_SIZE
     );
 
-
   const warehouses =
-    [...new Set(
-      state.boxes
-        .map(
-          row =>
-            row.warehouse
-        )
-        .filter(Boolean)
-    )]
-      .sort();
+    [
+      ...new Set(
+        state.boxes
+          .map(row =>
+            normalizeText(
+              row.warehouse
+            )
+          )
+          .filter(Boolean)
+      )
+    ].sort();
 
+  const zones =
+    [
+      ...new Set(
+        state.boxes
+          .filter(row => {
+
+            if (
+              state.baseWarehouse &&
+              normalizeText(row.warehouse) !==
+                normalizeText(state.baseWarehouse)
+            ) {
+              return false;
+            }
+
+            return true;
+          })
+          .map(row =>
+            normalizeText(
+              row.zone_row
+            )
+          )
+          .filter(Boolean)
+      )
+    ].sort();
+
+  const pallets =
+    [
+      ...new Set(
+        state.boxes
+          .filter(row => {
+
+            if (
+              state.baseWarehouse &&
+              normalizeText(row.warehouse) !==
+                normalizeText(state.baseWarehouse)
+            ) {
+              return false;
+            }
+
+            if (
+              state.baseZone &&
+              normalizeText(row.zone_row) !==
+                normalizeText(state.baseZone)
+            ) {
+              return false;
+            }
+
+            return true;
+          })
+          .map(row =>
+            normalizeText(
+              row.pallet
+            )
+          )
+          .filter(Boolean)
+      )
+    ].sort();
 
   const statuses =
-    [...new Set(
-      state.boxes
-        .map(
-          row =>
-            row.status
-        )
-        .filter(Boolean)
-    )]
-      .sort();
+    [
+      ...new Set(
+        state.boxes
+          .map(row =>
+            normalizeText(
+              row.status
+            )
+          )
+          .filter(Boolean)
+      )
+    ].sort();
 
+  const directions =
+    [
+      ...new Set(
+        state.boxes
+          .map(row =>
+            normalizeText(
+              row.direction
+            )
+          )
+          .filter(Boolean)
+      )
+    ].sort();
 
   return `
 
-    <div class="sp-toolbar">
+    <!-- =========================================
+         БЫСТРАЯ НАВИГАЦИЯ
+         ========================================= -->
+
+    <div
+      class="sp-card"
+      style="
+        margin-bottom:14px;
+      "
+    >
+
+      <div
+        style="
+          display:flex;
+          flex-wrap:wrap;
+          gap:8px;
+        "
+      >
+
+        <button
+          class="sp-btn secondary"
+          data-page="dashboard"
+        >
+          Главная
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="received"
+        >
+          Приёмка
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="assembly"
+        >
+          Сборка
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="collected"
+        >
+          Собрано
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="shipped"
+        >
+          Убыло
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="comparison"
+        >
+          Сравнение
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="tools"
+        >
+          Инструменты
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <!-- =========================================
+         ФИЛЬТРЫ
+         ========================================= -->
+
+    <div
+      class="sp-toolbar"
+      style="
+        flex-wrap:wrap;
+      "
+    >
 
       <input
         id="baseSearch"
         type="search"
-        placeholder="Поиск по штрихкоду, артикулу, зоне..."
-        value="${escapeHtml(state.baseSearch)}"
+        placeholder="Штрихкод / артикул / зона / поддон / направление..."
+        value="${escapeHtml(
+          state.baseSearch
+        )}"
+        style="min-width:260px"
       >
 
 
@@ -4769,7 +4946,9 @@ function baseView() {
           warehouse => `
 
             <option
-              value="${escapeHtml(warehouse)}"
+              value="${escapeHtml(
+                warehouse
+              )}"
               ${
                 warehouse ===
                 state.baseWarehouse
@@ -4777,7 +4956,63 @@ function baseView() {
                   : ''
               }
             >
-              ${escapeHtml(warehouse)}
+              ${escapeHtml(
+                warehouse
+              )}
+            </option>
+
+          `
+        ).join('')}
+
+      </select>
+
+
+      <select id="baseZone">
+
+        <option value="">
+          Все зоны / ряды
+        </option>
+
+        ${zones.map(
+          zone => `
+
+            <option
+              value="${escapeHtml(zone)}"
+              ${
+                zone ===
+                state.baseZone
+                  ? 'selected'
+                  : ''
+              }
+            >
+              ${escapeHtml(zone)}
+            </option>
+
+          `
+        ).join('')}
+
+      </select>
+
+
+      <select id="basePallet">
+
+        <option value="">
+          Все поддоны
+        </option>
+
+        ${pallets.map(
+          pallet => `
+
+            <option
+              value="${escapeHtml(pallet)}"
+              ${
+                pallet ===
+                state.basePallet
+                  ? 'selected'
+                  : ''
+              }
+            >
+              ${escapeHtml(pallet)}
             </option>
 
           `
@@ -4813,13 +5048,50 @@ function baseView() {
       </select>
 
 
+      <select id="baseDirection">
+
+        <option value="">
+          Все направления
+        </option>
+
+        ${directions.map(
+          direction => `
+
+            <option
+              value="${escapeHtml(
+                direction
+              )}"
+              ${
+                direction ===
+                state.baseDirection
+                  ? 'selected'
+                  : ''
+              }
+            >
+              ${escapeHtml(
+                direction
+              )}
+            </option>
+
+          `
+        ).join('')}
+
+      </select>
+
+
+      <button
+        class="sp-btn secondary"
+        id="resetBaseFilters"
+      >
+        Сбросить
+      </button>
+
       <button
         class="sp-btn"
         id="addBoxBtn"
       >
         + Добавить коробку
       </button>
-
 
       <button
         class="sp-btn success"
@@ -4830,9 +5102,21 @@ function baseView() {
             : 'disabled'
         }
       >
-        В подбор (${state.selectedIds.size})
+        В подбор
+        (${state.selectedIds.size})
       </button>
 
+      <button
+        class="sp-btn"
+        id="setDirectionFromBaseBtn"
+        ${
+          state.selectedIds.size
+            ? ''
+            : 'disabled'
+        }
+      >
+        🏷 Направление
+      </button>
 
       <button
         class="sp-btn danger"
@@ -4843,28 +5127,42 @@ function baseView() {
             : 'disabled'
         }
       >
-        Удалить выбранные
+        Удалить
+        (${state.selectedIds.size})
       </button>
 
     </div>
 
 
+    <!-- =========================================
+         СТАТИСТИКА
+         ========================================= -->
+
     <div
       class="sp-muted"
-      style="margin-bottom:10px"
+      style="margin:12px 0"
     >
+
       Найдено:
       <b>${filtered.length}</b>
 
-      · Всего коробок:
+      · Всего:
       <b>${state.boxes.length}</b>
 
-      · Страница
+      · Выбрано:
+      <b>${state.selectedIds.size}</b>
+
+      · Страница:
       ${state.basePage}
       из
       ${totalPages}
+
     </div>
 
+
+    <!-- =========================================
+         ТАБЛИЦА
+         ========================================= -->
 
     <div class="sp-table-wrap">
 
@@ -4878,23 +5176,41 @@ function baseView() {
               ✓
             </th>
 
-            <th>Штрихкод</th>
+            <th>
+              Штрихкод
+            </th>
 
-            <th>Артикул</th>
+            <th>
+              Артикул
+            </th>
 
-            <th>Кол-во в коробке</th>
+            <th>
+              Зона / ряд
+            </th>
 
-            <th>Зона/ряд</th>
+            <th>
+              Поддон
+            </th>
 
-            <th>Поддон</th>
+            <th>
+              Статус
+            </th>
 
-            <th>Статус</th>
+            <th>
+              Направление
+            </th>
 
-            <th>ДатаРазмещения</th>
+            <th>
+              Склад
+            </th>
 
-            <th>Склад</th>
+            <th>
+              Дата
+            </th>
 
-            <th>Действия</th>
+            <th>
+              Действия
+            </th>
 
           </tr>
 
@@ -4905,9 +5221,13 @@ function baseView() {
 
           ${
             rows.length
-              ? rows.map(
-                  baseRow
-                ).join('')
+
+              ? rows
+                  .map(
+                    baseRow
+                  )
+                  .join('')
+
               : `
 
                 <tr>
@@ -4931,6 +5251,10 @@ function baseView() {
 
     </div>
 
+
+    <!-- =========================================
+         ПАГИНАЦИЯ
+         ========================================= -->
 
     <div class="sp-pagination">
 
@@ -4958,7 +5282,6 @@ function baseView() {
           ←
         </button>
 
-
         <button
           class="sp-btn secondary"
           id="baseNext"
@@ -4976,7 +5299,6 @@ function baseView() {
     </div>
 
   `;
-
 }
 
 
@@ -5080,6 +5402,118 @@ function baseRow(row) {
 
 }
 
+async function setDirectionForSelectedBoxes() {
+
+  const ids =
+    [...state.selectedIds];
+
+  if (!ids.length) {
+
+    toast(
+      'Выберите хотя бы одну коробку',
+      'error'
+    );
+
+    return;
+  }
+
+  const direction =
+    prompt(
+      'Введите направление для выбранных коробок:',
+      ''
+    );
+
+  if (
+    direction === null
+  ) {
+    return;
+  }
+
+  const value =
+    normalizeText(
+      direction
+    );
+
+  if (!value) {
+
+    toast(
+      'Направление не указано',
+      'error'
+    );
+
+    return;
+  }
+
+  try {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from('boxes')
+        .update({
+          "Направление":
+            value,
+
+          "Изменил":
+            state.user?.email ||
+            null
+        })
+        .in(
+          'id',
+          ids
+        )
+        .select(
+          BOX_SELECT
+        );
+
+    if (error) {
+      throw error;
+    }
+
+    if (
+      Array.isArray(data)
+    ) {
+
+      data.forEach(
+        row => {
+
+          updateLocalBox(
+            row.id,
+            row
+          );
+
+        }
+      );
+
+    }
+
+    state.selectedIds =
+      new Set();
+
+    render();
+
+    toast(
+      `Направление "${value}" назначено: ${data?.length || ids.length}`
+    );
+
+  } catch (error) {
+
+    console.error(
+      'setDirectionForSelectedBoxes:',
+      error
+    );
+
+    toast(
+      error?.message ||
+      'Не удалось назначить направление',
+      'error'
+    );
+
+  }
+
+}
 
 function setupBase() {
 
@@ -5108,6 +5542,49 @@ function setupBase() {
         state.baseWarehouse =
           event.target.value;
 
+        state.baseZone =
+          '';
+
+        state.basePallet =
+          '';
+
+        state.basePage =
+          1;
+
+        render();
+
+      }
+    );
+
+
+  $('#baseZone')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.baseZone =
+          event.target.value;
+
+        state.basePallet =
+          '';
+
+        state.basePage =
+          1;
+
+        render();
+
+      }
+    );
+
+
+  $('#basePallet')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.basePallet =
+          event.target.value;
+
         state.basePage =
           1;
 
@@ -5127,6 +5604,42 @@ function setupBase() {
 
         state.basePage =
           1;
+
+        render();
+
+      }
+    );
+
+
+  $('#baseDirection')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.baseDirection =
+          event.target.value;
+
+        state.basePage =
+          1;
+
+        render();
+
+      }
+    );
+
+
+  $('#resetBaseFilters')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        state.baseSearch = '';
+        state.baseWarehouse = '';
+        state.baseZone = '';
+        state.basePallet = '';
+        state.baseStatus = '';
+        state.baseDirection = '';
+        state.basePage = 1;
 
         render();
 
@@ -5158,9 +5671,25 @@ function setupBase() {
       'click',
       () => {
 
-        state.basePage++;
+        const totalPages =
+          Math.max(
+            1,
+            Math.ceil(
+              getFilteredBoxes().length /
+              PAGE_SIZE
+            )
+          );
 
-        render();
+        if (
+          state.basePage <
+          totalPages
+        ) {
+
+          state.basePage++;
+
+          render();
+
+        }
 
       }
     );
@@ -5178,6 +5707,13 @@ function setupBase() {
     ?.addEventListener(
       'click',
       markSelectedForPicking
+    );
+
+
+  $('#setDirectionFromBaseBtn')
+    ?.addEventListener(
+      'click',
+      setDirectionForSelectedBoxes
     );
 
 
@@ -5201,23 +5737,19 @@ function setupBase() {
                 event.target.dataset.id
               );
 
-
             if (
               event.target.checked
             ) {
 
-              state.selectedIds.add(
-                id
-              );
+              state.selectedIds
+                .add(id);
 
             } else {
 
-              state.selectedIds.delete(
-                id
-              );
+              state.selectedIds
+                .delete(id);
 
             }
-
 
             render();
 
@@ -5236,9 +5768,10 @@ function setupBase() {
           'click',
           () => {
 
-            openBoxModal(
-              button.dataset.id
-            );
+            const id =
+              button.dataset.id;
+
+            openEditBoxModal(id);
 
           }
         );
@@ -5247,7 +5780,6 @@ function setupBase() {
     );
 
 }
-
 
 /* =========================================================
    BOX MODAL
@@ -7638,14 +8170,14 @@ function assemblyView() {
               Ручная комплектация
             </h3>
 
-            <div class="muted">
-              Одна галочка выбирает всю группу
-              одинаковых коробок в одной зоне
-              и на одном поддоне.
-            </div>
+           <div class="muted">
 
-          </div>
+             Галочка выбирает всю группу.
+             Кнопками − / + можно выбрать
+             отдельное количество физических коробок.
+             «Детали» показывает каждую коробку отдельно.
 
+           </div>
 
           <div
             id="assemblySelectedCount"
@@ -7867,500 +8399,584 @@ function assemblyView() {
 
 function pickingRow(group) {
 
-  const checked =
-    state.assemblySelectedGroups?.has(group.key)
+  const groupChecked =
+    state.assemblySelectedGroups?.has(
+      group.key
+    )
       ? 'checked'
+      : '';
+
+  const selectedIds =
+    state.assemblySelectedIds
+      ? state.assemblySelectedIds
+      : new Set();
+
+  const selectedCount =
+    group.ids.filter(
+      id =>
+        selectedIds.has(
+          String(id)
+        )
+    ).length;
+
+  const expanded =
+    state.assemblyExpandedGroups?.has(
+      group.key
+    );
+
+  const encodedKey =
+    encodeURIComponent(
+      group.key
+    );
+
+  const details =
+    expanded
+      ? `
+
+        <tr>
+
+          <td colspan="8">
+
+            <div
+              style="
+                padding:10px 14px;
+                background:#fafafa;
+                border-top:1px solid #eee;
+              "
+            >
+
+              <div
+                style="
+                  font-weight:700;
+                  margin-bottom:8px;
+                "
+              >
+                Физические коробки:
+                ${group.boxes.length}
+              </div>
+
+
+              <div
+                style="
+                  display:flex;
+                  flex-direction:column;
+                  gap:5px;
+                "
+              >
+
+                ${group.boxes.map(
+                  box => {
+
+                    const id =
+                      String(
+                        box.id
+                      );
+
+                    const checked =
+                      selectedIds.has(
+                        id
+                      )
+                        ? 'checked'
+                        : '';
+
+                    return `
+
+                      <label
+                        style="
+                          display:flex;
+                          align-items:center;
+                          gap:8px;
+                          padding:7px 9px;
+                          background:white;
+                          border:1px solid #eee;
+                          border-radius:8px;
+                          cursor:pointer;
+                        "
+                      >
+
+                        <input
+                          type="checkbox"
+                          class="assembly-box-checkbox"
+                          data-box-id="${escapeHtml(id)}"
+                          ${checked}
+                        >
+
+                        <span>
+                          ${escapeHtml(
+                            box.barcode
+                          )}
+                        </span>
+
+                        <span
+                          class="muted"
+                        >
+                          ${escapeHtml(
+                            box.zone_row
+                          )}
+                        </span>
+
+                        <span
+                          class="muted"
+                        >
+                          ${escapeHtml(
+                            box.pallet
+                          )}
+                        </span>
+
+                      </label>
+
+                    `;
+
+                  }
+                ).join('')}
+
+              </div>
+
+            </div>
+
+          </td>
+
+        </tr>
+
+      `
       : '';
 
   return `
 
     <tr>
 
-      <!-- ВЫБОР ГРУППЫ -->
-
       <td
         style="
           width:50px;
           text-align:center;
         "
-        data-label="Выбор"
       >
 
         <input
           type="checkbox"
           class="assembly-group-checkbox"
           data-group-key="${escapeHtml(
-            encodeURIComponent(group.key)
+            encodedKey
           )}"
-          ${checked}
+          ${groupChecked}
         >
 
       </td>
 
 
-      <!-- ШТРИХКОД -->
-
-      <td
-        data-label="Штрихкод"
-      >
+      <td>
 
         <b>
-          ${escapeHtml(group.barcode)}
+          ${escapeHtml(
+            group.barcode
+          )}
         </b>
 
       </td>
 
 
-      <!-- АРТИКУЛ -->
-
-      <td
-        data-label="Артикул"
-      >
-
-        ${escapeHtml(group.article)}
-
+      <td>
+        ${escapeHtml(
+          group.article
+        )}
       </td>
 
 
-      <!-- ЗОНА / РЯД -->
-
-      <td
-        data-label="Зона/ряд"
-      >
-
-        ${escapeHtml(group.zone_row)}
-
+      <td>
+        ${escapeHtml(
+          group.zone_row
+        )}
       </td>
 
 
-      <!-- ПОДДОН -->
-
-      <td
-        data-label="Поддон"
-      >
-
+      <td>
         <b>
-          ${escapeHtml(group.pallet)}
+          ${escapeHtml(
+            group.pallet
+          )}
         </b>
-
       </td>
 
 
-      <!-- СКЛАД -->
-
-      <td
-        data-label="Склад"
-      >
-
-        ${escapeHtml(group.warehouse)}
-
+      <td>
+        ${escapeHtml(
+          group.warehouse
+        )}
       </td>
 
 
-      <!-- КОЛИЧЕСТВО КОРОБОК -->
+      <td>
 
-      <td
-        data-label="Коробок"
-      >
-
-        <span
+        <div
           style="
-            font-weight:700;
-            font-size:14px;
+            display:flex;
+            align-items:center;
+            gap:5px;
           "
         >
-          ${group.count}
-        </span>
+
+          <button
+            type="button"
+            class="assembly-qty-btn"
+            data-action="minus"
+            data-group-key="${escapeHtml(
+              encodedKey
+            )}"
+          >
+            −
+          </button>
+
+
+          <b
+            style="
+              min-width:28px;
+              text-align:center;
+            "
+          >
+            ${selectedCount}
+          </b>
+
+
+          <button
+            type="button"
+            class="assembly-qty-btn"
+            data-action="plus"
+            data-group-key="${escapeHtml(
+              encodedKey
+            )}"
+          >
+            +
+          </button>
+
+
+          <span
+            class="muted"
+            style="
+              margin-left:5px;
+            "
+          >
+            / ${group.count}
+          </span>
+
+        </div>
 
       </td>
 
 
-      <!-- СТАТУС -->
+      <td>
 
-      <td
-        data-label="Статус"
-      >
-
-        <span class="status yellow">
-          ${escapeHtml(group.status)}
-        </span>
+        <button
+          type="button"
+          class="sp-btn secondary assembly-details-btn"
+          data-group-key="${escapeHtml(
+            encodedKey
+          )}"
+        >
+          ${
+            expanded
+              ? 'Скрыть'
+              : 'Детали'
+          }
+        </button>
 
       </td>
 
     </tr>
 
-  `;
+    ${details}
 
+  `;
 }
 
-function setupAssembly() {
+function pickingRow(group) {
 
-  /*
-    Отдельное множество выбранных ГРУПП
-    на странице "Сборка".
-
-    Внутри группы может быть несколько
-    физических коробок с одинаковым
-    штрихкодом / зоной / поддоном.
-  */
-
-  if (!state.assemblySelectedGroups) {
-    state.assemblySelectedGroups =
-      new Set();
-  }
-
-
-  /*
-    ТЕКУЩИЙ ПОДДОН
-  */
-
-  const pallet =
-    $('#currentPallet');
-
-
-  pallet?.addEventListener(
-    'input',
-    event => {
-
-      state.currentPallet =
-        event.target.value.trim();
-
-    }
-  );
-
-
-  $('#clearPallet')
-    ?.addEventListener(
-      'click',
-      () => {
-
-        state.currentPallet =
-          '';
-
-        render();
-
-        focusScanner();
-
-      }
-    );
-
-
-  /*
-    SCANNER
-    Сканер продолжает работать
-    с отдельными физическими коробками.
-  */
-
-  const scanner =
-    $('#scannerInput');
-
-
-  scanner?.addEventListener(
-    'keydown',
-    async event => {
-
-      if (
-        event.key === 'Enter'
-      ) {
-
-        event.preventDefault();
-
-
-        const barcode =
-          scanner.value;
-
-
-        scanner.value =
-          '';
-
-
-        await processScan(
-          barcode
-        );
-
-      }
-
-    }
-  );
-
-
-  scanner?.addEventListener(
-    'blur',
-    () => {
-
-      /*
-        Фокус специально не возвращаем.
-        Это позволяет пользоваться кнопками.
-      */
-
-    }
-  );
-
-
-  /*
-    РУЧНОЙ ВЫБОР ГРУПП
-  */
-
-  document
-    .querySelectorAll(
-      '.assembly-group-checkbox'
+  const groupChecked =
+    state.assemblySelectedGroups?.has(
+      group.key
     )
-    .forEach(
-      checkbox => {
+      ? 'checked'
+      : '';
 
-        checkbox.addEventListener(
-          'change',
-          event => {
+  const selectedIds =
+    state.assemblySelectedIds
+      ? state.assemblySelectedIds
+      : new Set();
 
-            const encodedKey =
-              event.target.dataset.groupKey;
+  const selectedCount =
+    group.ids.filter(
+      id =>
+        selectedIds.has(
+          String(id)
+        )
+    ).length;
 
-
-            if (!encodedKey) {
-              return;
-            }
-
-
-            let groupKey = '';
-
-            try {
-
-              groupKey =
-                decodeURIComponent(
-                  encodedKey
-                );
-
-            } catch (error) {
-
-              console.error(
-                'Ошибка чтения ключа группы:',
-                error
-              );
-
-              return;
-
-            }
-
-
-            if (!groupKey) {
-              return;
-            }
-
-
-            if (
-              event.target.checked
-            ) {
-
-              state
-                .assemblySelectedGroups
-                .add(groupKey);
-
-            } else {
-
-              state
-                .assemblySelectedGroups
-                .delete(groupKey);
-
-            }
-
-
-            updateAssemblySelectedCount();
-
-          }
-        );
-
-      }
+  const expanded =
+    state.assemblyExpandedGroups?.has(
+      group.key
     );
 
-
-  /*
-    ВЫБРАТЬ ВСЕ ГРУППЫ
-  */
-
-  const selectAll =
-    $('#selectAllAssembly');
-
-
-  const selectAllCheckbox =
-    $('#selectAllAssemblyCheckbox');
-
-
-  const selectAllGroups =
-    () => {
-
-      const groups =
-        getGroupedPickingBoxes()
-          .slice(0, 300);
-
-
-      groups.forEach(
-        group => {
-
-          state
-            .assemblySelectedGroups
-            .add(group.key);
-
-        }
-      );
-
-
-      document
-        .querySelectorAll(
-          '.assembly-group-checkbox'
-        )
-        .forEach(
-          checkbox => {
-
-            checkbox.checked =
-              true;
-
-          }
-        );
-
-
-      if (selectAllCheckbox) {
-
-        selectAllCheckbox.checked =
-          true;
-
-      }
-
-
-      updateAssemblySelectedCount();
-
-    };
-
-
-  /*
-    СНЯТЬ ВЫБОР СО ВСЕХ ГРУПП
-  */
-
-  const clearAllGroups =
-    () => {
-
-      state
-        .assemblySelectedGroups
-        .clear();
-
-
-      document
-        .querySelectorAll(
-          '.assembly-group-checkbox'
-        )
-        .forEach(
-          checkbox => {
-
-            checkbox.checked =
-              false;
-
-          }
-        );
-
-
-      if (selectAllCheckbox) {
-
-        selectAllCheckbox.checked =
-          false;
-
-      }
-
-
-      updateAssemblySelectedCount();
-
-    };
-
-
-  /*
-    КНОПКА "ВЫБРАТЬ ВСЕ"
-  */
-
-  selectAll?.addEventListener(
-    'click',
-    () => {
-
-      const checkboxes =
-        document.querySelectorAll(
-          '.assembly-group-checkbox'
-        );
-
-
-      const allChecked =
-        checkboxes.length > 0 &&
-        [...checkboxes].every(
-          checkbox =>
-            checkbox.checked
-        );
-
-
-      if (allChecked) {
-
-        clearAllGroups();
-
-      } else {
-
-        selectAllGroups();
-
-      }
-
-    }
-  );
-
-
-  /*
-    ГАЛОЧКА "ВЫБРАТЬ ВСЕ"
-  */
-
-  selectAllCheckbox?.addEventListener(
-    'change',
-    event => {
-
-      if (
-        event.target.checked
-      ) {
-
-        selectAllGroups();
-
-      } else {
-
-        clearAllGroups();
-
-      }
-
-    }
-  );
-
-
-  /*
-    СКОМПЛЕКТОВАТЬ ВЫБРАННЫЕ ГРУППЫ
-  */
-
-  $('#completeSelectedAssembly')
-    ?.addEventListener(
-      'click',
-      async () => {
-
-        await completeSelectedAssembly();
-
-      }
+  const encodedKey =
+    encodeURIComponent(
+      group.key
     );
 
+  const details =
+    expanded
+      ? `
 
-  /*
-    ОБНОВЛЯЕМ СЧЁТЧИК
-  */
+        <tr>
 
-  updateAssemblySelectedCount();
+          <td colspan="8">
+
+            <div
+              style="
+                padding:10px 14px;
+                background:#fafafa;
+                border-top:1px solid #eee;
+              "
+            >
+
+              <div
+                style="
+                  font-weight:700;
+                  margin-bottom:8px;
+                "
+              >
+                Физические коробки:
+                ${group.boxes.length}
+              </div>
 
 
-  /*
-    ФОКУС СКАНЕРА
-  */
+              <div
+                style="
+                  display:flex;
+                  flex-direction:column;
+                  gap:5px;
+                "
+              >
 
-  setTimeout(
-    focusScanner,
-    100
-  );
+                ${group.boxes.map(
+                  box => {
 
+                    const id =
+                      String(
+                        box.id
+                      );
+
+                    const checked =
+                      selectedIds.has(
+                        id
+                      )
+                        ? 'checked'
+                        : '';
+
+                    return `
+
+                      <label
+                        style="
+                          display:flex;
+                          align-items:center;
+                          gap:8px;
+                          padding:7px 9px;
+                          background:white;
+                          border:1px solid #eee;
+                          border-radius:8px;
+                          cursor:pointer;
+                        "
+                      >
+
+                        <input
+                          type="checkbox"
+                          class="assembly-box-checkbox"
+                          data-box-id="${escapeHtml(id)}"
+                          ${checked}
+                        >
+
+                        <span>
+                          ${escapeHtml(
+                            box.barcode
+                          )}
+                        </span>
+
+                        <span
+                          class="muted"
+                        >
+                          ${escapeHtml(
+                            box.zone_row
+                          )}
+                        </span>
+
+                        <span
+                          class="muted"
+                        >
+                          ${escapeHtml(
+                            box.pallet
+                          )}
+                        </span>
+
+                      </label>
+
+                    `;
+
+                  }
+                ).join('')}
+
+              </div>
+
+            </div>
+
+          </td>
+
+        </tr>
+
+      `
+      : '';
+
+  return `
+
+    <tr>
+
+      <td
+        style="
+          width:50px;
+          text-align:center;
+        "
+      >
+
+        <input
+          type="checkbox"
+          class="assembly-group-checkbox"
+          data-group-key="${escapeHtml(
+            encodedKey
+          )}"
+          ${groupChecked}
+        >
+
+      </td>
+
+
+      <td>
+
+        <b>
+          ${escapeHtml(
+            group.barcode
+          )}
+        </b>
+
+      </td>
+
+
+      <td>
+        ${escapeHtml(
+          group.article
+        )}
+      </td>
+
+
+      <td>
+        ${escapeHtml(
+          group.zone_row
+        )}
+      </td>
+
+
+      <td>
+        <b>
+          ${escapeHtml(
+            group.pallet
+          )}
+        </b>
+      </td>
+
+
+      <td>
+        ${escapeHtml(
+          group.warehouse
+        )}
+      </td>
+
+
+      <td>
+
+        <div
+          style="
+            display:flex;
+            align-items:center;
+            gap:5px;
+          "
+        >
+
+          <button
+            type="button"
+            class="assembly-qty-btn"
+            data-action="minus"
+            data-group-key="${escapeHtml(
+              encodedKey
+            )}"
+          >
+            −
+          </button>
+
+
+          <b
+            style="
+              min-width:28px;
+              text-align:center;
+            "
+          >
+            ${selectedCount}
+          </b>
+
+
+          <button
+            type="button"
+            class="assembly-qty-btn"
+            data-action="plus"
+            data-group-key="${escapeHtml(
+              encodedKey
+            )}"
+          >
+            +
+          </button>
+
+
+          <span
+            class="muted"
+            style="
+              margin-left:5px;
+            "
+          >
+            / ${group.count}
+          </span>
+
+        </div>
+
+      </td>
+
+
+      <td>
+
+        <button
+          type="button"
+          class="sp-btn secondary assembly-details-btn"
+          data-group-key="${escapeHtml(
+            encodedKey
+          )}"
+        >
+          ${
+            expanded
+              ? 'Скрыть'
+              : 'Детали'
+          }
+        </button>
+
+      </td>
+
+    </tr>
+
+    ${details}
+
+  `;
 }
 
 function focusScanner() {
@@ -8384,130 +9000,80 @@ function focusScanner() {
 
 async function completeSelectedAssembly() {
 
-  /*
-    Выбранные группы.
-  */
-
   if (!state.assemblySelectedGroups) {
     state.assemblySelectedGroups =
       new Set();
   }
 
-
-  const selectedGroupKeys =
-    [
-      ...state.assemblySelectedGroups
-    ];
-
-
-  if (!selectedGroupKeys.length) {
-
-    toast(
-      'Выберите хотя бы одну группу коробок',
-      'error'
-    );
-
-    return;
-
+  if (!state.assemblySelectedIds) {
+    state.assemblySelectedIds =
+      new Set();
   }
 
 
+  const ids =
+    new Set(
+      [
+        ...state.assemblySelectedIds
+      ]
+    );
+
+
   /*
-    Получаем актуальные группы
-    из текущего локального состояния.
+    Если выбрана целая группа,
+    добавляем все её физические ID.
   */
 
   const groups =
     getGroupedPickingBoxes();
 
-
-  /*
-    Находим выбранные группы.
-  */
-
-  const selectedGroups =
-    groups.filter(
-      group =>
-        state
-          .assemblySelectedGroups
-          .has(group.key)
-    );
-
-
-  /*
-    Собираем ID всех физических
-    коробок выбранных групп.
-
-    ID используется только внутри
-    системы и пользователю НЕ показывается.
-  */
-
-  const ids = [];
-
-
-  selectedGroups.forEach(
+  groups.forEach(
     group => {
 
       if (
-        !Array.isArray(group.ids)
+        state.assemblySelectedGroups
+          .has(
+            group.key
+          )
       ) {
-        return;
-      }
 
+        group.ids.forEach(
+          id => {
 
-      group.ids.forEach(
-        id => {
-
-          if (
-            id !== undefined &&
-            id !== null
-          ) {
-
-            ids.push(id);
+            ids.add(
+              String(id)
+            );
 
           }
+        );
 
-        }
-      );
+      }
 
     }
   );
 
 
-  /*
-    Убираем возможные дубликаты.
-  */
-
   const uniqueIds =
     [
-      ...new Set(ids)
+      ...ids
     ];
 
 
   if (!uniqueIds.length) {
 
-    state
-      .assemblySelectedGroups
-      .clear();
-
-    render();
-
     toast(
-      'В выбранных группах нет коробок',
+      'Выберите коробки для комплектации',
       'error'
     );
 
     return;
-
   }
 
 
   /*
-    Дополнительная защита.
-
-    Проверяем локальное состояние:
-    коробка должна действительно
-    находиться в КПодбору.
+    Проверяем,
+    что коробки всё ещё
+    находятся в КПодбору.
   */
 
   const validIds =
@@ -8517,9 +9083,9 @@ async function completeSelectedAssembly() {
         const row =
           state.boxes.find(
             box =>
-              box.id === id
+              String(box.id) ===
+              String(id)
           );
-
 
         return (
           row &&
@@ -8533,20 +9099,154 @@ async function completeSelectedAssembly() {
 
   if (!validIds.length) {
 
-    state
-      .assemblySelectedGroups
+    toast(
+      'Выбранные коробки уже не находятся в подборе',
+      'error'
+    );
+
+    state.assemblySelectedGroups
+      .clear();
+
+    state.assemblySelectedIds
       .clear();
 
     render();
 
+    return;
+  }
+
+
+  /*
+    Направление можно
+    назначить сразу при комплектации.
+  */
+
+  const direction =
+    prompt(
+      'Направление для скомплектованных коробок (можно оставить пустым):',
+      ''
+    );
+
+
+  if (
+    direction === null
+  ) {
+
+    return;
+
+  }
+
+
+  const cleanDirection =
+    normalizeText(
+      direction
+    );
+
+
+  const updateData = {
+
+    "Статус":
+      STATUSES.COLLECTED,
+
+    "Изменил":
+      state.user?.email ||
+      null
+
+  };
+
+
+  if (cleanDirection) {
+
+    updateData["Направление"] =
+      cleanDirection;
+
+  }
+
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+      .from('boxes')
+      .update(
+        updateData
+      )
+      .in(
+        'id',
+        validIds
+      )
+      .eq(
+        'Статус',
+        STATUSES.PICK
+      )
+      .select(
+        BOX_SELECT
+      );
+
+
+  if (error) {
+
+    console.error(
+      'Ошибка комплектации:',
+      error
+    );
+
     toast(
-      'Выбранные коробки уже не находятся в подборе',
+      error.message ||
+      'Ошибка комплектации',
       'error'
     );
 
     return;
 
   }
+
+
+  if (
+    Array.isArray(data)
+  ) {
+
+    data.forEach(
+      row => {
+
+        updateLocalBox(
+          row.id,
+          row
+        );
+
+      }
+    );
+
+  }
+
+
+  const completedCount =
+    Array.isArray(data)
+      ? data.length
+      : validIds.length;
+
+
+  state.assemblySelectedGroups
+    .clear();
+
+  state.assemblySelectedIds
+    .clear();
+
+  state.assemblyExpandedGroups
+    .clear();
+
+
+  render();
+
+
+  toast(
+    cleanDirection
+      ? `Скомплектовано: ${completedCount} · ${cleanDirection}`
+      : `Скомплектовано: ${completedCount}`
+  );
+
+}
 
 
   /*
@@ -8793,20 +9493,22 @@ function updateAssemblySelectedCount() {
   const element =
     $('#assemblySelectedCount');
 
-
   if (!element) {
     return;
   }
-
 
   const count =
     state.assemblySelectedIds
       ? state.assemblySelectedIds.size
       : 0;
 
+  const groups =
+    state.assemblySelectedGroups
+      ? state.assemblySelectedGroups.size
+      : 0;
 
   element.textContent =
-    `Выбрано: ${count}`;
+    `Выбрано: ${count} коробок · ${groups} групп`;
 
 }
 
