@@ -3133,3 +3133,53 @@ body.viewer-mode .viewer-edit-only {
   opacity: .45 !important;
   cursor: not-allowed !important;
 }
+
+/* =========================================================
+   FIX — SIDEBAR TOOLS
+   Все неактивные пункты меню светлые.
+   Чёрный фон только у реально активного пункта.
+   ========================================================= */
+
+.sidebar .nav {
+  background: transparent;
+  color: #111;
+  border-color: transparent;
+}
+
+.sidebar .nav:hover {
+  background: #f0f0f0;
+  color: #111;
+}
+
+.sidebar .nav.active {
+  background: #111;
+  color: #fff;
+}
+
+/* Инструменты и вложенные пункты */
+.sidebar .nav-section .nav {
+  background: transparent;
+  color: #111;
+}
+
+.sidebar .nav-section .nav:hover {
+  background: #f0f0f0;
+  color: #111;
+}
+
+.sidebar .nav-section .nav.active {
+  background: #111;
+  color: #fff;
+}
+
+/* Иконки внутри пунктов */
+.sidebar .nav svg,
+.sidebar .nav i {
+  color: currentColor;
+}
+
+/* Убираем возможный чёрный фон у контейнера инструментов */
+.sidebar .nav-section {
+  background: transparent;
+  color: #111;
+}
