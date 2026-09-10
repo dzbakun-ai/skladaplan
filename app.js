@@ -7762,6 +7762,11 @@ async function createPickingFromRequest() {
     =========================================================
   */
 
+console.log(
+  'REQUESTED:',
+  [...requested.entries()]
+);
+   
   for (
     const [
       barcode,
@@ -7769,6 +7774,12 @@ async function createPickingFromRequest() {
     ] of requested
   ) {
 
+const foundCount =
+  Math.min(
+    requiredCount,
+    candidates.length
+  );
+     
     /*
       Находим все физические коробки
       с этим штрихкодом.
