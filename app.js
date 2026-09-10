@@ -8305,12 +8305,12 @@ function assemblyView() {
 
 
                 <th>
-                  Коробок
+                  Выбор
                 </th>
 
 
                 <th>
-                  Статус
+                  Детализация
                 </th>
 
 
@@ -9878,14 +9878,72 @@ function collectedView() {
     );
 
 
+  const directions =
+    [
+      ...new Set(
+        rows
+          .map(row =>
+            normalizeText(
+              row.direction
+            )
+          )
+          .filter(Boolean)
+      )
+    ].sort();
+
+
   return `
 
-    <div class="sp-toolbar">
+    <div
+      class="sp-toolbar"
+      style="
+        flex-wrap:wrap;
+      "
+    >
 
       <div>
+
         Собрано:
-        <b>${rows.length}</b>
+        <b>
+          ${rows.length}
+        </b>
+
       </div>
+
+
+      <select
+        id="collectedDirectionFilter"
+      >
+
+        <option value="">
+          Все направления
+        </option>
+
+        ${directions.map(
+          direction => `
+
+            <option
+              value="${escapeHtml(
+                direction
+              )}"
+            >
+              ${escapeHtml(
+                direction
+              )}
+            </option>
+
+          `
+        ).join('')}
+
+      </select>
+
+
+      <button
+        class="sp-btn"
+        id="setCollectedDirectionBtn"
+      >
+        🏷 Назначить направление
+      </button>
 
 
       <button
@@ -9911,14 +9969,41 @@ function collectedView() {
 
           <tr>
 
-            <th>✓</th>
-            <th>Штрихкод</th>
-            <th>Артикул</th>
-            <th>Зона/ряд</th>
-            <th>Поддон</th>
-            <th>Склад</th>
-            <th>Работник</th>
-            <th>Дата</th>
+            <th>
+              ✓
+            </th>
+
+            <th>
+              Штрихкод
+            </th>
+
+            <th>
+              Артикул
+            </th>
+
+            <th>
+              Зона / ряд
+            </th>
+
+            <th>
+              Поддон
+            </th>
+
+            <th>
+              Склад
+            </th>
+
+            <th>
+              Направление
+            </th>
+
+            <th>
+              Работник
+            </th>
+
+            <th>
+              Дата
+            </th>
 
           </tr>
 
@@ -9929,16 +10014,18 @@ function collectedView() {
 
           ${
             rows.length
+
               ? rows
                   .map(
                     collectedRow
                   )
                   .join('')
+
               : `
 
                 <tr>
 
-                  <td colspan="8">
+                  <td colspan="9">
 
                     <div class="sp-empty">
                       Собранных коробок нет
@@ -9958,7 +10045,6 @@ function collectedView() {
     </div>
 
   `;
-
 }
 
 
@@ -9966,7 +10052,6 @@ function collectedRow(row) {
 
   const id =
     String(row.id);
-
 
   return `
 
@@ -9984,49 +10069,229 @@ function collectedRow(row) {
 
 
       <td>
+
         <b>
-          ${escapeHtml(row.barcode)}
+          ${escapeHtml(
+            row.barcode
+          )}
         </b>
-      </td>
 
-
-      <td>
-        ${escapeHtml(row.article)}
-      </td>
-
-
-      <td>
-        ${escapeHtml(row.zone_row)}
-      </td>
-
-
-      <td>
-        ${escapeHtml(row.pallet)}
-      </td>
-
-
-      <td>
-        ${escapeHtml(row.warehouse)}
-      </td>
-
-
-      <td>
-        ${escapeHtml(row.worker)}
       </td>
 
 
       <td>
         ${escapeHtml(
-          formatDate(row.date)
+          row.article
+        )}
+      </td>
+
+
+      <td>
+        ${escapeHtml(
+          row.zone_row
+        )}
+      </td>
+
+
+      <td>
+        ${escapeHtml(
+          row.pallet
+        )}
+      </td>
+
+
+      <td>
+        ${escapeHtml(
+          row.warehouse
+        )}
+      </td>
+
+
+      <td>
+
+        ${
+          row.direction
+
+            ? `
+              <span
+                style="
+                  display:inline-flex;
+                  padding:4px 9px;
+                  border-radius:999px;
+                  background:#eef2ff;
+                  font-weight:600;
+                  font-size:12px;
+                "
+              >
+                🏷
+                ${escapeHtml(
+                  row.direction
+                )}
+              </span>
+            `
+
+            : `
+              <span class="sp-muted">
+                —
+              </span>
+            `
+        }
+
+      </td>
+
+
+      <td>
+        ${escapeHtml(
+          row.worker
+        )}
+      </td>
+
+
+      <td>
+        ${escapeHtml(
+          formatDate(
+            row.date
+          )
         )}
       </td>
 
     </tr>
 
   `;
-
 }
 
+async function setDirectionForCollected() {
+
+  const ids =
+    $all('.collected-check')
+      .filter(
+        checkbox =>
+          checkbox.checked
+      )
+      .map(
+        checkbox =>
+          checkbox.dataset.id
+      );
+
+
+  if (!ids.length) {
+
+    toast(
+      'Выберите собранные коробки',
+      'error'
+    );
+
+    return;
+  }
+
+
+  const direction =
+    prompt(
+      'Введите направление:',
+      ''
+    );
+
+
+  if (
+    direction === null
+  ) {
+    return;
+  }
+
+
+  const value =
+    normalizeText(
+      direction
+    );
+
+
+  if (!value) {
+
+    toast(
+      'Направление не указано',
+      'error'
+    );
+
+    return;
+  }
+
+
+  try {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from('boxes')
+        .update({
+          "Направление":
+            value,
+
+          "Изменил":
+            state.user?.email ||
+            null
+        })
+        .in(
+          'id',
+          ids
+        )
+        .eq(
+          'Статус',
+          STATUSES.COLLECTED
+        )
+        .select(
+          BOX_SELECT
+        );
+
+
+    if (error) {
+      throw error;
+    }
+
+
+    if (
+      Array.isArray(data)
+    ) {
+
+      data.forEach(
+        row => {
+
+          updateLocalBox(
+            row.id,
+            row
+          );
+
+        }
+      );
+
+    }
+
+
+    render();
+
+
+    toast(
+      `Направление "${value}" назначено: ${data?.length || ids.length}`
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      'setDirectionForCollected:',
+      error
+    );
+
+    toast(
+      error?.message ||
+      'Ошибка назначения направления',
+      'error'
+    );
+
+  }
+
+}
 
 function setupCollected() {
 
@@ -10034,6 +10299,72 @@ function setupCollected() {
     ?.addEventListener(
       'click',
       shipSelectedCollected
+    );
+
+
+  $('#setCollectedDirectionBtn')
+    ?.addEventListener(
+      'click',
+      setDirectionForCollected
+    );
+
+
+  $('#collectedDirectionFilter')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        const direction =
+          normalizeText(
+            event.target.value
+          );
+
+        document
+          .querySelectorAll(
+            '.collected-check'
+          )
+          .forEach(
+            checkbox => {
+
+              const id =
+                String(
+                  checkbox.dataset.id
+                );
+
+              const row =
+                state.boxes.find(
+                  box =>
+                    String(box.id) ===
+                    id
+                );
+
+              if (!row) {
+                return;
+              }
+
+              const visible =
+                !direction ||
+                normalizeText(
+                  row.direction
+                ) ===
+                direction;
+
+              const tr =
+                checkbox.closest(
+                  'tr'
+                );
+
+              if (tr) {
+                tr.style.display =
+                  visible
+                    ? ''
+                    : 'none';
+              }
+
+            }
+          );
+
+      }
     );
 
 }
