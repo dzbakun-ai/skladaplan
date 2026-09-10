@@ -22618,36 +22618,40 @@ button.addEventListener(
       Специальные инструменты.
     */
 
-    if (
-      button.dataset.tool ===
-      'inventory'
-    ) {
+   if (
+  button.dataset.tool ===
+  'inventory'
+) {
 
-    } else if (button.dataset.tool === 'help') {
+  state.activeTool =
+    'inventory';
 
-       state.activeTool = 'help';
-       goToPage('tools');
+  goToPage(
+    'tools'
+  );
 
-   } else {
+} else if (
+  button.dataset.tool ===
+  'help'
+) {
 
-      state.activeTool =
-        'inventory';
+  state.activeTool =
+    'help';
 
-      goToPage(
-        'tools'
-      );
+  goToPage(
+    'tools'
+  );
 
-    } else {
+} else {
 
-      state.activeTool =
-        '';
+  state.activeTool =
+    '';
 
-      goToPage(
-        button.dataset.page
-      );
+  goToPage(
+    button.dataset.page
+  );
 
-    }
-
+}
 
             /*
               На телефоне после перехода
@@ -22807,14 +22811,6 @@ async function startAuthenticatedApp() {
     */
 
     render();
-
-if (
-  state.currentPage === 'tools' &&
-  state.activeTool === 'help'
-) {
-  setupHelp();
-}
-     
 
   } catch (error) {
 
