@@ -175,6 +175,22 @@ const state = {
 
   session: null
 
+     /* =======================================================
+     COMPARISON
+     ======================================================= */
+
+  comparisonRows: [],
+
+  comparisonFileName: '',
+
+  comparisonLoaded: false,
+
+  comparisonLoading: false,
+
+  comparisonError: '',
+
+  comparisonMode: 'units',
+
 };
 
 
@@ -12226,6 +12242,1646 @@ function countStatus(
    TOOLS
    ========================================================= */
 
+/* =========================================================
+   COMPARISON
+   ЗАЯВКА → ТРЕБУЕМЫЕ КОРОБКИ → СОБРАНО
+   ========================================================= */
+
+
+/*
+  Преобразование значения количества.
+
+  Поддерживает:
+  48
+  "48"
+  "48.0"
+  "48,0"
+*/
+function comparisonNumber(value) {
+
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+
+    return 0;
+
+  }
+
+
+  const normalized =
+    String(value)
+      .trim()
+      .replace(',', '.');
+
+
+  const number =
+    Number(normalized);
+
+
+  if (
+    !Number.isFinite(number)
+  ) {
+
+    return 0;
+
+  }
+
+
+  return number;
+
+}
+
+
+/*
+  Получаем количество товара в одной коробке
+  для конкретного штрихкода.
+
+  Если в базе несколько физических коробок
+  одного штрихкода — берём наиболее часто
+  встречающееся положительное значение.
+
+  Это защищает сравнение от случайной
+  единичной неправильной записи.
+*/
+function getQuantityInBoxForBarcode(
+  barcode
+) {
+
+  const values =
+    state.boxes
+      .filter(
+        row =>
+          normalizeBarcode(
+            row.barcode
+          ) === barcode
+      )
+      .map(
+        row =>
+          comparisonNumber(
+            row.quantity_in_box
+          )
+      )
+      .filter(
+        value =>
+          value > 0
+      );
+
+
+  if (!values.length) {
+
+    return 0;
+
+  }
+
+
+  const frequency =
+    new Map();
+
+
+  values.forEach(
+    value => {
+
+      frequency.set(
+        value,
+        (frequency.get(value) || 0) + 1
+      );
+
+    }
+  );
+
+
+  let bestValue =
+    values[0];
+
+  let bestCount =
+    0;
+
+
+  frequency.forEach(
+    (count, value) => {
+
+      if (
+        count > bestCount
+      ) {
+
+        bestCount =
+          count;
+
+        bestValue =
+          value;
+
+      }
+
+    }
+  );
+
+
+  return bestValue;
+
+}
+
+
+/*
+  Сколько физических коробок реально
+  находится в статусе "Скомплектовано".
+*/
+function getCollectedCountForBarcode(
+  barcode
+) {
+
+  return state.boxes
+    .filter(
+      row =>
+        row.status ===
+        STATUSES.COLLECTED
+    )
+    .filter(
+      row =>
+        normalizeBarcode(
+          row.barcode
+        ) === barcode
+    )
+    .length;
+
+}
+
+
+/*
+  Разбор строки заявки.
+
+  Поддерживаем:
+
+  4810122595003
+  4810122595003 48
+  4810122595003 - 48
+  4810122595003;48
+  4810122595003:48
+*/
+function parseComparisonText(
+  raw
+) {
+
+  const lines =
+    String(raw || '')
+      .split(/\r?\n/)
+      .map(
+        line =>
+          line.trim()
+      )
+      .filter(Boolean);
+
+
+  const map =
+    new Map();
+
+
+  lines.forEach(
+    line => {
+
+      const barcodeMatch =
+        line.match(
+          /\d{8,20}/
+        );
+
+
+      if (!barcodeMatch) {
+
+        return;
+
+      }
+
+
+      const barcode =
+        normalizeBarcode(
+          barcodeMatch[0]
+        );
+
+
+      if (!barcode) {
+
+        return;
+
+      }
+
+
+      let rest =
+        line
+          .replace(
+            barcodeMatch[0],
+            ''
+          )
+          .trim();
+
+
+      rest =
+        rest.replace(
+          /^[\s\-:;|]+/,
+          ''
+        );
+
+
+      const quantityMatch =
+        rest.match(
+          /(\d+(?:[.,]\d+)?)/
+        );
+
+
+      const quantity =
+        quantityMatch
+          ? comparisonNumber(
+              quantityMatch[1]
+            )
+          : 1;
+
+
+      if (
+        quantity <= 0
+      ) {
+
+        return;
+
+      }
+
+
+      map.set(
+        barcode,
+        (map.get(barcode) || 0) +
+        quantity
+      );
+
+    }
+  );
+
+
+  return [
+    ...map.entries()
+  ].map(
+    ([barcode, quantity]) => ({
+      barcode,
+      requestedUnits:
+        quantity
+    })
+  );
+
+}
+
+
+/*
+  Формируем результат сравнения.
+*/
+function buildComparisonRows(
+  requestRows
+) {
+
+  return requestRows.map(
+    request => {
+
+      const barcode =
+        request.barcode;
+
+
+      const requestedUnits =
+        comparisonNumber(
+          request.requestedUnits
+        );
+
+
+      const quantityInBox =
+        getQuantityInBoxForBarcode(
+          barcode
+        );
+
+
+      const requiredBoxes =
+        quantityInBox > 0
+          ? Math.ceil(
+              requestedUnits /
+              quantityInBox
+            )
+          : null;
+
+
+      const collectedBoxes =
+        getCollectedCountForBarcode(
+          barcode
+        );
+
+
+      let difference =
+        null;
+
+
+      let status =
+        'Нет нормы';
+
+
+      if (
+        requiredBoxes !== null
+      ) {
+
+        difference =
+          collectedBoxes -
+          requiredBoxes;
+
+
+        if (
+          difference === 0
+        ) {
+
+          status =
+            'ОК';
+
+        } else if (
+          difference < 0
+        ) {
+
+          status =
+            'Не хватает';
+
+        } else {
+
+          status =
+            'Лишние';
+
+        }
+
+      }
+
+
+      const article =
+        state.boxes.find(
+          row =>
+            normalizeBarcode(
+              row.barcode
+            ) === barcode &&
+            row.article
+        )?.article || '';
+
+
+      return {
+
+        barcode,
+
+        article,
+
+        requestedUnits,
+
+        quantityInBox,
+
+        requiredBoxes,
+
+        collectedBoxes,
+
+        difference,
+
+        status
+
+      };
+
+    }
+  );
+
+}
+
+
+/*
+  Обновляем сравнение после ручного ввода.
+*/
+function updateComparison() {
+
+  const input =
+    $('#comparisonRequest');
+
+
+  if (!input) {
+
+    return;
+
+  }
+
+
+  const rows =
+    parseComparisonText(
+      input.value
+    );
+
+
+  state.comparisonRows =
+    buildComparisonRows(
+      rows
+    );
+
+
+  renderComparisonTable();
+
+}
+
+
+/*
+  Импорт заявки Excel для сравнения.
+
+  Ожидается:
+
+  Штрихкод | Количество
+
+  Количество здесь означает
+  количество ТОВАРА, а не коробок.
+*/
+function importComparisonExcel(
+  event
+) {
+
+  const file =
+    event.target.files?.[0];
+
+
+  if (!file) {
+
+    return;
+
+  }
+
+
+  state.comparisonLoading =
+    true;
+
+
+  state.comparisonError =
+    '';
+
+
+  const reader =
+    new FileReader();
+
+
+  reader.onload =
+    function(e) {
+
+      try {
+
+        const data =
+          new Uint8Array(
+            e.target.result
+          );
+
+
+        const workbook =
+          XLSX.read(
+            data,
+            {
+              type: 'array'
+            }
+          );
+
+
+        const sheetName =
+          workbook.SheetNames[0];
+
+
+        const sheet =
+          workbook.Sheets[
+            sheetName
+          ];
+
+
+        const rows =
+          XLSX.utils.sheet_to_json(
+            sheet,
+            {
+              header: 1,
+              defval: '',
+              raw: false
+            }
+          );
+
+
+        if (
+          !rows.length
+        ) {
+
+          throw new Error(
+            'Excel-файл пустой'
+          );
+
+        }
+
+
+        const header =
+          rows[0].map(
+            value =>
+              normalizeHeader(
+                value
+              )
+          );
+
+
+        let barcodeColumn =
+          -1;
+
+
+        let quantityColumn =
+          -1;
+
+
+        for (
+          let i = 0;
+          i < header.length;
+          i++
+        ) {
+
+          const name =
+            header[i];
+
+
+          if (
+            barcodeColumn === -1 &&
+            (
+              name.includes(
+                'штрихкод'
+              ) ||
+              name.includes(
+                'barcode'
+              ) ||
+              name.includes(
+                'баркод'
+              )
+            )
+          ) {
+
+            barcodeColumn =
+              i;
+
+          }
+
+
+          if (
+            quantityColumn === -1 &&
+            (
+              name ===
+                'количество' ||
+              name.includes(
+                'количество'
+              ) ||
+              name.includes(
+                'колво'
+              ) ||
+              name.includes(
+                'колич'
+              ) ||
+              name ===
+                'qty'
+            )
+          ) {
+
+            quantityColumn =
+              i;
+
+          }
+
+        }
+
+
+        /*
+          Если заголовки не определились:
+
+          A = штрихкод
+          B = количество
+        */
+
+        if (
+          barcodeColumn === -1
+        ) {
+
+          barcodeColumn =
+            0;
+
+        }
+
+
+        if (
+          quantityColumn === -1
+        ) {
+
+          quantityColumn =
+            1;
+
+        }
+
+
+        const requestRows =
+          [];
+
+
+        for (
+          let i = 1;
+          i < rows.length;
+          i++
+        ) {
+
+          const row =
+            rows[i];
+
+
+          const barcode =
+            normalizeBarcode(
+              row[
+                barcodeColumn
+              ]
+            );
+
+
+          if (!barcode) {
+
+            continue;
+
+          }
+
+
+          const quantity =
+            comparisonNumber(
+              row[
+                quantityColumn
+              ]
+            );
+
+
+          if (
+            quantity <= 0
+          ) {
+
+            continue;
+
+          }
+
+
+          requestRows.push({
+            barcode,
+            requestedUnits:
+              quantity
+          });
+
+        }
+
+
+        /*
+          Объединяем одинаковые
+          штрихкоды.
+        */
+
+        const map =
+          new Map();
+
+
+        requestRows.forEach(
+          row => {
+
+            map.set(
+              row.barcode,
+              (
+                map.get(
+                  row.barcode
+                ) || 0
+              ) +
+              row.requestedUnits
+            );
+
+          }
+        );
+
+
+        const normalizedRows =
+          [
+            ...map.entries()
+          ].map(
+            ([barcode, quantity]) => ({
+              barcode,
+              requestedUnits:
+                quantity
+            })
+          );
+
+
+        state.comparisonRows =
+          buildComparisonRows(
+            normalizedRows
+          );
+
+
+        state.comparisonFileName =
+          file.name;
+
+
+        state.comparisonLoaded =
+          true;
+
+
+        const textarea =
+          $('#comparisonRequest');
+
+
+        if (textarea) {
+
+          textarea.value =
+            normalizedRows
+              .map(
+                row =>
+                  `${row.barcode} - ${row.requestedUnits}`
+              )
+              .join('\n');
+
+        }
+
+
+        renderComparisonTable();
+
+
+        toast(
+          `Заявка загружена: ${normalizedRows.length} позиций`
+        );
+
+
+      }
+      catch (error) {
+
+        console.error(
+          'Ошибка сравнения Excel:',
+          error
+        );
+
+
+        state.comparisonError =
+          error.message ||
+          'Не удалось прочитать Excel';
+
+
+        toast(
+          state.comparisonError,
+          'error'
+        );
+
+      }
+
+
+      finally {
+
+        state.comparisonLoading =
+          false;
+
+
+        event.target.value =
+          '';
+
+      }
+
+    };
+
+
+  reader.readAsArrayBuffer(
+    file
+  );
+
+}
+
+
+/*
+  Очищаем сравнение.
+*/
+function clearComparison() {
+
+  state.comparisonRows =
+    [];
+
+  state.comparisonLoaded =
+    false;
+
+  state.comparisonFileName =
+    '';
+
+  state.comparisonError =
+    '';
+
+
+  const input =
+    $('#comparisonRequest');
+
+
+  if (input) {
+
+    input.value =
+      '';
+
+  }
+
+
+  renderComparisonTable();
+
+}
+
+
+/*
+  Отрисовка таблицы сравнения.
+*/
+function renderComparisonTable() {
+
+  const body =
+    $('#comparisonBody');
+
+
+  const summary =
+    $('#comparisonSummary');
+
+
+  const totalRequested =
+    $('#comparisonRequested');
+
+
+  const totalRequired =
+    $('#comparisonRequired');
+
+
+  const totalCollected =
+    $('#comparisonCollected');
+
+
+  const totalDifference =
+    $('#comparisonDifference');
+
+
+  const statusElement =
+    $('#comparisonOverallStatus');
+
+
+  if (!body) {
+
+    return;
+
+  }
+
+
+  const rows =
+    state.comparisonRows || [];
+
+
+  if (!rows.length) {
+
+    body.innerHTML = `
+
+      <tr>
+
+        <td
+          colspan="7"
+          class="empty"
+        >
+          Загрузите заявку или вставьте
+          данные вручную.
+
+        </td>
+
+      </tr>
+
+    `;
+
+
+    if (summary) {
+
+      summary.textContent =
+        '0 позиций';
+
+    }
+
+
+    if (totalRequested) {
+
+      totalRequested.textContent =
+        '0';
+
+    }
+
+
+    if (totalRequired) {
+
+      totalRequired.textContent =
+        '0';
+
+    }
+
+
+    if (totalCollected) {
+
+      totalCollected.textContent =
+        '0';
+
+    }
+
+
+    if (totalDifference) {
+
+      totalDifference.textContent =
+        '0';
+
+    }
+
+
+    if (statusElement) {
+
+      statusElement.textContent =
+        'Ожидание заявки';
+
+    }
+
+
+    return;
+
+  }
+
+
+  body.innerHTML =
+    rows.map(
+      row => {
+
+        const statusClass =
+          row.status === 'ОК'
+            ? 'success'
+            : row.status === 'Не хватает'
+              ? 'danger'
+              : row.status === 'Лишние'
+                ? 'warning'
+                : 'muted';
+
+
+        const statusText =
+          row.status ===
+            'Не хватает'
+            ? `−${Math.abs(
+                row.difference || 0
+              )}`
+            : row.status ===
+              'Лишние'
+              ? `+${row.difference || 0}`
+              : row.status ===
+                'ОК'
+                ? '✓'
+                : '—';
+
+
+        return `
+
+          <tr>
+
+            <td>
+
+              <b>
+                ${escapeHtml(
+                  row.barcode
+                )}
+              </b>
+
+            </td>
+
+
+            <td>
+              ${escapeHtml(
+                row.article
+              )}
+            </td>
+
+
+            <td>
+              ${row.requestedUnits}
+            </td>
+
+
+            <td>
+              ${
+                row.quantityInBox
+                  ? row.quantityInBox
+                  : '—'
+              }
+            </td>
+
+
+            <td>
+
+              ${
+                row.requiredBoxes !== null
+                  ? row.requiredBoxes
+                  : '—'
+              }
+
+            </td>
+
+
+            <td>
+              ${row.collectedBoxes}
+            </td>
+
+
+            <td>
+
+              <span
+                class="sp-status ${statusClass}"
+              >
+                ${escapeHtml(
+                  row.status
+                )}
+                ${
+                  statusText !==
+                  row.status
+                    ? ` · ${statusText}`
+                    : ''
+                }
+              </span>
+
+            </td>
+
+          </tr>
+
+        `;
+
+      }
+    ).join('');
+
+
+  const requested =
+    rows.reduce(
+      (sum, row) =>
+        sum +
+        row.requestedUnits,
+      0
+    );
+
+
+  const required =
+    rows.reduce(
+      (sum, row) =>
+        sum +
+        (
+          row.requiredBoxes || 0
+        ),
+      0
+    );
+
+
+  const collected =
+    rows.reduce(
+      (sum, row) =>
+        sum +
+        row.collectedBoxes,
+      0
+    );
+
+
+  const difference =
+    rows.every(
+      row =>
+        row.difference !== null
+    )
+      ? collected -
+        required
+      : null;
+
+
+  const allOk =
+    rows.length > 0 &&
+    rows.every(
+      row =>
+        row.status === 'ОК'
+    );
+
+
+  const hasMissing =
+    rows.some(
+      row =>
+        row.status ===
+        'Не хватает'
+    );
+
+
+  const hasNoNorm =
+    rows.some(
+      row =>
+        row.status ===
+        'Нет нормы'
+    );
+
+
+  if (summary) {
+
+    summary.textContent =
+      `${rows.length} позиций · ` +
+      `${required} требуется коробок · ` +
+      `${collected} собрано`;
+
+  }
+
+
+  if (totalRequested) {
+
+    totalRequested.textContent =
+      requested;
+
+  }
+
+
+  if (totalRequired) {
+
+    totalRequired.textContent =
+      required;
+
+  }
+
+
+  if (totalCollected) {
+
+    totalCollected.textContent =
+      collected;
+
+  }
+
+
+  if (totalDifference) {
+
+    totalDifference.textContent =
+      difference === null
+        ? '—'
+        : difference > 0
+          ? `+${difference}`
+          : difference;
+
+  }
+
+
+  if (statusElement) {
+
+    if (allOk) {
+
+      statusElement.textContent =
+        '✓ ГОТОВО К ОТГРУЗКЕ';
+
+    } else if (
+      hasMissing
+    ) {
+
+      statusElement.textContent =
+        '⚠ НЕ ХВАТАЕТ КОРОБОК';
+
+    } else if (
+      hasNoNorm
+    ) {
+
+      statusElement.textContent =
+        '⚠ НУЖНО ЗАПОЛНИТЬ НОРМУ';
+
+    } else {
+
+      statusElement.textContent =
+        'ПРОВЕРКА';
+
+    }
+
+  }
+
+}
+
+
+/*
+  Сам экран.
+*/
+function comparisonView() {
+
+  return `
+
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
+
+    <div
+      class="sp-card"
+      style="
+        margin-bottom:16px;
+      "
+    >
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:flex-start;
+          gap:16px;
+          flex-wrap:wrap;
+        "
+      >
+
+        <div>
+
+          <h2
+            style="
+              margin:0 0 6px;
+              font-size:21px;
+            "
+          >
+            ⇄ Сравнение заявки
+          </h2>
+
+          <div class="sp-muted">
+
+            Сравнение количества товара
+            с фактически собранными
+            физическими коробками.
+
+          </div>
+
+        </div>
+
+
+        <div
+          id="comparisonOverallStatus"
+          style="
+            padding:8px 12px;
+            border-radius:10px;
+            background:#f5f5f5;
+            font-size:12px;
+            font-weight:700;
+            white-space:nowrap;
+          "
+        >
+          Ожидание заявки
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         IMPORT
+         ===================================================== -->
+
+    <div
+      class="sp-card"
+      style="
+        margin-bottom:16px;
+      "
+    >
+
+      <h3>
+        1. Заявка
+      </h3>
+
+      <p
+        class="sp-muted"
+        style="
+          margin-top:4px;
+        "
+      >
+        Excel должен содержать
+        <b>Штрихкод</b> и
+        <b>Количество</b>.
+        Количество — это количество товара,
+        а не коробок.
+      </p>
+
+
+      <div
+        style="
+          display:flex;
+          gap:10px;
+          flex-wrap:wrap;
+          margin:14px 0;
+        "
+      >
+
+        <button
+          class="sp-btn"
+          type="button"
+          onclick="
+            document
+              .getElementById(
+                'comparisonExcelInput'
+              )
+              .click()
+          "
+        >
+          📥 Импорт Excel
+        </button>
+
+
+        <input
+          id="comparisonExcelInput"
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          style="display:none"
+          onchange="importComparisonExcel(event)"
+        >
+
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          onclick="updateComparison()"
+        >
+          ↻ Пересчитать
+        </button>
+
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          onclick="clearComparison()"
+        >
+          Очистить
+        </button>
+
+      </div>
+
+
+      <textarea
+        id="comparisonRequest"
+        placeholder="Например:
+
+4810122595003 - 48
+4810122659354 - 50
+
+или просто вставьте строки Excel"
+        style="
+          width:100%;
+          min-height:130px;
+          box-sizing:border-box;
+          resize:vertical;
+          border:1px solid #ddd;
+          border-radius:12px;
+          padding:14px;
+          font-family:monospace;
+          font-size:14px;
+          line-height:1.6;
+          outline:none;
+        "
+      ></textarea>
+
+    </div>
+
+
+    <!-- =====================================================
+         KPI
+         ===================================================== -->
+
+    <div
+      class="sp-dashboard-kpi-grid"
+      style="
+        display:grid;
+        grid-template-columns:
+          repeat(4,minmax(0,1fr));
+        gap:12px;
+        margin-bottom:16px;
+      "
+    >
+
+      <div
+        class="sp-card"
+        style="
+          margin:0;
+          padding:18px;
+        "
+      >
+
+        <div class="sp-card-label">
+          Заказано, шт.
+        </div>
+
+        <div
+          id="comparisonRequested"
+          style="
+            font-size:28px;
+            font-weight:750;
+            margin-top:7px;
+          "
+        >
+          0
+        </div>
+
+      </div>
+
+
+      <div
+        class="sp-card"
+        style="
+          margin:0;
+          padding:18px;
+        "
+      >
+
+        <div class="sp-card-label">
+          Требуется коробок
+        </div>
+
+        <div
+          id="comparisonRequired"
+          style="
+            font-size:28px;
+            font-weight:750;
+            margin-top:7px;
+          "
+        >
+          0
+        </div>
+
+      </div>
+
+
+      <div
+        class="sp-card"
+        style="
+          margin:0;
+          padding:18px;
+        "
+      >
+
+        <div class="sp-card-label">
+          Собрано коробок
+        </div>
+
+        <div
+          id="comparisonCollected"
+          style="
+            font-size:28px;
+            font-weight:750;
+            margin-top:7px;
+          "
+        >
+          0
+        </div>
+
+      </div>
+
+
+      <div
+        class="sp-card"
+        style="
+          margin:0;
+          padding:18px;
+        "
+      >
+
+        <div class="sp-card-label">
+          Разница
+        </div>
+
+        <div
+          id="comparisonDifference"
+          style="
+            font-size:28px;
+            font-weight:750;
+            margin-top:7px;
+          "
+        >
+          0
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         TABLE
+         ===================================================== -->
+
+    <div class="sp-card">
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          gap:12px;
+          flex-wrap:wrap;
+          margin-bottom:14px;
+        "
+      >
+
+        <div>
+
+          <h3
+            style="
+              margin:0;
+            "
+          >
+            2. Результат проверки
+          </h3>
+
+          <div
+            id="comparisonSummary"
+            class="sp-muted"
+            style="
+              margin-top:4px;
+              font-size:12px;
+            "
+          >
+            0 позиций
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div class="table-wrap">
+
+        <table class="data-table">
+
+          <thead>
+
+            <tr>
+
+              <th>
+                Штрихкод
+              </th>
+
+              <th>
+                Артикул
+              </th>
+
+              <th>
+                Заказано
+              </th>
+
+              <th>
+                В коробке
+              </th>
+
+              <th>
+                Нужно коробок
+              </th>
+
+              <th>
+                Собрано
+              </th>
+
+              <th>
+                Статус
+              </th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody
+            id="comparisonBody"
+          >
+
+            <tr>
+
+              <td
+                colspan="7"
+                class="empty"
+              >
+                Загрузите заявку
+                или вставьте данные
+                вручную.
+
+              </td>
+
+            </tr>
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+
+/*
+  Подключение событий.
+*/
+function setupComparison() {
+
+  const input =
+    $('#comparisonRequest');
+
+
+  if (input) {
+
+    input.addEventListener(
+      'input',
+      updateComparison
+    );
+
+  }
+
+
+  renderComparisonTable();
+
+}
+
 function toolsView() {
 
   return `
@@ -14420,13 +16076,20 @@ received: {
 
 
   tools: {
-
     title:
       'Инструменты',
 
     heading:
       'Инструменты SKLADAPLAN'
+  },
 
+
+  comparison: {
+    title:
+      'Сравнение',
+
+    heading:
+      'Сравнение заявки'
   }
 
 };
@@ -14577,6 +16240,16 @@ function render() {
         shippedView();
 
       break;
+
+   case 'comparison':
+
+      content.innerHTML =
+        comparisonView();
+
+      setupComparison();
+
+      break;
+
 
 
     case 'tools':
