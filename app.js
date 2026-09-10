@@ -2757,11 +2757,9 @@ async function loadBoxesFromSupabase() {
 
     const all = [];
 
-    const pageSize =
-      1000;
+    const pageSize = 1000;
 
-    let from =
-      0;
+    let from = 0;
 
 
     while (true) {
@@ -2778,61 +2776,53 @@ async function loadBoxesFromSupabase() {
 
 
       /*
-        Таймаут одного запроса.
-
-        Если Supabase не отвечает
-        30 секунд — прекращаем ожидание.
+        Простой запрос без Promise.race.
+        Сначала проверяем, что Supabase
+        вообще нормально отвечает.
       */
 
-      const request =
-        supabaseClient
+      const {
+        data,
+        error
+      } =
+        await supabaseClient
           .from('boxes')
           .select(BOX_SELECT)
-          .order('id', {
-            ascending: true
-          })
           .range(
             from,
             to
           );
 
 
-      const timeout =
-        new Promise(
-          (_, reject) => {
-
-            setTimeout(
-              () => {
-
-                reject(
-                  new Error(
-                    `Supabase не ответил за 30 секунд. Диапазон boxes: ${from}-${to}`
-                  )
-                );
-
-              },
-              30000
-            );
-
-          }
-        );
-
-
-      const {
-        data,
-        error
-      } =
-        await Promise.race([
-          request,
-          timeout
-        ]);
-
+      /*
+        Показываем настоящую ошибку Supabase.
+      */
 
       if (error) {
 
         console.error(
-          'SKLADAPLAN: ошибка загрузки boxes:',
+          'SKLADAPLAN: ошибка Supabase при загрузке boxes:',
           error
+        );
+
+        console.error(
+          'message:',
+          error.message
+        );
+
+        console.error(
+          'details:',
+          error.details
+        );
+
+        console.error(
+          'hint:',
+          error.hint
+        );
+
+        console.error(
+          'code:',
+          error.code
         );
 
         throw error;
@@ -2846,7 +2836,8 @@ async function loadBoxesFromSupabase() {
 
 
       /*
-        Больше данных нет.
+        Если данных нет —
+        загрузка закончена.
       */
 
       if (
@@ -2865,8 +2856,7 @@ async function loadBoxesFromSupabase() {
 
 
       /*
-        Если получили меньше 1000,
-        значит это последняя страница.
+        Последняя страница.
       */
 
       if (
@@ -2930,12 +2920,6 @@ async function loadBoxesFromSupabase() {
       error
     );
 
-    /*
-      Пробрасываем ошибку наверх,
-      чтобы startAuthenticatedApp()
-      показал нормальный экран ошибки.
-    */
-
     throw error;
 
 
@@ -2947,6 +2931,7 @@ async function loadBoxesFromSupabase() {
   }
 
 }
+
 /* =========================================================
    RECEIVING DATA
    ========================================================= */
