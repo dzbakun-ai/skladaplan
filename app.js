@@ -14134,43 +14134,55 @@ function startInventory() {
 
   }
 
-  state.inventory.mode =
-    'scanning';
+state.inventory.mode =
+  'scanning';
 
-  state.inventory.expectedIds =
-    new Set(
-      expected.map(
-        row => String(row.id)
-      )
-    );
-
-  state.inventory.scannedIds =
-    new Set();
-
-  state.inventory.lastScan =
-    null;
-
-  state.inventory.recentScans =
-    [];
-
-  state.inventory.startedAt =
-    new Date().toISOString();
-
-  state.inventory.finishedAt =
-    null;
-
-  state.inventory.message =
-    '';
-
-  render();
-
-  setTimeout(
-    () => {
-      $('#inventoryScanner')
-        ?.focus();
-    },
-    50
+state.inventory.expectedIds =
+  new Set(
+    expected.map(
+      row => String(row.id)
+    )
   );
+
+state.inventory.scannedIds =
+  new Set();
+
+/* Коробки, которые уже есть в Базе,
+   но физически находятся вне выбранного паллета */
+state.inventory.outsideIds =
+  new Set();
+
+/* Штрихкоды, которых вообще нет в Базе */
+state.inventory.unknownBarcodes =
+  new Set();
+
+state.inventory.lastScan =
+  null;
+
+state.inventory.recentScans =
+  [];
+
+state.inventory.startedAt =
+  new Date().toISOString();
+
+state.inventory.finishedAt =
+  null;
+
+state.inventory.message =
+  '';
+
+state.inventory.messageType =
+  'success';
+
+render();
+
+setTimeout(
+  () => {
+    $('#inventoryScanner')
+      ?.focus();
+  },
+  50
+);
 
 }
 
@@ -14205,6 +14217,14 @@ function resetInventory() {
   state.inventory.scannedIds =
     new Set();
 
+  /* Сбрасываем найденные вне выбранного паллета коробки */
+  state.inventory.outsideIds =
+    new Set();
+
+  /* Сбрасываем неизвестные штрихкоды */
+  state.inventory.unknownBarcodes =
+    new Set();
+
   state.inventory.lastScan =
     null;
 
@@ -14220,11 +14240,17 @@ function resetInventory() {
   state.inventory.message =
     '';
 
+  state.inventory.messageType =
+    'success';
+
   render();
 
 }
 
 
+/*
+  Обработка одного barcode.
+*/
 /*
   Обработка одного barcode.
 */
@@ -14241,40 +14267,57 @@ function inventoryScan(
     return;
   }
 
+
   const expected =
     findInventoryExpectedBox(
       barcode
     );
 
+
   /*
-    1. Коробка уже была просканирована.
+    1. Коробка не найдена среди
+       ожидаемых коробок выбранного паллета.
   */
 
   if (!expected) {
 
+    /*
+      Проверяем, не была ли эта физическая
+      коробка уже просканирована.
+    */
+
     const alreadyScanned =
       getInventoryExpectedBoxes()
-        .some(row =>
-          normalizeBarcode(
-            row.barcode
-          ) === barcode &&
-          state.inventory.scannedIds.has(
-            String(row.id)
-          )
+        .some(
+          row =>
+            normalizeBarcode(
+              row.barcode
+            ) === barcode &&
+            state.inventory.scannedIds.has(
+              String(row.id)
+            )
         );
+
 
     if (alreadyScanned) {
 
       state.inventory.lastScan = {
-        type: 'duplicate',
+
+        type:
+          'duplicate',
+
         barcode,
+
         message:
           'Эта физическая коробка уже проверена'
+
       };
+
 
       state.inventory.recentScans.unshift(
         state.inventory.lastScan
       );
+
 
       state.inventory.recentScans =
         state.inventory.recentScans.slice(
@@ -14282,7 +14325,9 @@ function inventoryScan(
           20
         );
 
+
       render();
+
 
       setTimeout(
         () =>
@@ -14291,13 +14336,15 @@ function inventoryScan(
         50
       );
 
+
       return;
 
     }
 
+
     /*
-      2. Barcode есть в базе,
-         но находится вне выбранной области.
+      2. Ищем этот штрихкод вообще
+         во всей Базе.
     */
 
     const anywhere =
@@ -14305,38 +14352,76 @@ function inventoryScan(
         barcode
       );
 
+
     if (anywhere.length) {
 
+      /*
+        Если таких физических коробок несколько,
+        выбираем ту, которая ещё не была
+        отмечена как найденная вне паллета.
+      */
+
       const location =
+        anywhere.find(
+          row =>
+            !state.inventory.outsideIds.has(
+              String(row.id)
+            )
+        ) ||
         anywhere[0];
+
+
+      const locationId =
+        String(
+          location.id
+        );
+
+
+      /*
+        Запоминаем конкретную физическую коробку.
+      */
+
+      state.inventory.outsideIds.add(
+        locationId
+      );
+
 
       state.inventory.lastScan = {
 
-        type: 'outside',
+        type:
+          'outside',
 
         barcode,
 
         message:
           'Коробка найдена в другой области',
 
+        boxId:
+          locationId,
+
         location: {
 
           warehouse:
-            location.warehouse || '',
+            location.warehouse ||
+            '',
 
           zone:
-            location.zone_row || '',
+            location.zone_row ||
+            '',
 
           pallet:
-            location.pallet || ''
+            location.pallet ||
+            ''
 
         }
 
       };
 
+
       state.inventory.recentScans.unshift(
         state.inventory.lastScan
       );
+
 
       state.inventory.recentScans =
         state.inventory.recentScans.slice(
@@ -14344,7 +14429,9 @@ function inventoryScan(
           20
         );
 
+
       render();
+
 
       setTimeout(
         () =>
@@ -14353,17 +14440,26 @@ function inventoryScan(
         50
       );
 
+
       return;
 
     }
 
+
     /*
-      3. Barcode вообще неизвестен.
+      3. Штрихкод вообще отсутствует
+         в Базе.
     */
+
+    state.inventory.unknownBarcodes.add(
+      barcode
+    );
+
 
     state.inventory.lastScan = {
 
-      type: 'unknown',
+      type:
+        'unknown',
 
       barcode,
 
@@ -14372,9 +14468,11 @@ function inventoryScan(
 
     };
 
+
     state.inventory.recentScans.unshift(
       state.inventory.lastScan
     );
+
 
     state.inventory.recentScans =
       state.inventory.recentScans.slice(
@@ -14382,7 +14480,9 @@ function inventoryScan(
         20
       );
 
+
     render();
+
 
     setTimeout(
       () =>
@@ -14391,30 +14491,35 @@ function inventoryScan(
       50
     );
 
+
     return;
 
   }
 
 
   /*
-    4. Коробка найдена.
+    4. Коробка найдена на текущем паллете.
   */
 
   state.inventory.scannedIds.add(
-    String(expected.id)
+    String(
+      expected.id
+    )
   );
 
 
   state.inventory.lastScan = {
 
-    type: 'success',
+    type:
+      'success',
 
     barcode,
 
     message:
       'Коробка найдена',
 
-    box: expected
+    box:
+      expected
 
   };
 
@@ -14443,19 +14548,40 @@ function inventoryScan(
 
 }
 
-
 /*
   Завершение пересчёта.
 
-  Пока только фиксируем результат
-  локально.
+  Базу пока НЕ меняем.
 
-  Базу НЕ меняем.
+  Здесь только формируем полный результат
+  текущей инвентаризации.
 */
 function finishInventory() {
 
+  /*
+    Для безопасного проведения инвентаризации
+    обязательно должен быть выбран конкретный
+    паллет.
+  */
+
+  if (
+    !state.inventory.warehouse ||
+    !state.inventory.zone ||
+    !state.inventory.pallet
+  ) {
+
+    toast(
+      'Для проведения инвентаризации выберите склад, зону/ряд и паллет'
+    );
+
+    return;
+
+  }
+
+
   const expected =
     getInventoryExpectedBoxes();
+
 
   const scanned =
     expected.filter(
@@ -14464,6 +14590,7 @@ function finishInventory() {
           String(row.id)
         )
     );
+
 
   const missing =
     expected.filter(
@@ -14474,8 +14601,35 @@ function finishInventory() {
     );
 
 
+  /*
+    outsideIds содержит именно физические
+    коробки, которые существуют в Базе,
+    но были найдены вне выбранного паллета.
+  */
+
+  const outsideIds =
+    Array.from(
+      state.inventory.outsideIds ||
+      []
+    );
+
+
+  /*
+    unknownBarcodes содержит уникальные
+    физические штрихкоды, которых вообще
+    нет в Базе.
+  */
+
+  const unknownBarcodes =
+    Array.from(
+      state.inventory.unknownBarcodes ||
+      []
+    );
+
+
   state.inventory.finishedAt =
     new Date().toISOString();
+
 
   state.inventory.mode =
     'finished';
@@ -14483,21 +14637,40 @@ function finishInventory() {
 
   state.inventory.result = {
 
-    expected: expected.length,
+    expected:
+      expected.length,
 
-    scanned: scanned.length,
+    scanned:
+      scanned.length,
 
-    missing: missing.length,
+    missing:
+      missing.length,
 
-    extra: state.inventory.recentScans
-      .filter(
-        scan =>
-          scan.type ===
-            'unknown' ||
-          scan.type ===
-            'outside'
-      )
-      .length
+    outside:
+      outsideIds.length,
+
+    unknown:
+      unknownBarcodes.length,
+
+    /*
+      Все физические коробки,
+      которые реально будут на паллете
+      после проведения.
+    */
+
+    actual:
+      scanned.length +
+      outsideIds.length +
+      unknownBarcodes.length,
+
+    missing_boxes:
+      missing,
+
+    outside_ids:
+      outsideIds,
+
+    unknown_barcodes:
+      unknownBarcodes
 
   };
 
@@ -14506,11 +14679,467 @@ function finishInventory() {
 
 }
 
-
 /*
-  Экран настройки / сканирования /
-  результата.
+  ПРОВЕДЕНИЕ ИНВЕНТАРИЗАЦИИ.
+
+  Здесь уже реально изменяется Supabase.
+
+  Логика только для конкретного паллета:
+
+  1. Найденные коробки остаются.
+  2. Коробки, найденные на другом месте,
+     перемещаются на текущий паллет.
+  3. Коробки, которых физически не нашли,
+     снимаются с текущего паллета.
+  4. Неизвестные штрихкоды создаются
+     как новые физические коробки.
 */
+async function applyInventoryResult() {
+
+  if (
+    state.inventory.mode !==
+    'finished'
+  ) {
+
+    return;
+
+  }
+
+
+  /*
+    Без конкретного паллета проводить нельзя.
+  */
+
+  if (
+    !state.inventory.warehouse ||
+    !state.inventory.zone ||
+    !state.inventory.pallet
+  ) {
+
+    toast(
+      'Для проведения выберите склад, зону/ряд и паллет'
+    );
+
+    return;
+
+  }
+
+
+  const expected =
+    getInventoryExpectedBoxes();
+
+
+  const scanned =
+    expected.filter(
+      row =>
+        state.inventory.scannedIds.has(
+          String(row.id)
+        )
+    );
+
+
+  const missing =
+    expected.filter(
+      row =>
+        !state.inventory.scannedIds.has(
+          String(row.id)
+        )
+    );
+
+
+  const outsideIds =
+    Array.from(
+      state.inventory.outsideIds ||
+      []
+    );
+
+
+  const unknownBarcodes =
+    Array.from(
+      state.inventory.unknownBarcodes ||
+      []
+    );
+
+
+  const actualCount =
+    scanned.length +
+    outsideIds.length +
+    unknownBarcodes.length;
+
+
+  /*
+    Защита от случайного запуска.
+  */
+
+  const confirmed =
+    confirm(
+      [
+        'Провести инвентаризацию?',
+        '',
+        `Паллета: ${state.inventory.pallet}`,
+        `Система: ${expected.length}`,
+        `Фактически: ${actualCount}`,
+        '',
+        `Оставить на паллете: ${scanned.length}`,
+        `Переместить сюда: ${outsideIds.length}`,
+        `Снять с паллета: ${missing.length}`,
+        `Создать новых: ${unknownBarcodes.length}`,
+        '',
+        'После подтверждения изменения будут записаны в Базу.'
+      ].join('\n')
+    );
+
+
+  if (!confirmed) {
+    return;
+  }
+
+
+  /*
+    Блокируем кнопку на время операции.
+  */
+
+  const button =
+    $('#inventoryApplyBtn');
+
+  if (button) {
+
+    button.disabled =
+      true;
+
+    button.textContent =
+      'Проведение...';
+
+  }
+
+
+  try {
+
+    let movedCount =
+      0;
+
+    let removedCount =
+      0;
+
+    let createdCount =
+      0;
+
+
+    /*
+      --------------------------------------------------
+      1. Снимаем с текущего паллета коробки,
+         которые физически не были найдены.
+      --------------------------------------------------
+    */
+
+    for (
+      const row of missing
+    ) {
+
+      const payload = {
+
+        "Поддон":
+          null,
+
+        "Статус":
+          STATUSES.STOCK,
+
+        "Изменил":
+          state.user?.email ||
+          null
+
+      };
+
+
+      const {
+        data,
+        error
+      } =
+        await supabaseClient
+          .from('boxes')
+          .update(
+            payload
+          )
+          .eq(
+            'id',
+            row.id
+          )
+          .select(
+            BOX_SELECT
+          )
+          .single();
+
+
+      if (error) {
+        throw error;
+      }
+
+
+      if (data) {
+
+        updateLocalBox(
+          data
+        );
+
+      }
+
+
+      removedCount++;
+
+    }
+
+
+    /*
+      --------------------------------------------------
+      2. Перемещаем коробки, которые нашли
+         на другом паллете.
+      --------------------------------------------------
+    */
+
+    for (
+      const id of outsideIds
+    ) {
+
+      const {
+        data,
+        error
+      } =
+        await supabaseClient
+          .from('boxes')
+          .update({
+
+            "Склад":
+              state.inventory.warehouse,
+
+            "Зона/ряд":
+              state.inventory.zone,
+
+            "Поддон":
+              state.inventory.pallet,
+
+            "Статус":
+              STATUSES.STOCK,
+
+            "Изменил":
+              state.user?.email ||
+              null
+
+          })
+          .eq(
+            'id',
+            id
+          )
+          .select(
+            BOX_SELECT
+          )
+          .single();
+
+
+      if (error) {
+        throw error;
+      }
+
+
+      if (data) {
+
+        updateLocalBox(
+          data
+        );
+
+      }
+
+
+      movedCount++;
+
+    }
+
+
+    /*
+      --------------------------------------------------
+      3. Создаём новые физические коробки,
+         которых вообще не было в Базе.
+      --------------------------------------------------
+    */
+
+    for (
+      const barcode of unknownBarcodes
+    ) {
+
+      const payload = {
+
+        "Штрихкод":
+          barcode,
+
+        "Артикул":
+          null,
+
+        "Кол-во в коробке":
+          null,
+
+        "Зона/ряд":
+          state.inventory.zone,
+
+        "Поддон":
+          state.inventory.pallet,
+
+        "Статус":
+          STATUSES.STOCK,
+
+        "ДатаРазмещения":
+          new Date().toISOString(),
+
+        "Склад":
+          state.inventory.warehouse,
+
+        "Изменил":
+          state.user?.email ||
+          null
+
+      };
+
+
+      const {
+        data,
+        error
+      } =
+        await supabaseClient
+          .from('boxes')
+          .insert(
+            payload
+          )
+          .select(
+            BOX_SELECT
+          )
+          .single();
+
+
+      if (error) {
+        throw error;
+      }
+
+
+      if (data) {
+
+        addLocalBox(
+          data
+        );
+
+      }
+
+
+      createdCount++;
+
+    }
+
+
+    /*
+      Обновляем локальную статистику.
+    */
+
+    state.inventory.result =
+      {
+
+        ...state.inventory.result,
+
+        applied:
+          true,
+
+        moved:
+          movedCount,
+
+        removed:
+          removedCount,
+
+        created:
+          createdCount,
+
+        appliedAt:
+          new Date().toISOString()
+
+      };
+
+
+    /*
+      После проведения снова загружаем
+      актуальную Базу.
+
+      Это надёжнее, чем полагаться
+      только на локальный state.
+    */
+
+    const {
+      data: freshBoxes,
+      error: reloadError
+    } =
+      await supabaseClient
+        .from('boxes')
+        .select(
+          BOX_SELECT
+        )
+        .order(
+          'id',
+          {
+            ascending:
+              true
+          }
+        );
+
+
+    if (reloadError) {
+      throw reloadError;
+    }
+
+
+    state.boxes =
+      freshBoxes || [];
+
+
+    toast(
+      `Инвентаризация проведена: перемещено ${movedCount}, снято ${removedCount}, создано ${createdCount}`
+    );
+
+
+    render();
+
+  } catch (error) {
+
+    console.error(
+      'applyInventoryResult:',
+      error
+    );
+
+
+    toast(
+      'Ошибка проведения: ' +
+      (
+        error?.message ||
+        'неизвестная ошибка'
+      )
+    );
+
+
+    /*
+      Если произошла ошибка,
+      снова разрешаем кнопку.
+    */
+
+    const currentButton =
+      $('#inventoryApplyBtn');
+
+    if (currentButton) {
+
+      currentButton.disabled =
+        false;
+
+      currentButton.textContent =
+        '✓ Провести инвентаризацию';
+
+    }
+
+  }
+
+}
+
 function inventoryView() {
 
   if (
@@ -15413,10 +16042,15 @@ function inventoryScanningView() {
 /*
   Финальный экран.
 */
+
+/*
+  Финальный экран.
+*/
 function inventoryFinishedView() {
 
   const expected =
     getInventoryExpectedBoxes();
+
 
   const scanned =
     expected.filter(
@@ -15426,6 +16060,7 @@ function inventoryFinishedView() {
         )
     );
 
+
   const missing =
     expected.filter(
       row =>
@@ -15434,19 +16069,39 @@ function inventoryFinishedView() {
         )
     );
 
-  const outside =
-    state.inventory.recentScans.filter(
-      scan =>
-        scan.type ===
-        'outside'
+
+  const outsideIds =
+    Array.from(
+      state.inventory.outsideIds ||
+      []
     );
 
-  const unknown =
-    state.inventory.recentScans.filter(
-      scan =>
-        scan.type ===
-        'unknown'
+
+  const unknownBarcodes =
+    Array.from(
+      state.inventory.unknownBarcodes ||
+      []
     );
+
+
+  const outside =
+    outsideIds
+      .map(
+        id =>
+          state.boxes.find(
+            row =>
+              String(row.id) ===
+              String(id)
+          )
+      )
+      .filter(Boolean);
+
+
+  const actual =
+    scanned.length +
+    outsideIds.length +
+    unknownBarcodes.length;
+
 
   const progress =
     expected.length
@@ -15456,6 +16111,19 @@ function inventoryFinishedView() {
           100
         )
       : 0;
+
+
+  const canApply =
+    Boolean(
+      state.inventory.warehouse &&
+      state.inventory.zone &&
+      state.inventory.pallet
+    );
+
+
+  const alreadyApplied =
+    state.inventory.result?.applied ===
+    true;
 
 
   return `
@@ -15490,6 +16158,7 @@ function inventoryFinishedView() {
         <div
           class="sp-muted"
         >
+
           ${escapeHtml(
             state.inventory.warehouse ||
             'Все склады'
@@ -15508,6 +16177,7 @@ function inventoryFinishedView() {
             state.inventory.pallet ||
             'Все паллеты'
           )}
+
         </div>
 
       </div>
@@ -15545,7 +16215,7 @@ function inventoryFinishedView() {
           <div
             class="sp-card-value"
           >
-            ${scanned.length}
+            ${actual}
           </div>
 
         </div>
@@ -15573,13 +16243,30 @@ function inventoryFinishedView() {
           <div
             class="sp-card-label"
           >
-            Лишние / неизвестные
+            Переместить
           </div>
 
           <div
             class="sp-card-value"
           >
-            ${outside.length + unknown.length}
+            ${outsideIds.length}
+          </div>
+
+        </div>
+
+
+        <div class="sp-card">
+
+          <div
+            class="sp-card-label"
+          >
+            Новых коробок
+          </div>
+
+          <div
+            class="sp-card-value"
+          >
+            ${unknownBarcodes.length}
           </div>
 
         </div>
@@ -15592,7 +16279,7 @@ function inventoryFinishedView() {
           padding:16px;
           background:#f7f7f7;
           border-radius:14px;
-          margin-bottom:18px;
+          margin:18px 0;
         "
       >
 
@@ -15605,7 +16292,7 @@ function inventoryFinishedView() {
         >
 
           <b>
-            Совпадение
+            Найдено из ожидаемых
           </b>
 
           <b>
@@ -15638,7 +16325,7 @@ function inventoryFinishedView() {
 
 
       ${
-        missing.length
+        outside.length
           ? `
 
             <div
@@ -15648,7 +16335,7 @@ function inventoryFinishedView() {
             >
 
               <h3>
-                Не найдено
+                Найдены вне выбранного паллета
               </h3>
 
               <div
@@ -15668,15 +16355,11 @@ function inventoryFinishedView() {
                       </th>
 
                       <th>
-                        Артикул
+                        Сейчас
                       </th>
 
                       <th>
-                        Место
-                      </th>
-
-                      <th>
-                        Паллета
+                        После проведения
                       </th>
 
                     </tr>
@@ -15685,7 +16368,7 @@ function inventoryFinishedView() {
 
                   <tbody>
 
-                    ${missing.map(
+                    ${outside.map(
                       row => `
 
                         <tr>
@@ -15693,26 +16376,129 @@ function inventoryFinishedView() {
                           <td>
                             <b>
                               ${escapeHtml(
-                                row.barcode
+                                normalizeBarcode(
+                                  row.barcode
+                                )
+                              )}
+                            </b>
+                          </td>
+
+                          <td>
+
+                            ${escapeHtml(
+                              row.zone_row ||
+                              '—'
+                            )}
+
+                            ·
+
+                            ${escapeHtml(
+                              row.pallet ||
+                              '—'
+                            )}
+
+                          </td>
+
+                          <td>
+
+                            ${escapeHtml(
+                              state.inventory.zone
+                            )}
+
+                            ·
+
+                            ${escapeHtml(
+                              state.inventory.pallet
+                            )}
+
+                          </td>
+
+                        </tr>
+
+                      `
+                    ).join('')}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            </div>
+
+          `
+          : ''
+      }
+
+
+      ${
+        unknownBarcodes.length
+          ? `
+
+            <div
+              style="
+                margin-bottom:20px;
+              "
+            >
+
+              <h3>
+                Новые коробки
+              </h3>
+
+              <div
+                class="sp-table-wrap"
+              >
+
+                <table
+                  class="sp-table"
+                >
+
+                  <thead>
+
+                    <tr>
+
+                      <th>
+                        Штрихкод
+                      </th>
+
+                      <th>
+                        Будет создано
+                      </th>
+
+                    </tr>
+
+                  </thead>
+
+                  <tbody>
+
+                    ${unknownBarcodes.map(
+                      barcode => `
+
+                        <tr>
+
+                          <td>
+                            <b>
+                              ${escapeHtml(
+                                barcode
                               )}
                             </b>
                           </td>
 
                           <td>
                             ${escapeHtml(
-                              row.article
+                              state.inventory.warehouse
                             )}
-                          </td>
 
-                          <td>
+                            ·
+
                             ${escapeHtml(
-                              row.zone_row
+                              state.inventory.zone
                             )}
-                          </td>
 
-                          <td>
+                            ·
+
                             ${escapeHtml(
-                              row.pallet
+                              state.inventory.pallet
                             )}
                           </td>
 
@@ -15730,19 +16516,168 @@ function inventoryFinishedView() {
             </div>
 
           `
-          : `
+          : ''
+      }
+
+
+      ${
+        missing.length
+          ? `
 
             <div
-              class="notice"
               style="
                 margin-bottom:20px;
               "
             >
-              ✓ Все коробки из выбранной
-              области найдены.
+
+              <h3>
+                Не найдены
+              </h3>
+
+              <div
+                class="sp-table-wrap"
+              >
+
+                <table
+                  class="sp-table"
+                >
+
+                  <thead>
+
+                    <tr>
+
+                      <th>
+                        Штрихкод
+                      </th>
+
+                      <th>
+                        Место
+                      </th>
+
+                      <th>
+                        Паллет
+                      </th>
+
+                    </tr>
+
+                  </thead>
+
+                  <tbody>
+
+                    ${missing.map(
+                      row => `
+
+                        <tr>
+
+                          <td>
+                            <b>
+                              ${escapeHtml(
+                                normalizeBarcode(
+                                  row.barcode
+                                )
+                              )}
+                            </b>
+                          </td>
+
+                          <td>
+                            ${escapeHtml(
+                              row.zone_row ||
+                              '—'
+                            )}
+                          </td>
+
+                          <td>
+                            ${escapeHtml(
+                              row.pallet ||
+                              '—'
+                            )}
+                          </td>
+
+                        </tr>
+
+                      `
+                    ).join('')}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
             </div>
 
           `
+          : ''
+      }
+
+
+      ${
+        alreadyApplied
+          ? `
+
+            <div
+              class="notice"
+              style="
+                margin-bottom:18px;
+              "
+            >
+              ✓ Инвентаризация проведена
+              и изменения записаны в Базу.
+            </div>
+
+          `
+          : canApply
+            ? `
+
+              <div
+                style="
+                  padding:16px;
+                  background:#f7f7f7;
+                  border-radius:14px;
+                  margin-bottom:18px;
+                "
+              >
+
+                <b>
+                  Перед проведением
+                </b>
+
+                <div
+                  class="sp-muted"
+                  style="
+                    margin-top:7px;
+                    line-height:1.5;
+                  "
+                >
+
+                  После подтверждения содержимое
+                  выбранного паллета будет приведено
+                  в соответствие с фактическим
+                  пересчётом.
+
+                </div>
+
+              </div>
+
+            `
+            : `
+
+              <div
+                style="
+                  padding:16px;
+                  background:#fff4f2;
+                  color:#b42318;
+                  border-radius:14px;
+                  margin-bottom:18px;
+                "
+              >
+
+                Для проведения необходимо выбрать
+                конкретные склад, зону/ряд и паллет.
+
+              </div>
+
+            `
       }
 
 
@@ -15762,8 +16697,31 @@ function inventoryFinishedView() {
           Новый пересчёт
         </button>
 
+
+        ${
+          !alreadyApplied
+            ? `
+
+              <button
+                class="sp-btn"
+                id="inventoryApplyBtn"
+                type="button"
+                ${
+                  canApply
+                    ? ''
+                    : 'disabled'
+                }
+              >
+                ✓ Провести инвентаризацию
+              </button>
+
+            `
+            : ''
+        }
+
+
         <button
-          class="sp-btn"
+          class="sp-btn secondary"
           id="inventoryExportBtn"
           type="button"
         >
@@ -15778,10 +16736,6 @@ function inventoryFinishedView() {
 
 }
 
-
-/*
-  Обработчики экрана инвентаризации.
-*/
 function setupInventory() {
 
   const warehouse =
@@ -15883,6 +16837,11 @@ function setupInventory() {
       resetInventory
     );
 
+   $('#inventoryApplyBtn')
+  ?.addEventListener(
+    'click',
+    applyInventoryResult
+  );
 
   $('#inventoryExportBtn')
     ?.addEventListener(
