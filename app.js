@@ -3193,6 +3193,262 @@ async function loadReceivingData() {
 
 }
 
+/* =========================================================
+   RECEIVING — СОЗДАНИЕ НОВОЙ ЗОНЫ / РЯДА
+   ========================================================= */
+
+async function createReceivingLocation() {
+
+  const warehouseId =
+    state.receivingWarehouseId;
+
+  if (!warehouseId) {
+
+    toast(
+      'Сначала выберите склад',
+      'error'
+    );
+
+    return;
+
+  }
+
+  const warehouse =
+    state.receivingWarehouses.find(
+      row =>
+        String(row.id) ===
+        String(warehouseId)
+    );
+
+  if (!warehouse) {
+
+    toast(
+      'Не удалось определить выбранный склад',
+      'error'
+    );
+
+    return;
+
+  }
+
+  const code =
+    prompt(
+      `Новая зона / ряд для склада "${warehouse.name}"\n\nВведите название или код:`,
+      ''
+    );
+
+  if (code === null) {
+
+    return;
+
+  }
+
+  const cleanCode =
+    normalizeText(code);
+
+  if (!cleanCode) {
+
+    toast(
+      'Название зоны не указано',
+      'error'
+    );
+
+    return;
+
+  }
+
+  /*
+    Проверяем, нет ли уже такой зоны
+    на выбранном складе.
+  */
+
+  const duplicate =
+    state.receivingLocations.find(
+      location =>
+        String(
+          location.warehouse_id
+        ) ===
+        String(warehouseId) &&
+        normalizeText(
+          location.code
+        ).toLowerCase() ===
+        cleanCode.toLowerCase()
+    );
+
+  if (duplicate) {
+
+    state.receivingLocationId =
+      duplicate.id;
+
+    toast(
+      `Зона "${duplicate.code}" уже существует`
+    );
+
+    render();
+
+    return;
+
+  }
+
+  /*
+    Для обычных кодов:
+
+    A-04-01
+    B-02-15
+    СлеваНиз/10ряд
+
+    сохраняем code целиком.
+
+    Для структурированных адресов
+    дополнительно пытаемся заполнить
+    zone / row_name / place.
+  */
+
+  let zone = null;
+  let rowName = null;
+  let place = null;
+
+  const structured =
+    cleanCode.match(
+      /^([A-Za-zА-Яа-яЁё]+)-(\d{2})-(\d{2})$/
+    );
+
+  if (structured) {
+
+    zone =
+      structured[1];
+
+    rowName =
+      structured[2];
+
+    place =
+      structured[3];
+
+  }
+
+  try {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from('locations')
+        .insert({
+          warehouse_id:
+            warehouseId,
+
+          code:
+            cleanCode,
+
+          zone:
+            zone,
+
+          row_name:
+            rowName,
+
+          place:
+            place,
+
+          is_active:
+            true
+        })
+        .select('*')
+        .single();
+
+    if (error) {
+
+      throw error;
+
+    }
+
+    /*
+      Добавляем новую зону
+      в локальный список.
+    */
+
+    state.receivingLocations.push(
+      data
+    );
+
+    /*
+      Сразу выбираем
+      созданную зону.
+    */
+
+    state.receivingLocationId =
+      data.id;
+
+    /*
+      Старый выбранный поддон
+      больше не относится
+      к новой зоне.
+    */
+
+    state.receivingPalletId =
+      null;
+
+    state.receivingPalletNumber =
+      '';
+
+    /*
+      Сортируем места.
+    */
+
+    state.receivingLocations.sort(
+      (a, b) => {
+
+        if (
+          Number(a.warehouse_id) !==
+          Number(b.warehouse_id)
+        ) {
+
+          return (
+            Number(a.warehouse_id) -
+            Number(b.warehouse_id)
+          );
+
+        }
+
+        return String(
+          a.code || ''
+        ).localeCompare(
+          String(
+            b.code || ''
+          ),
+          'ru',
+          {
+            numeric: true,
+            sensitivity: 'base'
+          }
+        );
+
+      }
+    );
+
+    toast(
+      `Зона "${data.code}" создана`
+    );
+
+    render();
+
+  } catch (error) {
+
+    console.error(
+      'Ошибка создания зоны:',
+      error
+    );
+
+    toast(
+      error?.message ||
+      'Не удалось создать новую зону',
+      'error'
+    );
+
+  }
+
+}
+
 async function getOrCreateReceivingPallet() {
 
   const warehouseId =
@@ -4255,6 +4511,49 @@ function setupReceived() {
     }
   );
 
+     /*
+    СОЗДАТЬ НОВУЮ ЗОНУ / РЯД
+  */
+
+  const createLocationButton =
+    $('#createReceivingLocationBtn');
+
+  createLocationButton?.addEventListener(
+    'click',
+    async event => {
+
+      event.preventDefault();
+
+      if (
+        !state.receivingWarehouseId
+      ) {
+
+        toast(
+          'Сначала выберите склад',
+          'error'
+        );
+
+        return;
+
+      }
+
+      if (
+        state.receivingReceiptId
+      ) {
+
+        toast(
+          'Нельзя менять место во время открытой приёмки',
+          'error'
+        );
+
+        return;
+
+      }
+
+      await createReceivingLocation();
+
+    }
+  );
 
   /*
     НОМЕР ПОДДОНА
@@ -10593,6 +10892,24 @@ function receivedView() {
               }
 
             </select>
+
+            <button
+              type="button"
+              class="sp-btn secondary"
+              id="createReceivingLocationBtn"
+              style="
+                margin-top:8px;
+                width:100%;
+              "
+              ${
+                isOpen ||
+                !state.receivingWarehouseId
+                  ? 'disabled'
+                  : ''
+              }
+            >
+              + Новая зона / ряд
+            </button>
 
           </div>
 
