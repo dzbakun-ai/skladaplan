@@ -2747,9 +2747,11 @@ async function logout() {
 
 async function loadBoxesFromSupabase() {
 
-  state.loading =
-    true;
+  state.loading = true;
 
+  console.log(
+    'SKLADAPLAN: начинаем загрузку boxes...'
+  );
 
   try {
 
@@ -2770,11 +2772,20 @@ async function loadBoxesFromSupabase() {
         1;
 
 
-      const {
-        data,
-        error
-      } =
-        await supabaseClient
+      console.log(
+        `SKLADAPLAN: загрузка boxes ${from}-${to}...`
+      );
+
+
+      /*
+        Таймаут одного запроса.
+
+        Если Supabase не отвечает
+        30 секунд — прекращаем ожидание.
+      */
+
+      const request =
+        supabaseClient
           .from('boxes')
           .select(BOX_SELECT)
           .order('id', {
@@ -2786,12 +2797,57 @@ async function loadBoxesFromSupabase() {
           );
 
 
+      const timeout =
+        new Promise(
+          (_, reject) => {
+
+            setTimeout(
+              () => {
+
+                reject(
+                  new Error(
+                    `Supabase не ответил за 30 секунд. Диапазон boxes: ${from}-${to}`
+                  )
+                );
+
+              },
+              30000
+            );
+
+          }
+        );
+
+
+      const {
+        data,
+        error
+      } =
+        await Promise.race([
+          request,
+          timeout
+        ]);
+
+
       if (error) {
+
+        console.error(
+          'SKLADAPLAN: ошибка загрузки boxes:',
+          error
+        );
 
         throw error;
 
       }
 
+
+      console.log(
+        `SKLADAPLAN: получено ${data?.length || 0} строк`
+      );
+
+
+      /*
+        Больше данных нет.
+      */
 
       if (
         !data ||
@@ -2807,6 +2863,11 @@ async function loadBoxesFromSupabase() {
         ...data
       );
 
+
+      /*
+        Если получили меньше 1000,
+        значит это последняя страница.
+      */
 
       if (
         data.length <
@@ -2824,9 +2885,17 @@ async function loadBoxesFromSupabase() {
     }
 
 
+    /*
+      Сохраняем коробки.
+    */
+
     state.boxes =
       all;
 
+
+    /*
+      Проверяем выбранные строки.
+    */
 
     const existingIds =
       new Set(
@@ -2849,6 +2918,27 @@ async function loadBoxesFromSupabase() {
       );
 
 
+    console.log(
+      `SKLADAPLAN: загрузка завершена. Всего коробок: ${all.length}`
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      'SKLADAPLAN: Database load error:',
+      error
+    );
+
+    /*
+      Пробрасываем ошибку наверх,
+      чтобы startAuthenticatedApp()
+      показал нормальный экран ошибки.
+    */
+
+    throw error;
+
+
   } finally {
 
     state.loading =
@@ -2857,7 +2947,6 @@ async function loadBoxesFromSupabase() {
   }
 
 }
-
 /* =========================================================
    RECEIVING DATA
    ========================================================= */
