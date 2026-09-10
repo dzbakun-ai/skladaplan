@@ -2747,189 +2747,24 @@ async function logout() {
 
 async function loadBoxesFromSupabase() {
 
-  state.loading = true;
+  console.log('=== TEST SUPABASE BOXES ===');
 
-  console.log(
-    'SKLADAPLAN: начинаем загрузку boxes...'
-  );
+  const result = await supabaseClient
+    .from('boxes')
+    .select('*')
+    .limit(1);
 
-  try {
+  console.log('RESULT:', result);
 
-    const all = [];
-
-    const pageSize = 1000;
-
-    let from = 0;
-
-
-    while (true) {
-
-      const to =
-        from +
-        pageSize -
-        1;
-
-
-      console.log(
-        `SKLADAPLAN: загрузка boxes ${from}-${to}...`
-      );
-
-
-      /*
-        Простой запрос без Promise.race.
-        Сначала проверяем, что Supabase
-        вообще нормально отвечает.
-      */
-
-      const {
-        data,
-        error
-      } =
-        await supabaseClient
-          .from('boxes')
-          .select(BOX_SELECT)
-          .range(
-            from,
-            to
-          );
-
-
-      /*
-        Показываем настоящую ошибку Supabase.
-      */
-
-      if (error) {
-
-        console.error(
-          'SKLADAPLAN: ошибка Supabase при загрузке boxes:',
-          error
-        );
-
-        console.error(
-          'message:',
-          error.message
-        );
-
-        console.error(
-          'details:',
-          error.details
-        );
-
-        console.error(
-          'hint:',
-          error.hint
-        );
-
-        console.error(
-          'code:',
-          error.code
-        );
-
-        throw error;
-
-      }
-
-
-      console.log(
-        `SKLADAPLAN: получено ${data?.length || 0} строк`
-      );
-
-
-      /*
-        Если данных нет —
-        загрузка закончена.
-      */
-
-      if (
-        !data ||
-        data.length === 0
-      ) {
-
-        break;
-
-      }
-
-
-      all.push(
-        ...data
-      );
-
-
-      /*
-        Последняя страница.
-      */
-
-      if (
-        data.length <
-        pageSize
-      ) {
-
-        break;
-
-      }
-
-
-      from +=
-        pageSize;
-
-    }
-
-
-    /*
-      Сохраняем коробки.
-    */
-
-    state.boxes =
-      all;
-
-
-    /*
-      Проверяем выбранные строки.
-    */
-
-    const existingIds =
-      new Set(
-        all.map(
-          row =>
-            String(row.id)
-        )
-      );
-
-
-    state.selectedIds =
-      new Set(
-        [...state.selectedIds]
-          .filter(
-            id =>
-              existingIds.has(
-                String(id)
-              )
-          )
-      );
-
-
-    console.log(
-      `SKLADAPLAN: загрузка завершена. Всего коробок: ${all.length}`
-    );
-
-
-  } catch (error) {
-
-    console.error(
-      'SKLADAPLAN: Database load error:',
-      error
-    );
-
-    throw error;
-
-
-  } finally {
-
-    state.loading =
-      false;
-
+  if (result.error) {
+    console.error('SUPABASE ERROR:', result.error);
+    throw result.error;
   }
 
+  console.log('SUPABASE DATA:', result.data);
+
+  state.boxes = result.data || [];
+  state.loading = false;
 }
 
 /* =========================================================
