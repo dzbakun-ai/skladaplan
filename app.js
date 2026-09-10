@@ -22420,10 +22420,30 @@ $('#heading').textContent =
     .forEach(
       button => {
 
+        let isActive = false;
+
+        if (
+          button.dataset.tool
+        ) {
+
+          isActive =
+            state.currentPage ===
+              'tools' &&
+            state.activeTool ===
+              button.dataset.tool;
+
+        } else {
+
+          isActive =
+            !button.dataset.tool &&
+            button.dataset.page ===
+              state.currentPage;
+
+        }
+
         button.classList.toggle(
           'active',
-          button.dataset.page ===
-          state.currentPage
+          isActive
         );
 
       }
