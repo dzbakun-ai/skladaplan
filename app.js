@@ -9101,8 +9101,7 @@ async function completeSelectedAssembly() {
   // сохраняем его
   if (cleanDirection) {
 
-    updateData["Направление"] =
-      cleanDirection;
+    updateData["Направление"] = cleanDirection;
 
   }
 
@@ -9174,7 +9173,7 @@ async function completeSelectedAssembly() {
       ? data.length
       : validIds.length;
 
-  // Очищаем выделение
+  // Очищаем выбор
   state.assemblySelectedGroups.clear();
   state.assemblySelectedIds.clear();
   state.assemblyExpandedGroups.clear();
@@ -9187,36 +9186,6 @@ async function completeSelectedAssembly() {
     cleanDirection
       ? `Скомплектовано: ${completedCount} · ${cleanDirection}`
       : `Скомплектовано: ${completedCount}`
-  );
-
-}
-
-
-  /*
-    Полностью очищаем выбор групп.
-  */
-
-  state
-    .assemblySelectedGroups
-    .clear();
-
-
-  render();
-
-
-  /*
-    Количество реально переведённых
-    физических коробок.
-  */
-
-  const completedCount =
-    Array.isArray(data)
-      ? data.length
-      : validIds.length;
-
-
-  toast(
-    `Скомплектовано коробок: ${completedCount}`
   );
 
 }
