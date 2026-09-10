@@ -22986,9 +22986,7 @@ async function startApp() {
 
   ensureAppStyles();
 
-
   setupNavigation();
-
 
   /*
     Получаем текущую сессию.
@@ -23001,29 +22999,23 @@ async function startApp() {
     await supabaseClient.auth
       .getSession();
 
-
   if (error) {
 
     console.error(
       error
     );
 
-
     showLogin();
 
     return;
-
   }
-
 
   state.session =
     data.session;
 
-
   state.user =
     data.session?.user ||
     null;
-
 
   if (
     !data.session
@@ -23034,132 +23026,125 @@ async function startApp() {
   } else {
 
     await startAuthenticatedApp();
-
   }
-
 
   /*
     Отслеживаем вход/выход.
   */
 
-supabaseClient.auth
-  .onAuthStateChange(
-    async (
-      event,
-      session
-    ) => {
+  supabaseClient.auth
+    .onAuthStateChange(
+      async (
+        event,
+        session
+      ) => {
 
-      console.log(
-        'Auth event:',
-        event
-      );
+        console.log(
+          'Auth event:',
+          event
+        );
 
+        /* =====================================================
+           ВЫХОД
+           ===================================================== */
 
-      /* =====================================================
-         ВЫХОД
-         ===================================================== */
+        if (
+          event ===
+          'SIGNED_OUT'
+        ) {
 
-      if (
-        event ===
-        'SIGNED_OUT'
-      ) {
+          state.session =
+            null;
 
-        state.session =
-          null;
+          state.user =
+            null;
 
-        state.user =
-          null;
+          state.boxes =
+            [];
 
-        state.boxes =
-          [];
+          state.loading =
+            false;
 
-        state.loading =
-          false;
+          showLogin();
 
-        showLogin();
-
-        return;
-
-      }
-
-
-      /* =====================================================
-         ВХОД
-         ===================================================== */
-
-     if (
-  event ===
-  'SIGNED_IN'
-) {
-
-  const newUserId =
-    session?.user?.id ||
-    null;
-
-  const currentUserId =
-    state.user?.id ||
-    null;
-
-
-  /*
-    Supabase может повторно отправить
-    SIGNED_IN для уже авторизованного
-    пользователя.
-
-    Если это тот же пользователь,
-    а база уже загружается или уже
-    загружена — повторный запуск
-    НЕ нужен.
-  */
-
-  const sameUser =
-    Boolean(
-      newUserId &&
-      currentUserId &&
-      newUserId ===
-        currentUserId
-    );
-
-
-  if (
-    sameUser &&
-    (
-      state.loading ||
-      state.boxes.length > 0
-    )
-  ) {
-
-    console.log(
-      'SKLADAPLAN: повторный SIGNED_IN — повторную загрузку не запускаем'
-    );
-
-    state.session =
-      session;
-
-    return;
-
-  }
-
-
-  /*
-    Настоящая авторизация
-    или первая загрузка приложения.
-  */
-
-  state.session =
-    session;
-
-  state.user =
-    session?.user ||
-    null;
-
-
-  await startAuthenticatedApp();
-
+          return;
         }
-       
+
+        /* =====================================================
+           ВХОД
+           ===================================================== */
+
+        if (
+          event ===
+          'SIGNED_IN'
+        ) {
+
+          const newUserId =
+            session?.user?.id ||
+            null;
+
+          const currentUserId =
+            state.user?.id ||
+            null;
+
+          /*
+            Supabase может повторно отправить
+            SIGNED_IN для уже авторизованного
+            пользователя.
+
+            Если это тот же пользователь,
+            а база уже загружается или уже
+            загружена — повторный запуск
+            НЕ нужен.
+          */
+
+          const sameUser =
+            Boolean(
+              newUserId &&
+              currentUserId &&
+              newUserId ===
+                currentUserId
+            );
+
+          if (
+            sameUser &&
+            (
+              state.loading ||
+              state.boxes.length > 0
+            )
+          ) {
+
+            console.log(
+              'SKLADAPLAN: повторный SIGNED_IN — повторную загрузку не запускаем'
+            );
+
+            state.session =
+              session;
+
+            return;
+          }
+
+          /*
+            Настоящая авторизация
+            или первая загрузка приложения.
+          */
+
+          state.session =
+            session;
+
+          state.user =
+            session?.user ||
+            null;
+
+          await startAuthenticatedApp();
+             }
+
       }
-   );
+
+    );
+
+}
+
 
 /* =========================================================
    ASSEMBLY SELECT ALL CHECKBOX
@@ -23175,7 +23160,7 @@ document.addEventListener(
     ) {
 
       toggleSelectAllAssembly();
-
+    
     }
 
   }
@@ -23203,7 +23188,6 @@ document.addEventListener(
       return;
     }
 
-
     const removeButton =
       event.target.closest(
         '#removeFromAssemblyBtn'
@@ -23218,12 +23202,10 @@ document.addEventListener(
       ) {
 
         removeSelectedFromAssembly();
-
       }
 
       return;
     }
-
 
     const completeButton =
       event.target.closest(
@@ -23238,7 +23220,6 @@ document.addEventListener(
 
       return;
     }
-
   }
 );
 
