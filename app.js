@@ -5534,7 +5534,7 @@ function baseView() {
 
                 <tr>
 
-                  <td colspan="10">
+                  <td colspan="11">
 
                     <div class="sp-empty">
                       Нет данных
