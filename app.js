@@ -86,7 +86,8 @@ const STATUSES = {
 const state = {
 
   boxes: [],
-   
+
+
   /* =======================================================
      RECEIVING
      ======================================================= */
@@ -115,18 +116,11 @@ const state = {
   receivingDataLoaded: false,
   receivingDataError: '',
 
-  /*
-    Состояние загрузки справочников приёмки.
 
-    Важно:
-    страница не должна зависать в disabled-состоянии,
-    если Supabase отвечает медленно или вернул ошибку.
-  */
-  receivingDataLoading: false,
-  receivingDataLoaded: false,
-  receivingDataError: '',
+  /* =======================================================
+     GENERAL
+     ======================================================= */
 
-   
   loading: false,
 
   currentPage: 'dashboard',
@@ -148,6 +142,11 @@ const state = {
   scannerInput: '',
 
   scannerActive: false,
+
+
+  /* =======================================================
+     EXCEL
+     ======================================================= */
 
   excelRows: [],
 
@@ -171,11 +170,17 @@ const state = {
 
   excelImportTotal: 0,
 
+
+  /* =======================================================
+     USER / SESSION
+     ======================================================= */
+
   user: null,
 
-  session: null
+  session: null,
 
-     /* =======================================================
+
+  /* =======================================================
      COMPARISON
      ======================================================= */
 
@@ -189,7 +194,7 @@ const state = {
 
   comparisonError: '',
 
-  comparisonMode: 'units',
+  comparisonMode: 'units'
 
 };
 
