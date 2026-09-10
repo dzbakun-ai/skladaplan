@@ -8603,6 +8603,12 @@ function assemblyView() {
 
       </div>
 
+<button
+  class="sp-btn secondary"
+  id="removeFromAssemblyBtn"
+>
+  ↩ Убрать из сборки
+</button>
 
 
       <!-- ========================= -->
@@ -9447,6 +9453,131 @@ function focusScanner() {
   scanner.focus({
     preventScroll: true
   });
+
+}
+
+/* =========================================================
+   REMOVE SELECTED FROM ASSEMBLY
+   ========================================================= */
+
+async function removeSelectedFromAssembly() {
+
+  if (!state.assemblySelectedIds) {
+    state.assemblySelectedIds = new Set();
+  }
+
+
+  const ids =
+    [...state.assemblySelectedIds]
+      .map(id => String(id));
+
+
+  if (!ids.length) {
+
+    toast(
+      'Выберите коробки, которые нужно убрать из сборки',
+      'error'
+    );
+
+    return;
+  }
+
+
+  const confirmed =
+    confirm(
+      `Убрать из сборки выбранные коробки: ${ids.length}?`
+    );
+
+
+  if (!confirmed) {
+    return;
+  }
+
+
+  try {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from('boxes')
+        .update({
+          "Статус":
+            STATUSES.STOCK,
+
+          "Изменил":
+            state.user?.email ||
+            null
+        })
+        .in(
+          'id',
+          ids
+        )
+        .eq(
+          'Статус',
+          STATUSES.PICK
+        )
+        .select(
+          BOX_SELECT
+        );
+
+
+    if (error) {
+      throw error;
+    }
+
+
+    if (Array.isArray(data)) {
+
+      data.forEach(
+        row => {
+
+          updateLocalBox(
+            row.id,
+            row
+          );
+
+        }
+      );
+
+    }
+
+
+    /*
+      Очищаем выделение.
+    */
+
+    state.assemblySelectedIds =
+      new Set();
+
+
+    /*
+      Перерисовываем интерфейс.
+    */
+
+    render();
+
+
+    toast(
+      `Из сборки убрано: ${data?.length || 0}`
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      'removeSelectedFromAssembly:',
+      error
+    );
+
+    toast(
+      error?.message ||
+      'Ошибка удаления из сборки',
+      'error'
+    );
+
+  }
 
 }
 
@@ -10636,6 +10767,11 @@ function setupCollected() {
       shipSelectedCollected
     );
 
+   $('#removeFromAssemblyBtn')
+  ?.addEventListener(
+    'click',
+    removeSelectedFromAssembly
+  );
 
 $('#selectAllCollectedBtn')
   ?.addEventListener(
