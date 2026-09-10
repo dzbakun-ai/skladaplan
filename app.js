@@ -22341,14 +22341,29 @@ function goToPage(
   state.currentPage =
     page;
 
-   if (
-  page !== 'tools'
-) {
 
-  state.activeTool =
-    '';
+  /*
+    Для обычных страниц
+    сбрасываем активный инструмент.
 
-}
+    Исключения:
+
+    tools
+    comparison + split
+  */
+
+  if (
+    page !== 'tools' &&
+    !(
+      page === 'comparison' &&
+      state.activeTool === 'split'
+    )
+  ) {
+
+    state.activeTool =
+      '';
+
+  }
 
 
   state.basePage =
@@ -22361,9 +22376,8 @@ function goToPage(
 
 }
 
-
 /* =========================================================
-   RENDER
+   FUNCTION RENDER
    ========================================================= */
 
 function render() {
@@ -22385,61 +22399,121 @@ function render() {
     ] ||
     PAGE_META.dashboard;
 
-  const effectiveMeta =
-  state.currentPage === 'tools' &&
-  state.activeTool === 'inventory'
-    ? {
-        title:
-          'Инвентаризация',
 
-        heading:
-          'Инвентаризация склада'
-      }
+  /* =========================================================
+     EFFECTIVE META
+     ========================================================= */
+
+  const effectiveMeta =
+    state.currentPage === 'tools' &&
+    state.activeTool === 'inventory'
+
+      ? {
+
+          title:
+            'Инвентаризация',
+
+          heading:
+            'Инвентаризация склада'
+
+        }
 
     : state.currentPage === 'tools' &&
       state.activeTool === 'help'
-    ? {
-        title:
-          'Справка',
 
-        heading:
-          'Руководство пользователя SKLADAPLAN'
-      }
+      ? {
+
+          title:
+            'Справка',
+
+          heading:
+            'Руководство пользователя SKLADAPLAN'
+
+        }
 
     : meta;
 
 
-$('#pageTitle').textContent =
-  effectiveMeta.title;
+  $('#pageTitle').textContent =
+    effectiveMeta.title;
 
-$('#heading').textContent =
-  effectiveMeta.heading;
 
+  $('#heading').textContent =
+    effectiveMeta.heading;
+
+
+  /* =========================================================
+     SIDEBAR NAVIGATION
+
+     Логика:
+
+     1. Обычная страница:
+        data-page === currentPage
+
+     2. Инструмент:
+        data-tool === activeTool
+
+     3. Деление:
+        currentPage === comparison
+        activeTool === split
+
+     Только один пункт получает .active.
+     ========================================================= */
 
   $all('.nav')
     .forEach(
       button => {
 
-        let isActive = false;
+        let isActive =
+          false;
+
+
+        /* -----------------------------------------------
+           Кнопка с data-tool
+           ----------------------------------------------- */
 
         if (
           button.dataset.tool
         ) {
 
           isActive =
-            state.currentPage ===
-              'tools' &&
-            state.activeTool ===
-              button.dataset.tool;
+            Boolean(
+              state.activeTool
+            ) &&
+            button.dataset.tool ===
+              state.activeTool &&
+            (
+              (
+                state.activeTool ===
+                  'split' &&
+                state.currentPage ===
+                  'comparison'
+              )
+              ||
+              (
+                state.activeTool !==
+                  'split' &&
+                state.currentPage ===
+                  'tools'
+              )
+            );
 
-        } else {
+        }
+
+
+        /* -----------------------------------------------
+           Обычная кнопка без data-tool
+           ----------------------------------------------- */
+
+        else {
 
           isActive =
-            !button.dataset.tool &&
+            !state.activeTool &&
             button.dataset.page ===
               state.currentPage;
 
         }
+
 
         button.classList.toggle(
           'active',
@@ -22450,19 +22524,28 @@ $('#heading').textContent =
     );
 
 
+  /* =========================================================
+     MOBILE NAVIGATION
+     ========================================================= */
+
   $all('.mobile-nav-btn')
     .forEach(
       button => {
 
         button.classList.toggle(
           'active',
+          !state.activeTool &&
           button.dataset.page ===
-          state.currentPage
+            state.currentPage
         );
 
       }
     );
 
+
+  /* =========================================================
+     PAGE CONTENT
+     ========================================================= */
 
   switch (
     state.currentPage
@@ -22487,6 +22570,7 @@ $('#heading').textContent =
 
       break;
 
+
     case 'received':
 
       content.innerHTML =
@@ -22503,6 +22587,7 @@ $('#heading').textContent =
       setupReceived();
 
       break;
+
 
     case 'collected':
 
@@ -22521,7 +22606,8 @@ $('#heading').textContent =
 
       break;
 
-   case 'comparison':
+
+    case 'comparison':
 
       content.innerHTML =
         comparisonView();
@@ -22529,7 +22615,6 @@ $('#heading').textContent =
       setupComparison();
 
       break;
-
 
 
     case 'tools':
@@ -22549,6 +22634,10 @@ $('#heading').textContent =
 
   }
 
+
+  /* =========================================================
+     ASSEMBLY BADGES
+     ========================================================= */
 
   updateAssemblyBadges();
 
@@ -22617,70 +22706,91 @@ function updateAssemblyBadges() {
 
 function setupNavigation() {
 
-  /*
-    ОСНОВНАЯ НАВИГАЦИЯ
-
-    Обрабатываем все кнопки,
-    у которых есть data-page.
-  */
-
-  $all(
-    '[data-page]'
-  )
+  $all('[data-page]')
     .forEach(
       button => {
 
-button.addEventListener(
-  'click',
-  () => {
+        button.addEventListener(
+          'click',
+          () => {
 
-    /*
-      Специальные инструменты.
-    */
-
-   if (
-  button.dataset.tool ===
-  'inventory'
-) {
-
-  state.activeTool =
-    'inventory';
-
-  goToPage(
-    'tools'
-  );
-
-} else if (
-  button.dataset.tool ===
-  'help'
-) {
-
-  state.activeTool =
-    'help';
-
-  goToPage(
-    'tools'
-  );
-
-} else {
-
-  state.activeTool =
-    '';
-
-  goToPage(
-    button.dataset.page
-  );
-
-}
-
-            /*
-              На телефоне после перехода
-              автоматически закрываем
-              боковое меню.
-            */
+            /* =================================================
+               ИНВЕНТАРИЗАЦИЯ
+               ================================================= */
 
             if (
-              window.innerWidth <= 700
+              button.dataset.tool ===
+              'inventory'
+            ) {
+
+              state.activeTool =
+                'inventory';
+
+              goToPage(
+                'tools'
+              );
+
+            }
+
+            /* =================================================
+               СПРАВКА
+               ================================================= */
+
+            else if (
+              button.dataset.tool ===
+              'help'
+            ) {
+
+              state.activeTool =
+                'help';
+
+              goToPage(
+                'tools'
+              );
+
+            }
+
+            /* =================================================
+               ДЕЛЕНИЕ
+               ================================================= */
+
+            else if (
+              button.dataset.tool ===
+              'split'
+            ) {
+
+              state.activeTool =
+                'split';
+
+              goToPage(
+                'comparison'
+              );
+
+            }
+
+            /* =================================================
+               ОБЫЧНЫЕ РАЗДЕЛЫ
+               ================================================= */
+
+            else {
+
+              state.activeTool =
+                '';
+
+              goToPage(
+                button.dataset.page
+              );
+
+            }
+
+
+            /* =================================================
+               МОБИЛЬНОЕ МЕНЮ
+               ================================================= */
+
+            if (
+              window.innerWidth <=
+              700
             ) {
 
               document
@@ -22700,11 +22810,9 @@ button.addEventListener(
     );
 
 
-  /*
-    КНОПКА МОБИЛЬНОГО МЕНЮ
-
-    Открывает / закрывает боковую панель.
-  */
+  /* =========================================================
+     MOBILE MENU
+     ========================================================= */
 
   $('#mobileMenu')
     ?.addEventListener(
@@ -22723,13 +22831,6 @@ button.addEventListener(
     );
 
 
-  /*
-    КНОПКА «ЕЩЁ»
-
-    На мобильном открывает
-    полноценное боковое меню.
-  */
-
   $('#mobileMore')
     ?.addEventListener(
       'click',
@@ -22747,13 +22848,9 @@ button.addEventListener(
     );
 
 
-  /*
-    СТАРЫЕ КНОПКИ ЭКСПОРТА
-
-    Оставляем обработчики безопасными.
-    Если кнопок нет в index.html —
-    ничего не происходит.
-  */
+  /* =========================================================
+     EXPORT
+     ========================================================= */
 
   $('#exportBtn')
     ?.addEventListener(
@@ -22761,6 +22858,10 @@ button.addEventListener(
       exportJSON
     );
 
+
+  /* =========================================================
+     BACKUP
+     ========================================================= */
 
   $('#backupBtn')
     ?.addEventListener(
