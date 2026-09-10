@@ -10458,6 +10458,43 @@ function collectedRow(row) {
   `;
 }
 
+/* =========================================================
+   SELECT ALL COLLECTED
+   ========================================================= */
+
+function toggleAllCollected() {
+
+  const checkboxes =
+    $all('.collected-check');
+
+  if (!checkboxes.length) {
+    return;
+  }
+
+
+  const headerCheckbox =
+    document.getElementById(
+      'selectAllCollectedCheck'
+    );
+
+
+  const shouldCheck =
+    headerCheckbox
+      ? headerCheckbox.checked
+      : true;
+
+
+  checkboxes.forEach(
+    checkbox => {
+
+      checkbox.checked =
+        shouldCheck;
+
+    }
+  );
+
+}
+
 async function setDirectionForCollected() {
 
   const ids =
@@ -10600,11 +10637,65 @@ function setupCollected() {
     );
 
 
-  $('#setCollectedDirectionBtn')
-    ?.addEventListener(
-      'click',
-      setDirectionForCollected
-    );
+$('#selectAllCollectedBtn')
+  ?.addEventListener(
+    'click',
+    () => {
+
+      const checkboxes =
+        $all('.collected-check');
+
+      if (!checkboxes.length) {
+        return;
+      }
+
+
+      const allChecked =
+        checkboxes.every(
+          checkbox =>
+            checkbox.checked
+        );
+
+
+      checkboxes.forEach(
+        checkbox => {
+
+          checkbox.checked =
+            !allChecked;
+
+        }
+      );
+
+
+      const headerCheckbox =
+        document.getElementById(
+          'selectAllCollectedCheck'
+        );
+
+
+      if (headerCheckbox) {
+
+        headerCheckbox.checked =
+          !allChecked;
+
+      }
+
+    }
+  );
+
+
+$('#selectAllCollectedCheck')
+  ?.addEventListener(
+    'change',
+    toggleAllCollected
+  );
+
+
+$('#setCollectedDirectionBtn')
+  ?.addEventListener(
+    'click',
+    setDirectionForCollected
+  );
 
 
   $('#collectedDirectionFilter')
