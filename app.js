@@ -194,9 +194,8 @@ const state = {
 
   comparisonError: '',
 
-  comparisonMode: 'units'
+  comparisonMode: 'units',
 
-};
 
   /* =======================================================
      INVENTORY
@@ -222,8 +221,9 @@ const state = {
 
     message: '',
     messageType: 'success'
-  },
+  }
 
+};
 
 /* =========================================================
    HELPERS
