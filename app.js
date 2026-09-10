@@ -7658,6 +7658,118 @@ async function deleteSelectedBoxes() {
 /* =========================================================
    PICKING
    ========================================================= */
+async function markSelectedForPicking() {
+
+  const ids =
+    [...state.selectedIds];
+
+  if (!ids.length) {
+
+    toast(
+      'Сначала выберите коробки',
+      'error'
+    );
+
+    return;
+
+  }
+
+  const button =
+    $('#markPickBtn');
+
+  if (button) {
+
+    button.disabled =
+      true;
+
+    button.textContent =
+      'Перевод...';
+
+  }
+
+  try {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from('boxes')
+        .update({
+          "Статус":
+            STATUSES.PICK,
+
+          "Изменил":
+            state.user?.email ||
+            null
+        })
+        .in(
+          'id',
+          ids
+        )
+        .select(
+          BOX_SELECT
+        );
+
+    if (error) {
+
+      throw error;
+
+    }
+
+    if (
+      Array.isArray(data)
+    ) {
+
+      data.forEach(
+        row => {
+
+          updateLocalBox(
+            row.id,
+            row
+          );
+
+        }
+      );
+
+    }
+
+    state.selectedIds =
+      new Set();
+
+    render();
+
+    toast(
+      `В подбор переведено: ${data?.length || 0}`
+    );
+
+  } catch (error) {
+
+    console.error(
+      'markSelectedForPicking:',
+      error
+    );
+
+    toast(
+      error?.message ||
+      'Не удалось перевести коробки в подбор',
+      'error'
+    );
+
+    if (button) {
+
+      button.disabled =
+        false;
+
+      button.textContent =
+        `В подбор (${ids.length})`;
+
+    }
+
+  }
+
+}
+
 /* =========================================================
    REQUEST → PICKING
    ========================================================= */
