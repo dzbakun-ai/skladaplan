@@ -23042,66 +23042,123 @@ async function startApp() {
     Отслеживаем вход/выход.
   */
 
-  supabaseClient.auth
-    .onAuthStateChange(
-      async (
-        event,
-        session
-      ) => {
+supabaseClient.auth
+  .onAuthStateChange(
+    async (
+      event,
+      session
+    ) => {
 
-        console.log(
-          'Auth event:',
-          event
-        );
+      console.log(
+        'Auth event:',
+        event
+      );
+
+
+      /* =====================================================
+         ВЫХОД
+         ===================================================== */
+
+      if (
+        event ===
+        'SIGNED_OUT'
+      ) {
+
+        state.session =
+          null;
+
+        state.user =
+          null;
+
+        state.boxes =
+          [];
+
+        state.loading =
+          false;
+
+        showLogin();
+
+        return;
+
+      }
+
+
+      /* =====================================================
+         ВХОД
+         ===================================================== */
+
+      if (
+        event ===
+        'SIGNED_IN'
+      ) {
+
+        const newUserId =
+          session?.user?.id ||
+          null;
+
+        const currentUserId =
+          state.user?.id ||
+          null;
+
+
+        /*
+          Supabase может повторно отправить
+          SIGNED_IN для уже авторизованного
+          пользователя.
+
+          В таком случае НЕ загружаем
+          16 000+ коробок заново.
+
+          Повторная загрузка разрешается
+          только если действительно изменился
+          пользователь или приложение ещё
+          не имеет загруженной базы.
+        */
+
+        const sameUser =
+          Boolean(
+            newUserId &&
+            currentUserId &&
+            newUserId ===
+              currentUserId
+          );
 
 
         if (
-          event ===
-          'SIGNED_OUT'
+          sameUser &&
+          state.boxes.length > 0
         ) {
 
+          console.log(
+            'SKLADAPLAN: повторный SIGNED_IN — базу не перезагружаем'
+          );
+
           state.session =
-            null;
-
-
-          state.user =
-            null;
-
-
-          state.boxes =
-            [];
-
-
-          showLogin();
-
+            session;
 
           return;
 
         }
 
 
-        if (
-          event ===
-          'SIGNED_IN'
-        ) {
+        /*
+          Настоящая новая авторизация.
+        */
 
-          state.session =
-            session;
+        state.session =
+          session;
 
-
-          state.user =
-            session?.user ||
-            null;
+        state.user =
+          session?.user ||
+          null;
 
 
-          await startAuthenticatedApp();
-
-        }
+        await startAuthenticatedApp();
 
       }
-    );
 
-}
+    }
+  );
 
 /* =========================================================
    ASSEMBLY SELECT ALL CHECKBOX
