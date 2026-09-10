@@ -1,28 +1,42 @@
+```html
 <!doctype html>
 <html lang="ru">
 
 <head>
-<meta charset="utf-8">
-<meta
-  name="viewport"
-  content="width=device-width,initial-scale=1"
->
 
-<title>SKLADAPLAN — WMS</title>
+  <meta charset="utf-8">
 
-<link rel="stylesheet" href="style.css">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <meta
+    name="theme-color"
+    content="#ffffff"
+  >
+
+  <title>SKLADAPLAN — WMS</title>
+
+  <link
+    rel="stylesheet"
+    href="style.css"
+  >
 
 </head>
+
 
 <body>
 
 <div class="app">
+
 
   <!-- =====================================================
        SIDEBAR
        ===================================================== -->
 
   <aside class="sidebar">
+
 
     <!-- BRAND -->
 
@@ -47,7 +61,9 @@
     </div>
 
 
-    <!-- NAVIGATION -->
+    <!-- ===================================================
+         SIDEBAR NAVIGATION
+         =================================================== -->
 
     <nav class="sidebar-nav">
 
@@ -63,14 +79,15 @@
         </div>
 
 
+        <!-- ГЛАВНАЯ -->
+
         <button
           class="nav"
+          type="button"
           data-page="dashboard"
         >
 
-          <span class="nav-icon">
-            ⌂
-          </span>
+          <span class="nav-icon">⌂</span>
 
           <span>
             Главная
@@ -79,14 +96,15 @@
         </button>
 
 
+        <!-- БАЗА -->
+
         <button
           class="nav"
+          type="button"
           data-page="base"
         >
 
-<span class="nav-icon">
-  ▤
-</span>
+          <span class="nav-icon">▤</span>
 
           <span>
             База
@@ -95,14 +113,15 @@
         </button>
 
 
+        <!-- ПРИЁМКА -->
+
         <button
           class="nav"
+          type="button"
           data-page="received"
         >
 
-<span class="nav-icon">
-  ⇩
-</span>
+          <span class="nav-icon">⇩</span>
 
           <span>
             Приёмка
@@ -111,32 +130,37 @@
         </button>
 
 
+        <!-- СБОРКА -->
+
         <button
           class="nav"
+          type="button"
           data-page="assembly"
         >
 
-<span class="nav-icon">
-  ◫
-</span>
+          <span class="nav-icon">◫</span>
 
           <span>
             Сборка
           </span>
 
-          <em id="assemblyBadge"></em>
+          <em
+            id="assemblyBadge"
+            aria-hidden="true"
+          ></em>
 
         </button>
 
 
+        <!-- СОБРАНО -->
+
         <button
           class="nav"
+          type="button"
           data-page="collected"
         >
 
-          <span class="nav-icon">
-            ✓
-          </span>
+          <span class="nav-icon">✓</span>
 
           <span>
             Собрано
@@ -145,14 +169,15 @@
         </button>
 
 
+        <!-- УБЫЛО -->
+
         <button
           class="nav"
+          type="button"
           data-page="shipped"
         >
 
-<span class="nav-icon">
-  ⇧
-</span>
+          <span class="nav-icon">⇧</span>
 
           <span>
             Убыло
@@ -174,15 +199,16 @@
         </div>
 
 
+        <!-- СРАВНЕНИЕ -->
+
         <button
           class="nav"
+          type="button"
           data-page="tools"
           data-tool="compare"
         >
 
-          <span class="nav-icon">
-            ⇄
-          </span>
+          <span class="nav-icon">⇄</span>
 
           <span>
             Сравнение
@@ -191,15 +217,16 @@
         </button>
 
 
+        <!-- ДЕЛЕНИЕ -->
+
         <button
           class="nav"
+          type="button"
           data-page="comparison"
           data-tool="split"
         >
 
-          <span class="nav-icon">
-            ÷
-          </span>
+          <span class="nav-icon">÷</span>
 
           <span>
             Деление
@@ -208,15 +235,16 @@
         </button>
 
 
+        <!-- СУММА -->
+
         <button
           class="nav"
+          type="button"
           data-page="tools"
           data-tool="sum"
         >
 
-          <span class="nav-icon">
-            Σ
-          </span>
+          <span class="nav-icon">Σ</span>
 
           <span>
             Сумма
@@ -225,15 +253,16 @@
         </button>
 
 
+        <!-- ИНВЕНТАРИЗАЦИЯ -->
+
         <button
           class="nav"
+          type="button"
           data-page="tools"
           data-tool="inventory"
         >
 
-          <span class="nav-icon">
-            ⊙
-          </span>
+          <span class="nav-icon">⊙</span>
 
           <span>
             Инвентаризация
@@ -242,15 +271,16 @@
         </button>
 
 
+        <!-- EXCEL -->
+
         <button
           class="nav"
+          type="button"
           data-page="tools"
           data-tool="excel"
         >
 
-          <span class="nav-icon">
-            ↓
-          </span>
+          <span class="nav-icon">↓</span>
 
           <span>
             Excel
@@ -259,15 +289,16 @@
         </button>
 
 
+        <!-- ДАННЫЕ -->
+
         <button
           class="nav"
+          type="button"
           data-page="tools"
           data-tool="data"
         >
 
-          <span class="nav-icon">
-            ◫
-          </span>
+          <span class="nav-icon">◫</span>
 
           <span>
             Данные
@@ -289,15 +320,16 @@
         </div>
 
 
+        <!-- КАРТА СОХ -->
+
         <button
           class="nav"
+          type="button"
           data-page="tools"
           data-tool="map-soh"
         >
 
-          <span class="nav-icon">
-            ◇
-          </span>
+          <span class="nav-icon">◇</span>
 
           <span>
             Карта СОХ
@@ -306,15 +338,16 @@
         </button>
 
 
+        <!-- КАРТА НС -->
+
         <button
           class="nav"
+          type="button"
           data-page="tools"
           data-tool="map-ns"
         >
 
-          <span class="nav-icon">
-            ◇
-          </span>
+          <span class="nav-icon">◇</span>
 
           <span>
             Карта НС
@@ -323,15 +356,16 @@
         </button>
 
 
+        <!-- СПРАВКА -->
+
         <button
           class="nav"
+          type="button"
           data-page="tools"
           data-tool="help"
         >
 
-          <span class="nav-icon">
-            ?
-          </span>
+          <span class="nav-icon">?</span>
 
           <span>
             Справка
@@ -344,15 +378,20 @@
     </nav>
 
 
-    <!-- SIDEBAR FOOT -->
+    <!-- ===================================================
+         SIDEBAR FOOTER
+         =================================================== -->
 
     <div class="sidebar-foot">
+
 
       <div class="offline">
 
         <i></i>
 
-        Онлайн-режим
+        <span>
+          Онлайн-режим
+        </span>
 
       </div>
 
@@ -377,6 +416,11 @@
 
   <main>
 
+
+    <!-- ===================================================
+         TOPBAR
+         =================================================== -->
+
     <header class="topbar">
 
 
@@ -385,7 +429,9 @@
       <button
         class="mobile-menu"
         id="mobileMenu"
-        aria-label="Меню"
+        type="button"
+        aria-label="Открыть меню"
+        aria-expanded="false"
       >
         ☰
       </button>
@@ -415,15 +461,23 @@
 
       <!-- TOP ACTIONS -->
 
-<div class="top-actions">
-</div>
+      <div
+        class="top-actions"
+        id="topActions"
+      ></div>
 
     </header>
 
 
-    <!-- PAGE CONTENT -->
+    <!-- ===================================================
+         PAGE CONTENT
+         =================================================== -->
 
-    <section id="content"></section>
+    <section
+      id="content"
+      aria-live="polite"
+    ></section>
+
 
   </main>
 
@@ -434,24 +488,22 @@
      MOBILE NAVIGATION
      ===================================================== -->
 
-<!-- =====================================================
-     MOBILE NAVIGATION
-     ===================================================== -->
-
 <nav
   class="mobile-nav"
   id="mobileNav"
+  aria-label="Основная навигация"
 >
+
 
   <!-- ГЛАВНАЯ -->
 
   <button
     class="mobile-nav-btn"
-    data-page="dashboard"
     type="button"
+    data-page="dashboard"
   >
 
-    <span>
+    <span aria-hidden="true">
       ⌂
     </span>
 
@@ -466,12 +518,12 @@
 
   <button
     class="mobile-nav-btn"
-    data-page="base"
     type="button"
+    data-page="base"
   >
 
-    <span>
-      ▦
+    <span aria-hidden="true">
+      ▤
     </span>
 
     <small>
@@ -485,12 +537,12 @@
 
   <button
     class="mobile-nav-btn"
-    data-page="received"
     type="button"
+    data-page="received"
   >
 
-    <span>
-      ↓
+    <span aria-hidden="true">
+      ⇩
     </span>
 
     <small>
@@ -504,11 +556,11 @@
 
   <button
     class="mobile-nav-btn"
-    data-page="assembly"
     type="button"
+    data-page="assembly"
   >
 
-    <span>
+    <span aria-hidden="true">
       ◫
     </span>
 
@@ -516,7 +568,10 @@
       Сборка
     </small>
 
-    <em id="mobileAssemblyBadge"></em>
+    <em
+      id="mobileAssemblyBadge"
+      aria-hidden="true"
+    ></em>
 
   </button>
 
@@ -528,9 +583,10 @@
     id="mobileMore"
     type="button"
     aria-label="Открыть меню"
+    aria-expanded="false"
   >
 
-    <span>
+    <span aria-hidden="true">
       ⋯
     </span>
 
@@ -547,22 +603,30 @@
      SUPABASE
      ===================================================== -->
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script
+  src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
+></script>
 
 
 <!-- =====================================================
      XLSX
      ===================================================== -->
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script
+  src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
+></script>
 
 
 <!-- =====================================================
      SKLADAPLAN
      ===================================================== -->
 
-<script src="app.js"></script>
+<script
+  src="app.js"
+></script>
+
 
 </body>
 
 </html>
+```
