@@ -13243,6 +13243,396 @@ Excel:
 }
 
 /* =========================================================
+   REQUEST PARSER
+   Одна общая логика разбора заявки
+   ========================================================= */
+
+function parseRequestText(raw) {
+
+  const requested = new Map();
+
+  let invalidLines = 0;
+
+  const lines =
+    String(raw || '')
+      .split(/\r?\n/)
+      .map(
+        line =>
+          line.trim()
+      )
+      .filter(Boolean);
+
+
+  for (const line of lines) {
+
+    /*
+      Ищем 13-значный штрихкод.
+    */
+
+    const barcodeMatch =
+      line.match(
+        /\b\d{13}\b/
+      );
+
+
+    if (!barcodeMatch) {
+
+      invalidLines++;
+
+      continue;
+
+    }
+
+
+    const barcode =
+      normalizeBarcode(
+        barcodeMatch[0]
+      );
+
+
+    if (!barcode) {
+
+      invalidLines++;
+
+      continue;
+
+    }
+
+
+    /*
+      Всё после штрихкода.
+    */
+
+    const rest =
+      line
+        .slice(
+          barcodeMatch.index +
+          barcodeMatch[0].length
+        )
+        .trim();
+
+
+    /*
+      По умолчанию:
+      одна коробка.
+    */
+
+    let quantity = 1;
+
+
+    /*
+      Если после штрихкода есть число —
+      используем именно его.
+
+      Поддерживается:
+
+      4810122638540 12
+      4810122638540    12
+      4810122638540 - 12
+      4810122638540 — 12
+      4810122638540 : 12
+      4810122638540 ; 12
+    */
+
+    const quantityMatch =
+      rest.match(
+        /(?:^|[-—–:;,]|\s+)(\d+(?:[.,]\d+)?)\s*$/
+      );
+
+
+    if (quantityMatch) {
+
+      quantity =
+        Number(
+          String(
+            quantityMatch[1]
+          ).replace(
+            ',',
+            '.'
+          )
+        );
+
+    }
+
+
+    /*
+      Проверяем количество.
+    */
+
+    if (
+      !Number.isFinite(
+        quantity
+      ) ||
+      quantity <= 0
+    ) {
+
+      invalidLines++;
+
+      continue;
+
+    }
+
+
+    quantity =
+      Math.floor(
+        quantity
+      );
+
+
+    if (quantity <= 0) {
+
+      invalidLines++;
+
+      continue;
+
+    }
+
+
+    /*
+      Повторяющиеся штрихкоды
+      складываем.
+
+      Например:
+
+      4810122638540 5
+      4810122638540 7
+
+      = 12
+    */
+
+    requested.set(
+      barcode,
+      (
+        requested.get(
+          barcode
+        ) || 0
+      ) + quantity
+    );
+
+  }
+
+
+  return {
+    requested,
+    invalidLines
+  };
+
+}
+
+/* =========================================================
+   REQUEST PARSER
+   ЕДИНАЯ ЛОГИКА РАЗБОРА ЗАЯВКИ
+   ========================================================= */
+
+function parseRequestText(raw) {
+
+  const requested =
+    new Map();
+
+  let invalidLines =
+    0;
+
+  const lines =
+    String(raw || '')
+      .split(/\r?\n/)
+      .map(
+        line =>
+          line.trim()
+      )
+      .filter(Boolean);
+
+
+  for (
+    const line of lines
+  ) {
+
+    /*
+      Ищем именно 13-значный штрихкод.
+    */
+
+    const barcodeMatch =
+      line.match(
+        /\d{13}/
+      );
+
+
+    if (!barcodeMatch) {
+
+      invalidLines++;
+
+      continue;
+
+    }
+
+
+    const barcode =
+      normalizeBarcode(
+        barcodeMatch[0]
+      );
+
+
+    if (!barcode) {
+
+      invalidLines++;
+
+      continue;
+
+    }
+
+
+    /*
+      Берём только то,
+      что находится ПОСЛЕ штрихкода.
+
+      Например:
+
+      4810122638540 12
+
+      превращается в:
+
+      rest = "12"
+    */
+
+    const barcodeEnd =
+      (
+        barcodeMatch.index || 0
+      ) +
+      barcodeMatch[0].length;
+
+
+    const rest =
+      line
+        .slice(
+          barcodeEnd
+        )
+        .trim();
+
+
+    /*
+      По умолчанию:
+      одна физическая коробка.
+    */
+
+    let quantity =
+      1;
+
+
+    /*
+      Если после штрихкода
+      стоит число — используем его.
+
+      Поддерживаем:
+
+      4810122638540 12
+      4810122638540    12
+      4810122638540 - 12
+      4810122638540 — 12
+      4810122638540 – 12
+      4810122638540 : 12
+      4810122638540 ; 12
+      4810122638540 , 12
+    */
+
+    if (rest) {
+
+      const quantityMatch =
+        rest.match(
+          /(?:^|[-—–:;,]|\s+)(\d+(?:[.,]\d+)?)\s*$/
+        );
+
+
+      if (quantityMatch) {
+
+        quantity =
+          Number(
+            String(
+              quantityMatch[1]
+            )
+              .replace(
+                ',',
+                '.'
+              )
+          );
+
+      }
+
+    }
+
+
+    /*
+      Проверяем количество.
+    */
+
+    if (
+      !Number.isFinite(
+        quantity
+      ) ||
+      quantity <= 0
+    ) {
+
+      invalidLines++;
+
+      continue;
+
+    }
+
+
+    /*
+      Количество физических коробок
+      всегда целое.
+    */
+
+    quantity =
+      Math.floor(
+        quantity
+      );
+
+
+    if (
+      quantity <= 0
+    ) {
+
+      invalidLines++;
+
+      continue;
+
+    }
+
+
+    /*
+      Повторный штрихкод
+      складывает количество.
+
+      Например:
+
+      4810122638540 5
+      4810122638540 7
+
+      = 12
+    */
+
+    requested.set(
+      barcode,
+      (
+        requested.get(
+          barcode
+        ) || 0
+      ) +
+      quantity
+    );
+
+  }
+
+
+  return {
+    requested,
+    invalidLines
+  };
+
+}
+
+
+/* =========================================================
    REQUEST PREVIEW
    ========================================================= */
 
@@ -13286,6 +13676,7 @@ function updateRequestPreview() {
   ) {
 
     return;
+
   }
 
 
@@ -13294,14 +13685,16 @@ function updateRequestPreview() {
 
 
   /*
-    Если поле пустое —
-    скрываем предпросмотр.
+    Пустое поле.
   */
 
-  if (!raw.trim()) {
+  if (
+    !raw.trim()
+  ) {
 
     preview.style.display =
       'none';
+
 
     if (button) {
 
@@ -13310,140 +13703,27 @@ function updateRequestPreview() {
 
     }
 
+
     return;
+
   }
 
 
   /*
-    Разбираем заявку.
+    ЕДИНЫЙ ПАРСЕР.
   */
 
-  const lines =
-    raw
-      .split(/\r?\n/)
-      .map(
-        line =>
-          line.trim()
-      )
-      .filter(Boolean);
-
-
-  const requested =
-    new Map();
-
-
-  for (
-    const line of lines
-  ) {
-
-    const barcodeMatch =
-      line.match(
-        /\d{13}/
-      );
-
-
-    if (!barcodeMatch) {
-
-      continue;
-    }
-
-
-    const barcode =
-      normalizeBarcode(
-        barcodeMatch[0]
-      );
-
-
-    if (!barcode) {
-
-      continue;
-    }
-
-
-    const rest =
-      line
-        .replace(
-          barcodeMatch[0],
-          ''
-        )
-        .trim();
-
-
-    let quantity =
-      1;
-
-
-    /*
-      Поддерживаем:
-
-      4810122595003 - 3
-      4810122595003 — 3
-      4810122595003 3
-      4810122595003:3
-      */
-
-    const quantityMatch =
-      rest.match(
-        /(?:[-—–:;,]|\s)\s*(\d+(?:[.,]\d+)?)\s*$/
-      );
-
-
-    if (
-      quantityMatch
-    ) {
-
-      quantity =
-        Number(
-          String(
-            quantityMatch[1]
-          ).replace(
-            ',',
-            '.'
-          )
-        );
-
-    }
-
-
-    if (
-      !Number.isFinite(
-        quantity
-      ) ||
-      quantity <= 0
-    ) {
-
-      continue;
-    }
-
-
-    quantity =
-      Math.floor(
-        quantity
-      );
-
-
-    if (
-      quantity <= 0
-    ) {
-
-      continue;
-    }
-
-
-    requested.set(
-      barcode,
-      (
-        requested.get(
-          barcode
-        ) || 0
-      ) + quantity
+  const {
+    requested,
+    invalidLines
+  } =
+    parseRequestText(
+      raw
     );
-
-  }
 
 
   /*
-    Очищаем таблицу.
+    Очищаем старый preview.
   */
 
   body.innerHTML =
@@ -13455,8 +13735,7 @@ function updateRequestPreview() {
 
 
   /*
-    Если удалось распознать
-    позиции — строим таблицу.
+    Строим preview.
   */
 
   requested.forEach(
@@ -13483,6 +13762,7 @@ function updateRequestPreview() {
           )}
         </td>
 
+
         <td
           style="
             text-align:center;
@@ -13491,6 +13771,7 @@ function updateRequestPreview() {
         >
           ${quantity}
         </td>
+
 
         <td
           style="
@@ -13528,6 +13809,10 @@ function updateRequestPreview() {
   );
 
 
+  /*
+    Ничего не распознано.
+  */
+
   if (
     requested.size === 0
   ) {
@@ -13535,12 +13820,22 @@ function updateRequestPreview() {
     preview.style.display =
       'none';
 
+
+    if (button) {
+
+      button.textContent =
+        '📦 Сформировать подбор';
+
+    }
+
+
     return;
+
   }
 
 
   /*
-    Показываем предпросмотр.
+    Показываем preview.
   */
 
   preview.style.display =
@@ -13556,7 +13851,7 @@ function updateRequestPreview() {
 
 
   /*
-    Меняем текст кнопки.
+    Меняем кнопку.
   */
 
   if (button) {
@@ -13565,6 +13860,37 @@ function updateRequestPreview() {
       `📦 Сформировать подбор · ${totalQuantity}`;
 
   }
+
+
+  /*
+    Диагностика некорректных строк.
+  */
+
+  if (
+    invalidLines > 0
+  ) {
+
+    console.warn(
+      `Пропущено строк заявки: ${invalidLines}`
+    );
+
+  }
+
+
+  /*
+    Очень полезная диагностика.
+    Например:
+
+    REQUESTED:
+    [
+      ["4810122638540", 12]
+    ]
+  */
+
+  console.log(
+    'REQUESTED:',
+    [...requested.entries()]
+  );
 
 }
 
