@@ -11626,7 +11626,14 @@ function collectedRow(row) {
 function toggleAllCollected() {
 
   const checkboxes =
-    $all('.collected-check');
+    $all('.collected-check')
+      .filter(
+        checkbox =>
+          checkbox
+            .closest('tr')
+            ?.style.display !==
+            'none'
+      );
 
   if (!checkboxes.length) {
     return;
@@ -11809,7 +11816,14 @@ $('#selectAllCollectedBtn')
     () => {
 
       const checkboxes =
-        $all('.collected-check');
+        $all('.collected-check')
+          .filter(
+            checkbox =>
+              checkbox
+                .closest('tr')
+                ?.style.display !==
+                'none'
+          );
 
       if (!checkboxes.length) {
         return;
