@@ -5935,15 +5935,10 @@ function toggleSelectAllBase() {
 }
 
 
-/* =========================================================
-   BASE VIEW
-   ========================================================= */
-
 function baseView() {
 
   const filtered =
     getFilteredBoxes();
-
 
   const totalPages =
     Math.max(
@@ -5954,36 +5949,17 @@ function baseView() {
       )
     );
 
-
-  /*
-    Защита от выхода за последнюю страницу.
-  */
-
-  if (
-    state.basePage < 1
-  ) {
-
-    state.basePage = 1;
-  }
-
-
   if (
     state.basePage >
     totalPages
   ) {
-
     state.basePage =
       totalPages;
   }
 
-
   const start =
-    (
-      state.basePage -
-      1
-    ) *
+    (state.basePage - 1) *
     PAGE_SIZE;
-
 
   const rows =
     filtered.slice(
@@ -5991,166 +5967,349 @@ function baseView() {
       start + PAGE_SIZE
     );
 
-
-  /*
-    Список складов.
-  */
-
   const warehouses =
     [
       ...new Set(
         state.boxes
-          .map(
-            row =>
-              normalizeText(
-                row.warehouse
-              )
+          .map(row =>
+            normalizeText(
+              row.warehouse
+            )
           )
           .filter(Boolean)
       )
-    ]
-      .sort();
+    ].sort();
 
+  const zones =
+    [
+      ...new Set(
+        state.boxes
+          .filter(row => {
 
-  /*
-    Список статусов.
-  */
+            if (
+              state.baseWarehouse &&
+              normalizeText(row.warehouse) !==
+                normalizeText(state.baseWarehouse)
+            ) {
+              return false;
+            }
+
+            return true;
+          })
+          .map(row =>
+            normalizeText(
+              row.zone_row
+            )
+          )
+          .filter(Boolean)
+      )
+    ].sort();
+
+  const pallets =
+    [
+      ...new Set(
+        state.boxes
+          .filter(row => {
+
+            if (
+              state.baseWarehouse &&
+              normalizeText(row.warehouse) !==
+                normalizeText(state.baseWarehouse)
+            ) {
+              return false;
+            }
+
+            if (
+              state.baseZone &&
+              normalizeText(row.zone_row) !==
+                normalizeText(state.baseZone)
+            ) {
+              return false;
+            }
+
+            return true;
+          })
+          .map(row =>
+            normalizeText(
+              row.pallet
+            )
+          )
+          .filter(Boolean)
+      )
+    ].sort();
 
   const statuses =
     [
       ...new Set(
         state.boxes
-          .map(
-            row =>
-              normalizeText(
-                row.status
-              )
+          .map(row =>
+            normalizeText(
+              row.status
+            )
           )
           .filter(Boolean)
       )
-    ]
-      .sort();
+    ].sort();
 
-
-  /*
-    ID коробок текущего фильтра.
-  */
-
-  const filteredIds =
-    filtered.map(
-      row =>
-        String(row.id)
-    );
-
-
-  const selectedFilteredCount =
-    filteredIds.filter(
-      id =>
-        state.selectedIds.has(id)
-    ).length;
-
-
-  const allFilteredSelected =
-    filtered.length > 0 &&
-    selectedFilteredCount ===
-      filtered.length;
-
+  const directions =
+    [
+      ...new Set(
+        state.boxes
+          .map(row =>
+            normalizeText(
+              row.direction
+            )
+          )
+          .filter(Boolean)
+      )
+    ].sort();
 
   return `
 
-    <div class="sp-toolbar">
+    <!-- =========================================
+         БЫСТРАЯ НАВИГАЦИЯ
+         ========================================= -->
 
-      <!-- ПОИСК -->
+    <div
+      class="sp-card"
+      style="
+        margin-bottom:14px;
+      "
+    >
+
+      <div
+        style="
+          display:flex;
+          flex-wrap:wrap;
+          gap:8px;
+        "
+      >
+
+        <button
+          class="sp-btn secondary"
+          data-page="dashboard"
+        >
+          Главная
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="received"
+        >
+          Приёмка
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="assembly"
+        >
+          Сборка
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="collected"
+        >
+          Собрано
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="shipped"
+        >
+          Убыло
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="comparison"
+        >
+          Сравнение
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="tools"
+        >
+          Инструменты
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <!-- =========================================
+         ФИЛЬТРЫ
+         ========================================= -->
+
+    <div
+      class="sp-toolbar"
+      style="
+        flex-wrap:wrap;
+      "
+    >
 
       <input
         id="baseSearch"
         type="search"
-        placeholder="Поиск по штрихкоду, артикулу, зоне..."
+        placeholder="Штрихкод / артикул / зона / поддон / направление..."
         value="${escapeHtml(
           state.baseSearch
         )}"
+        style="min-width:260px"
       >
 
 
-      <!-- СКЛАД -->
-
-      <select
-        id="baseWarehouse"
-      >
+      <select id="baseWarehouse">
 
         <option value="">
           Все склады
         </option>
 
-        ${
-          warehouses
-            .map(
-              warehouse => `
+        ${warehouses.map(
+          warehouse => `
 
-                <option
-                  value="${escapeHtml(
-                    warehouse
-                  )}"
-                  ${
-                    warehouse ===
-                    state.baseWarehouse
-                      ? 'selected'
-                      : ''
-                  }
-                >
-                  ${escapeHtml(
-                    warehouse
-                  )}
-                </option>
+            <option
+              value="${escapeHtml(
+                warehouse
+              )}"
+              ${
+                warehouse ===
+                state.baseWarehouse
+                  ? 'selected'
+                  : ''
+              }
+            >
+              ${escapeHtml(
+                warehouse
+              )}
+            </option>
 
-              `
-            )
-            .join('')
-        }
+          `
+        ).join('')}
 
       </select>
 
 
-      <!-- СТАТУС -->
+      <select id="baseZone">
 
-      <select
-        id="baseStatus"
-      >
+        <option value="">
+          Все зоны / ряды
+        </option>
+
+        ${zones.map(
+          zone => `
+
+            <option
+              value="${escapeHtml(zone)}"
+              ${
+                zone ===
+                state.baseZone
+                  ? 'selected'
+                  : ''
+              }
+            >
+              ${escapeHtml(zone)}
+            </option>
+
+          `
+        ).join('')}
+
+      </select>
+
+
+      <select id="basePallet">
+
+        <option value="">
+          Все поддоны
+        </option>
+
+        ${pallets.map(
+          pallet => `
+
+            <option
+              value="${escapeHtml(pallet)}"
+              ${
+                pallet ===
+                state.basePallet
+                  ? 'selected'
+                  : ''
+              }
+            >
+              ${escapeHtml(pallet)}
+            </option>
+
+          `
+        ).join('')}
+
+      </select>
+
+
+      <select id="baseStatus">
 
         <option value="">
           Все статусы
         </option>
 
-        ${
-          statuses
-            .map(
-              status => `
+        ${statuses.map(
+          status => `
 
-                <option
-                  value="${escapeHtml(
-                    status
-                  )}"
-                  ${
-                    status ===
-                    state.baseStatus
-                      ? 'selected'
-                      : ''
-                  }
-                >
-                  ${escapeHtml(
-                    status
-                  )}
-                </option>
+            <option
+              value="${escapeHtml(status)}"
+              ${
+                status ===
+                state.baseStatus
+                  ? 'selected'
+                  : ''
+              }
+            >
+              ${escapeHtml(status)}
+            </option>
 
-              `
-            )
-            .join('')
-        }
+          `
+        ).join('')}
 
       </select>
 
 
-      <!-- ДОБАВИТЬ -->
+      <select id="baseDirection">
+
+        <option value="">
+          Все направления
+        </option>
+
+        ${directions.map(
+          direction => `
+
+            <option
+              value="${escapeHtml(
+                direction
+              )}"
+              ${
+                direction ===
+                state.baseDirection
+                  ? 'selected'
+                  : ''
+              }
+            >
+              ${escapeHtml(
+                direction
+              )}
+            </option>
+
+          `
+        ).join('')}
+
+      </select>
+
+
+      <button
+        class="sp-btn secondary"
+        id="resetBaseFilters"
+      >
+        Сбросить
+      </button>
 
       <button
         class="sp-btn"
@@ -6158,34 +6317,6 @@ function baseView() {
       >
         + Добавить коробку
       </button>
-
-
-      <!-- ВЫБРАТЬ ВСЕ -->
-
-      <button
-        class="sp-btn secondary"
-        id="selectAllBaseBtn"
-        ${
-          filtered.length
-            ? ''
-            : 'disabled'
-        }
-      >
-        ${
-          allFilteredSelected
-            ? 'Снять выделение'
-            : 'Выбрать все'
-        }
-
-        ${
-          filtered.length
-            ? ` (${filtered.length})`
-            : ''
-        }
-      </button>
-
-
-      <!-- В ПОДБОР -->
 
       <button
         class="sp-btn success"
@@ -6197,15 +6328,20 @@ function baseView() {
         }
       >
         В подбор
-        ${
-          state.selectedIds.size
-            ? ` (${state.selectedIds.size})`
-            : ''
-        }
+        (${state.selectedIds.size})
       </button>
 
-
-      <!-- УДАЛИТЬ -->
+      <button
+        class="sp-btn"
+        id="setDirectionFromBaseBtn"
+        ${
+          state.selectedIds.size
+            ? ''
+            : 'disabled'
+        }
+      >
+        🏷 Направление
+      </button>
 
       <button
         class="sp-btn danger"
@@ -6216,40 +6352,32 @@ function baseView() {
             : 'disabled'
         }
       >
-        Удалить выбранные
-        ${
-          state.selectedIds.size
-            ? ` (${state.selectedIds.size})`
-            : ''
-        }
+        Удалить
+        (${state.selectedIds.size})
       </button>
 
     </div>
 
 
-    <!-- ИНФОРМАЦИЯ -->
+    <!-- =========================================
+         СТАТИСТИКА
+         ========================================= -->
 
     <div
       class="sp-muted"
-      style="margin-bottom:10px"
+      style="margin:12px 0"
     >
 
       Найдено:
-      <b>
-        ${filtered.length}
-      </b>
+      <b>${filtered.length}</b>
+
+      · Всего:
+      <b>${state.boxes.length}</b>
 
       · Выбрано:
-      <b>
-        ${state.selectedIds.size}
-      </b>
+      <b>${state.selectedIds.size}</b>
 
-      · Всего коробок:
-      <b>
-        ${state.boxes.length}
-      </b>
-
-      · Страница
+      · Страница:
       ${state.basePage}
       из
       ${totalPages}
@@ -6257,61 +6385,66 @@ function baseView() {
     </div>
 
 
-    <!-- ТАБЛИЦА -->
+<!-- =========================================
+     ТАБЛИЦА
+     ========================================= -->
 
-    <div class="sp-table-wrap">
+<div class="sp-table-wrap">
 
-      <table class="sp-table">
+  <table class="sp-table">
 
-        <thead>
+    <thead>
 
-          <tr>
+      <tr>
 
-            <th style="width:35px">
-              ✓
-            </th>
+        <th style="width:35px">
+          ✓
+        </th>
 
-            <th>
-              Штрихкод
-            </th>
+        <th>
+          Штрихкод
+        </th>
 
-            <th>
-              Артикул
-            </th>
+        <th>
+          Артикул
+        </th>
 
-            <th>
-              Кол-во в коробке
-            </th>
+        <th>
+          Кол-во
+        </th>
 
-            <th>
-              Зона/ряд
-            </th>
+        <th>
+          Зона / ряд
+        </th>
 
-            <th>
-              Поддон
-            </th>
+        <th>
+          Поддон
+        </th>
 
-            <th>
-              Статус
-            </th>
+        <th>
+          Статус
+        </th>
 
-            <th>
-              ДатаРазмещения
-            </th>
+        <th>
+          Направление
+        </th>
 
-            <th>
-              Склад
-            </th>
+        <th>
+          Склад
+        </th>
 
-            <th>
-              Действия
-            </th>
+        <th>
+          Дата
+        </th>
 
-          </tr>
+        <th>
+          Действия
+        </th>
 
-        </thead>
+      </tr>
 
-
+    </thead>
+    
         <tbody>
 
           ${
@@ -6327,7 +6460,7 @@ function baseView() {
 
                 <tr>
 
-                  <td colspan="10">
+                  <td colspan="11">
 
                     <div class="sp-empty">
                       Нет данных
@@ -6347,7 +6480,9 @@ function baseView() {
     </div>
 
 
-    <!-- ПАГИНАЦИЯ -->
+    <!-- =========================================
+         ПАГИНАЦИЯ
+         ========================================= -->
 
     <div class="sp-pagination">
 
@@ -6375,7 +6510,6 @@ function baseView() {
           ←
         </button>
 
-
         <button
           class="sp-btn secondary"
           id="baseNext"
@@ -6396,16 +6530,10 @@ function baseView() {
 }
 
 
-/* =========================================================
-   BASE ROW
-   ========================================================= */
-
 function baseRow(row) {
 
   const id =
-    String(
-      row.id
-    );
+    String(row.id);
 
 
   const selected =
@@ -6418,12 +6546,10 @@ function baseRow(row) {
 
     <tr
       data-row-id="${escapeHtml(id)}"
-      class="${
-        selected
-          ? 'selected'
-          : ''
-      }"
+      class="${selected ? 'selected' : ''}"
     >
+
+      <!-- ВЫБОР -->
 
       <td>
 
@@ -6441,6 +6567,8 @@ function baseRow(row) {
       </td>
 
 
+      <!-- ШТРИХКОД -->
+
       <td>
 
         <b>
@@ -6452,12 +6580,16 @@ function baseRow(row) {
       </td>
 
 
+      <!-- АРТИКУЛ -->
+
       <td>
         ${escapeHtml(
           row.article
         )}
       </td>
 
+
+      <!-- КОЛИЧЕСТВО -->
 
       <td>
         ${escapeHtml(
@@ -6466,6 +6598,8 @@ function baseRow(row) {
       </td>
 
 
+      <!-- ЗОНА / РЯД -->
+
       <td>
         ${escapeHtml(
           row.zone_row
@@ -6473,12 +6607,16 @@ function baseRow(row) {
       </td>
 
 
+      <!-- ПОДДОН -->
+
       <td>
         ${escapeHtml(
           row.pallet
         )}
       </td>
 
+
+      <!-- СТАТУС -->
 
       <td>
 
@@ -6491,14 +6629,16 @@ function baseRow(row) {
       </td>
 
 
+      <!-- НАПРАВЛЕНИЕ -->
+
       <td>
         ${escapeHtml(
-          formatDate(
-            row.date
-          )
+          row.direction
         )}
       </td>
 
+
+      <!-- СКЛАД -->
 
       <td>
         ${escapeHtml(
@@ -6507,10 +6647,20 @@ function baseRow(row) {
       </td>
 
 
+      <!-- ДАТА -->
+
+      <td>
+        ${escapeHtml(
+          formatDate(row.date)
+        )}
+      </td>
+
+
+      <!-- ДЕЙСТВИЯ -->
+
       <td>
 
         <button
-          type="button"
           class="sp-btn secondary edit-box"
           data-id="${escapeHtml(id)}"
         >
@@ -6522,6 +6672,7 @@ function baseRow(row) {
     </tr>
 
   `;
+
 }
 
 async function setDirectionForSelectedBoxes() {
@@ -6637,31 +6788,9 @@ async function setDirectionForSelectedBoxes() {
 
 }
 
-/* =========================================================
-   BASE SETUP
-   ========================================================= */
-
 function setupBase() {
 
-  const content =
-    $('#content');
-
-
-  if (!content) {
-
-    return;
-  }
-
-
-  /* =======================================================
-     ПОИСК
-     ======================================================= */
-
-  const searchInput =
-    $('#baseSearch');
-
-
-  searchInput
+  $('#baseSearch')
     ?.addEventListener(
       'input',
       event => {
@@ -6669,33 +6798,16 @@ function setupBase() {
         state.baseSearch =
           event.target.value;
 
-
         state.basePage =
           1;
 
-
-        /*
-          Новый фильтр →
-          старое выделение сбрасываем.
-        */
-
-        state.selectedIds.clear();
-
-
         render();
+
       }
     );
 
 
-  /* =======================================================
-     СКЛАД
-     ======================================================= */
-
-  const warehouseSelect =
-    $('#baseWarehouse');
-
-
-  warehouseSelect
+  $('#baseWarehouse')
     ?.addEventListener(
       'change',
       event => {
@@ -6703,28 +6815,59 @@ function setupBase() {
         state.baseWarehouse =
           event.target.value;
 
+        state.baseZone =
+          '';
+
+        state.basePallet =
+          '';
 
         state.basePage =
           1;
 
-
-        state.selectedIds.clear();
-
-
         render();
+
       }
     );
 
 
-  /* =======================================================
-     СТАТУС
-     ======================================================= */
+  $('#baseZone')
+    ?.addEventListener(
+      'change',
+      event => {
 
-  const statusSelect =
-    $('#baseStatus');
+        state.baseZone =
+          event.target.value;
+
+        state.basePallet =
+          '';
+
+        state.basePage =
+          1;
+
+        render();
+
+      }
+    );
 
 
-  statusSelect
+  $('#basePallet')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.basePallet =
+          event.target.value;
+
+        state.basePage =
+          1;
+
+        render();
+
+      }
+    );
+
+
+  $('#baseStatus')
     ?.addEventListener(
       'change',
       event => {
@@ -6732,22 +6875,50 @@ function setupBase() {
         state.baseStatus =
           event.target.value;
 
-
         state.basePage =
           1;
 
-
-        state.selectedIds.clear();
-
-
         render();
+
       }
     );
 
 
-  /* =======================================================
-     ПРЕДЫДУЩАЯ СТРАНИЦА
-     ======================================================= */
+  $('#baseDirection')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.baseDirection =
+          event.target.value;
+
+        state.basePage =
+          1;
+
+        render();
+
+      }
+    );
+
+
+  $('#resetBaseFilters')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        state.baseSearch = '';
+        state.baseWarehouse = '';
+        state.baseZone = '';
+        state.basePallet = '';
+        state.baseStatus = '';
+        state.baseDirection = '';
+        state.basePage = 1;
+
+        render();
+
+      }
+    );
+
 
   $('#basePrev')
     ?.addEventListener(
@@ -6755,40 +6926,32 @@ function setupBase() {
       () => {
 
         if (
-          state.basePage >
-          1
+          state.basePage > 1
         ) {
 
           state.basePage--;
 
           render();
+
         }
+
       }
     );
 
-
-  /* =======================================================
-     СЛЕДУЮЩАЯ СТРАНИЦА
-     ======================================================= */
 
   $('#baseNext')
     ?.addEventListener(
       'click',
       () => {
 
-        const filtered =
-          getFilteredBoxes();
-
-
         const totalPages =
           Math.max(
             1,
             Math.ceil(
-              filtered.length /
+              getFilteredBoxes().length /
               PAGE_SIZE
             )
           );
-
 
         if (
           state.basePage <
@@ -6798,163 +6961,97 @@ function setupBase() {
           state.basePage++;
 
           render();
+
         }
+
       }
     );
 
-
-  /* =======================================================
-     ДОБАВИТЬ КОРОБКУ
-     ======================================================= */
 
   $('#addBoxBtn')
     ?.addEventListener(
       'click',
-      () => {
-
-        openBoxModal();
-      }
+      () =>
+        openBoxModal()
     );
 
-
-  /* =======================================================
-     ВЫБРАТЬ ВСЕ
-     ======================================================= */
-
-  $('#selectAllBaseBtn')
-    ?.addEventListener(
-      'click',
-      event => {
-
-        event.preventDefault();
-
-        toggleSelectAllBase();
-      }
-    );
-
-
-  /* =======================================================
-     В ПОДБОР
-     ======================================================= */
 
   $('#markPickBtn')
     ?.addEventListener(
       'click',
-      event => {
-
-        event.preventDefault();
-
-        markSelectedForPicking();
-      }
+      markSelectedForPicking
     );
 
 
-  /* =======================================================
-     УДАЛИТЬ
-     ======================================================= */
+  $('#setDirectionFromBaseBtn')
+    ?.addEventListener(
+      'click',
+      setDirectionForSelectedBoxes
+    );
+
 
   $('#deleteSelectedBtn')
     ?.addEventListener(
       'click',
-      event => {
+      deleteSelectedBoxes
+    );
 
-        event.preventDefault();
 
-        deleteSelectedBoxes();
+  $all('.base-check')
+    .forEach(
+      check => {
+
+        check.addEventListener(
+          'change',
+          event => {
+
+            const id =
+              String(
+                event.target.dataset.id
+              );
+
+            if (
+              event.target.checked
+            ) {
+
+              state.selectedIds
+                .add(id);
+
+            } else {
+
+              state.selectedIds
+                .delete(id);
+
+            }
+
+            render();
+
+          }
+        );
+
       }
     );
 
 
-  /* =======================================================
-     ЧЕКБОКСЫ + ИЗМЕНИТЬ
-     
-     Один делегированный обработчик.
-     ======================================================= */
+  $all('.edit-box')
+    .forEach(
+      button => {
 
-  content.addEventListener(
-    'change',
-    event => {
+        button.addEventListener(
+          'click',
+          () => {
 
-      const checkbox =
-        event.target.closest(
-          '.base-check'
+            const id =
+              button.dataset.id;
+
+            openEditBoxModal(id);
+
+          }
         );
 
-
-      if (!checkbox) {
-
-        return;
       }
+    );
 
-
-      const id =
-        String(
-          checkbox.dataset.id
-        );
-
-
-      if (
-        checkbox.checked
-      ) {
-
-        state.selectedIds.add(
-          id
-        );
-
-      } else {
-
-        state.selectedIds.delete(
-          id
-        );
-      }
-
-
-      render();
-    }
-  );
-
-
-  content.addEventListener(
-    'click',
-    event => {
-
-      const editButton =
-        event.target.closest(
-          '.edit-box'
-        );
-
-
-      if (!editButton) {
-
-        return;
-      }
-
-
-      event.preventDefault();
-
-      event.stopPropagation();
-
-
-      const id =
-        editButton.dataset.id;
-
-
-      if (!id) {
-
-        toast(
-          'Не найден ID коробки',
-          'error'
-        );
-
-        return;
-      }
-
-
-      openBoxModal(
-        id
-      );
-    }
-  );
 }
 
 /* =========================================================
@@ -7251,13 +7348,7 @@ function openBoxModal(
 }
 
 
-/* =========================================================
-   SAVE BOX
-   ========================================================= */
-
-async function saveBox(
-  event
-) {
+async function saveBox(event) {
 
   event.preventDefault();
 
@@ -7266,14 +7357,12 @@ async function saveBox(
     $('#saveBoxBtn');
 
 
-  if (button) {
+  button.disabled =
+    true;
 
-    button.disabled =
-      true;
 
-    button.textContent =
-      'Сохранение...';
-  }
+  button.textContent =
+    'Сохранение...';
 
 
   try {
@@ -7281,36 +7370,28 @@ async function saveBox(
     const formData = {
 
       barcode:
-        $('#boxBarcode')
-          ?.value ?? '',
+        $('#boxBarcode').value,
 
       article:
-        $('#boxArticle')
-          ?.value ?? '',
+        $('#boxArticle').value,
 
       quantity_in_box:
-        $('#boxQuantity')
-          ?.value ?? '',
+        $('#boxQuantity').value,
 
       zone_row:
-        $('#boxZone')
-          ?.value ?? '',
+        $('#boxZone').value,
 
       pallet:
-        $('#boxPallet')
-          ?.value ?? '',
+        $('#boxPallet').value,
 
       status:
-        $('#boxStatus')
-          ?.value ?? '',
+        $('#boxStatus').value,
 
       date:
-        $('#boxDate')
-          ?.value ?? '',
+        $('#boxDate').value,
 
       warehouse:
-        $('#boxWarehouse')
-          ?.value ?? ''
+        $('#boxWarehouse').value
 
     };
 
@@ -7328,12 +7409,13 @@ async function saveBox(
       throw new Error(
         'Штрихкод обязателен'
       );
+
     }
 
 
-    /* =====================================================
-       НОВАЯ КОРОБКА
-       ===================================================== */
+    /*
+      INSERT
+    */
 
     if (
       !state.editingId
@@ -7345,26 +7427,15 @@ async function saveBox(
       } =
         await supabaseClient
           .from('boxes')
-          .insert(
-            payload
-          )
-          .select(
-            BOX_SELECT
-          )
+          .insert(payload)
+          .select(BOX_SELECT)
           .single();
 
 
       if (error) {
 
         throw error;
-      }
 
-
-      if (!data) {
-
-        throw new Error(
-          'Supabase не вернул добавленную коробку'
-        );
       }
 
 
@@ -7384,18 +7455,13 @@ async function saveBox(
 
 
       return;
+
     }
 
 
-    /* =====================================================
-       РЕДАКТИРОВАНИЕ
-       ===================================================== */
-
-    const editingId =
-      String(
-        state.editingId
-      );
-
+    /*
+      UPDATE
+    */
 
     const {
       data,
@@ -7403,39 +7469,24 @@ async function saveBox(
     } =
       await supabaseClient
         .from('boxes')
-        .update(
-          payload
-        )
+        .update(payload)
         .eq(
           'id',
-          editingId
+          state.editingId
         )
-        .select(
-          BOX_SELECT
-        )
-        .maybeSingle();
+        .select(BOX_SELECT)
+        .single();
 
 
     if (error) {
 
       throw error;
+
     }
 
-
-    if (!data) {
-
-      throw new Error(
-        'Коробка не обновлена. Проверь права UPDATE в Supabase (RLS).'
-      );
-    }
-
-
-    /*
-      Обновляем локальную строку.
-    */
 
     updateLocalBox(
-      editingId,
+      state.editingId,
       data
     );
 
@@ -7459,21 +7510,21 @@ async function saveBox(
 
 
     toast(
-      error?.message ||
+      error.message ||
       'Ошибка сохранения',
       'error'
     );
 
 
-    if (button) {
+    button.disabled =
+      false;
 
-      button.disabled =
-        false;
 
-      button.textContent =
-        'Сохранить';
-    }
+    button.textContent =
+      'Сохранить';
+
   }
+
 }
 
 
@@ -7607,190 +7658,6 @@ async function deleteSelectedBoxes() {
 /* =========================================================
    PICKING
    ========================================================= */
-
-async function markSelectedForPicking() {
-
-  const ids =
-    [
-      ...state.selectedIds
-    ];
-
-
-  if (!ids.length) {
-
-    toast(
-      'Сначала выберите коробки',
-      'error'
-    );
-
-    return;
-  }
-
-
-  /*
-    Проверяем, что выбранные ID
-    действительно существуют локально.
-  */
-
-  const validIds =
-    ids.filter(
-      id =>
-        state.boxes.some(
-          row =>
-            String(row.id) ===
-            String(id)
-        )
-    );
-
-
-  if (!validIds.length) {
-
-    state.selectedIds.clear();
-
-    render();
-
-    toast(
-      'Выбранные коробки не найдены',
-      'error'
-    );
-
-    return;
-  }
-
-
-  const button =
-    $('#markPickBtn');
-
-
-  if (button) {
-
-    button.disabled =
-      true;
-
-    button.textContent =
-      'Добавление...';
-  }
-
-
-  try {
-
-    /*
-      ОДИН запрос в Supabase.
-    */
-
-    const {
-      data,
-      error
-    } =
-      await supabaseClient
-        .from('boxes')
-        .update({
-          status:
-            STATUSES.PICK,
-
-          pick:
-            true
-        })
-        .in(
-          'id',
-          validIds
-        )
-        .select(
-          BOX_SELECT
-        );
-
-
-    if (error) {
-
-      throw error;
-    }
-
-
-    /*
-      Supabase должен вернуть
-      обновлённые строки.
-    */
-
-    if (!data) {
-
-      throw new Error(
-        'Supabase не вернул обновлённые коробки'
-      );
-    }
-
-
-    /*
-      Обновляем локальную базу.
-    */
-
-    data.forEach(
-      row => {
-
-        updateLocalBox(
-          row.id,
-          row
-        );
-      }
-    );
-
-
-    /*
-      Если по какой-то причине Supabase
-      вернул меньше строк, чем ожидалось,
-      не скрываем это от пользователя.
-    */
-
-    const updatedCount =
-      data.length;
-
-
-    state.selectedIds.clear();
-
-
-    render();
-
-
-    if (
-      updatedCount ===
-      validIds.length
-    ) {
-
-      toast(
-        `Добавлено в подбор: ${updatedCount}`
-      );
-
-    } else {
-
-      toast(
-        `В подбор добавлено: ${updatedCount} из ${validIds.length}`,
-        'error'
-      );
-    }
-
-
-  } catch (error) {
-
-    console.error(
-      'markSelectedForPicking error:',
-      error
-    );
-
-
-    toast(
-      error?.message ||
-      'Ошибка добавления в подбор',
-      'error'
-    );
-
-
-    /*
-      После ошибки возвращаем кнопку
-      в нормальное состояние.
-    */
-
-    render();
-  }
-}
 /* =========================================================
    REQUEST → PICKING
    ========================================================= */
