@@ -8657,18 +8657,18 @@ function assemblyView() {
           >
             ☑ Выбрать все
           </button>
-<button
-  class="sp-btn secondary"
-  id="removeFromAssemblyBtn"
-  ${
-    state.assemblySelectedIds &&
-    state.assemblySelectedIds.size
-      ? ''
-      : 'disabled'
-  }
->
-  ↩ Убрать из сборки
-</button>
+          <button
+            class="sp-btn secondary"
+            id="removeFromAssemblyBtn"
+            ${
+              state.assemblySelectedIds &&
+              state.assemblySelectedIds.size
+                ? ''
+                : 'disabled'
+            }
+          >
+            ↩ Убрать из сборки
+          </button>
 
           <button
             class="primary"
@@ -8859,7 +8859,6 @@ function assemblyView() {
 
 }
 
-
 function pickingRow(group) {
 
   const groupChecked =
@@ -9151,295 +9150,100 @@ function pickingRow(group) {
   `;
 }
 
-function pickingRow(group) {
+/* =========================================================
+   SELECT ALL ASSEMBLY GROUPS
+   ========================================================= */
 
-  const groupChecked =
-    state.assemblySelectedGroups?.has(
-      group.key
-    )
-      ? 'checked'
-      : '';
+function toggleSelectAllAssembly() {
 
-  const selectedIds =
-    state.assemblySelectedIds
-      ? state.assemblySelectedIds
-      : new Set();
+  if (!state.assemblySelectedGroups) {
+    state.assemblySelectedGroups = new Set();
+  }
 
-  const selectedCount =
-    group.ids.filter(
-      id =>
-        selectedIds.has(
-          String(id)
+  const groups =
+    getGroupedPickingBoxes();
+
+  if (!groups.length) {
+    toast(
+      'В подборе нет групп',
+      'error'
+    );
+    return;
+  }
+
+  /*
+    Проверяем:
+    все ли группы уже выбраны.
+  */
+
+  const allSelected =
+    groups.every(
+      group =>
+        state.assemblySelectedGroups.has(
+          group.key
         )
-    ).length;
-
-  const expanded =
-    state.assemblyExpandedGroups?.has(
-      group.key
     );
 
-  const encodedKey =
-    encodeURIComponent(
-      group.key
-    );
+  if (allSelected) {
 
-  const details =
-    expanded
-      ? `
+    /*
+      Снять выбор со всех групп.
+    */
 
-        <tr>
+    state.assemblySelectedGroups.clear();
 
-          <td colspan="8">
+    /*
+      И очищаем выбор отдельных коробок.
+    */
 
-            <div
-              style="
-                padding:10px 14px;
-                background:#fafafa;
-                border-top:1px solid #eee;
-              "
-            >
+    if (state.assemblySelectedIds) {
+      state.assemblySelectedIds.clear();
+    }
 
-              <div
-                style="
-                  font-weight:700;
-                  margin-bottom:8px;
-                "
-              >
-                Физические коробки:
-                ${group.boxes.length}
-              </div>
+  } else {
 
+    /*
+      Выбрать все группы.
+    */
 
-              <div
-                style="
-                  display:flex;
-                  flex-direction:column;
-                  gap:5px;
-                "
-              >
+    state.assemblySelectedGroups =
+      new Set(
+        groups.map(
+          group =>
+            group.key
+        )
+      );
 
-                ${group.boxes.map(
-                  box => {
+    /*
+      Выбираем все физические коробки
+      из всех групп.
+    */
 
-                    const id =
-                      String(
-                        box.id
-                      );
+    if (!state.assemblySelectedIds) {
+      state.assemblySelectedIds = new Set();
+    }
 
-                    const checked =
-                      selectedIds.has(
-                        id
-                      )
-                        ? 'checked'
-                        : '';
+    state.assemblySelectedIds.clear();
 
-                    return `
+    groups.forEach(
+      group => {
 
-                      <label
-                        style="
-                          display:flex;
-                          align-items:center;
-                          gap:8px;
-                          padding:7px 9px;
-                          background:white;
-                          border:1px solid #eee;
-                          border-radius:8px;
-                          cursor:pointer;
-                        "
-                      >
+        group.ids.forEach(
+          id => {
 
-                        <input
-                          type="checkbox"
-                          class="assembly-box-checkbox"
-                          data-box-id="${escapeHtml(id)}"
-                          ${checked}
-                        >
+            state.assemblySelectedIds.add(
+              String(id)
+            );
 
-                        <span>
-                          ${escapeHtml(
-                            box.barcode
-                          )}
-                        </span>
-
-                        <span
-                          class="muted"
-                        >
-                          ${escapeHtml(
-                            box.zone_row
-                          )}
-                        </span>
-
-                        <span
-                          class="muted"
-                        >
-                          ${escapeHtml(
-                            box.pallet
-                          )}
-                        </span>
-
-                      </label>
-
-                    `;
-
-                  }
-                ).join('')}
-
-              </div>
-
-            </div>
-
-          </td>
-
-        </tr>
-
-      `
-      : '';
-
-  return `
-
-    <tr>
-
-      <td
-        style="
-          width:50px;
-          text-align:center;
-        "
-      >
-
-        <input
-          type="checkbox"
-          class="assembly-group-checkbox"
-          data-group-key="${escapeHtml(
-            encodedKey
-          )}"
-          ${groupChecked}
-        >
-
-      </td>
-
-
-      <td>
-
-        <b>
-          ${escapeHtml(
-            group.barcode
-          )}
-        </b>
-
-      </td>
-
-
-      <td>
-        ${escapeHtml(
-          group.article
-        )}
-      </td>
-
-
-      <td>
-        ${escapeHtml(
-          group.zone_row
-        )}
-      </td>
-
-
-      <td>
-        <b>
-          ${escapeHtml(
-            group.pallet
-          )}
-        </b>
-      </td>
-
-
-      <td>
-        ${escapeHtml(
-          group.warehouse
-        )}
-      </td>
-
-
-      <td>
-
-        <div
-          style="
-            display:flex;
-            align-items:center;
-            gap:5px;
-          "
-        >
-
-          <button
-            type="button"
-            class="assembly-qty-btn"
-            data-action="minus"
-            data-group-key="${escapeHtml(
-              encodedKey
-            )}"
-          >
-            −
-          </button>
-
-
-          <b
-            style="
-              min-width:28px;
-              text-align:center;
-            "
-          >
-            ${selectedCount}
-          </b>
-
-
-          <button
-            type="button"
-            class="assembly-qty-btn"
-            data-action="plus"
-            data-group-key="${escapeHtml(
-              encodedKey
-            )}"
-          >
-            +
-          </button>
-
-
-          <span
-            class="muted"
-            style="
-              margin-left:5px;
-            "
-          >
-            / ${group.count}
-          </span>
-
-        </div>
-
-      </td>
-
-
-      <td>
-
-        <button
-          type="button"
-          class="sp-btn secondary assembly-details-btn"
-          data-group-key="${escapeHtml(
-            encodedKey
-          )}"
-        >
-          ${
-            expanded
-              ? 'Скрыть'
-              : 'Детали'
           }
-        </button>
+        );
 
-      </td>
+      }
+    );
 
-    </tr>
+  }
 
-    ${details}
-
-  `;
+  render();
 }
 
 function focusScanner() {
