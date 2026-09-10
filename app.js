@@ -21683,6 +21683,87 @@ async function startApp() {
 
 }
 
+/* =========================================================
+   ASSEMBLY SELECT ALL CHECKBOX
+   ========================================================= */
+
+document.addEventListener(
+  'change',
+  function(event) {
+
+    if (
+      event.target.id ===
+      'selectAllAssemblyCheckbox'
+    ) {
+
+      toggleSelectAllAssembly();
+
+    }
+
+  }
+);
+
+/* =========================================================
+   ASSEMBLY BUTTON HANDLERS
+   ========================================================= */
+
+document.addEventListener(
+  'click',
+  function(event) {
+
+    const selectAllButton =
+      event.target.closest(
+        '#selectAllAssembly'
+      );
+
+    if (selectAllButton) {
+
+      event.preventDefault();
+
+      toggleSelectAllAssembly();
+
+      return;
+    }
+
+
+    const removeButton =
+      event.target.closest(
+        '#removeFromAssemblyBtn'
+      );
+
+    if (removeButton) {
+
+      event.preventDefault();
+
+      if (
+        !removeButton.disabled
+      ) {
+
+        removeSelectedFromAssembly();
+
+      }
+
+      return;
+    }
+
+
+    const completeButton =
+      event.target.closest(
+        '#completeSelectedAssembly'
+      );
+
+    if (completeButton) {
+
+      event.preventDefault();
+
+      completeSelectedAssembly();
+
+      return;
+    }
+
+  }
+);
+
 
 /* =========================================================
    BOOT
