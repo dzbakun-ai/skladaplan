@@ -22385,10 +22385,9 @@ function render() {
     ] ||
     PAGE_META.dashboard;
 
-   const effectiveMeta =
+  const effectiveMeta =
   state.currentPage === 'tools' &&
   state.activeTool === 'inventory'
-
     ? {
         title:
           'Инвентаризация',
@@ -22397,12 +22396,15 @@ function render() {
           'Инвентаризация склада'
       }
 
-      state.currentPage === 'tools' &&
+    : state.currentPage === 'tools' &&
       state.activeTool === 'help'
-   ? {
-      title: 'Справка',
-      heading: 'Руководство пользователя SKLADAPLAN'
-    }
+    ? {
+        title:
+          'Справка',
+
+        heading:
+          'Руководство пользователя SKLADAPLAN'
+      }
 
     : meta;
 
