@@ -20090,6 +20090,10 @@ function exportInventoryResult() {
 
 function toolsView() {
 
+  if (state.activeTool === 'help') {
+    return helpView();
+  }
+   
   if (
     state.activeTool ===
     'inventory'
@@ -22393,6 +22397,13 @@ function render() {
           'Инвентаризация склада'
       }
 
+      state.currentPage === 'tools' &&
+      state.activeTool === 'help'
+   ? {
+      title: 'Справка',
+      heading: 'Руководство пользователя SKLADAPLAN'
+    }
+
     : meta;
 
 
@@ -22610,6 +22621,13 @@ button.addEventListener(
       'inventory'
     ) {
 
+    } else if (button.dataset.tool === 'help') {
+
+       state.activeTool = 'help';
+       goToPage('tools');
+
+   } else {
+
       state.activeTool =
         'inventory';
 
@@ -22788,6 +22806,13 @@ async function startAuthenticatedApp() {
 
     render();
 
+if (
+  state.currentPage === 'tools' &&
+  state.activeTool === 'help'
+) {
+  setupHelp();
+}
+     
 
   } catch (error) {
 
