@@ -7773,12 +7773,6 @@ console.log(
       requiredCount
     ] of requested
   ) {
-
-const foundCount =
-  Math.min(
-    requiredCount,
-    candidates.length
-  );
      
     /*
       Находим все физические коробки
@@ -7825,6 +7819,17 @@ const foundCount =
         candidates.length
       );
 
+     console.log(
+  'PICK CHECK:',
+  {
+    barcode,
+    requiredCount,
+    candidates: candidates.length,
+    ids: candidates.map(
+      box => box.id
+    )
+  }
+);
 
     /*
       Берём только нужное количество.
