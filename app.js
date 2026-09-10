@@ -389,25 +389,22 @@ document.addEventListener(
   true
 );
 
-/*
-  =========================================================
-  ROLE
-  ========================================================= */
+/* =========================================================
+   ROLE
+   ========================================================= */
 
 function getCurrentUserRole() {
 
-  const email =
+  const role =
     String(
-      state.user?.email || ''
+      state.user?.app_metadata?.role || ''
     )
       .trim()
       .toLowerCase();
 
 
   if (
-    VIEW_ONLY_USERS.has(
-      email
-    )
+    role === 'viewer'
   ) {
 
     return 'viewer';
