@@ -8334,6 +8334,111 @@ function getGroupedPickingBoxes() {
 
 }
 
+/* =========================================================
+   ASSEMBLY HEADER CHECKBOX
+   ========================================================= */
+
+document.addEventListener(
+  'change',
+  function(event) {
+
+    if (
+      event.target.id !==
+      'selectAllAssemblyCheckbox'
+    ) {
+
+      return;
+
+    }
+
+
+    toggleSelectAllAssembly();
+
+  }
+);
+
+/* =========================================================
+   ASSEMBLY HEADER CHECKBOX
+   ========================================================= */
+
+document.addEventListener(
+  'change',
+  function(event) {
+
+    if (
+      event.target.id !==
+      'selectAllAssemblyCheckbox'
+    ) {
+
+      return;
+
+    }
+
+
+    toggleSelectAllAssembly();
+
+  }
+);
+
+
+/* =========================================================
+   ASSEMBLY BUTTON EVENTS
+   ========================================================= */
+
+document.addEventListener(
+  'click',
+  function(event) {
+
+    const selectAllButton =
+      event.target.closest(
+        '#selectAllAssembly'
+      );
+
+
+    if (
+      selectAllButton
+    ) {
+
+      event.preventDefault();
+
+      toggleSelectAllAssembly();
+
+      return;
+
+    }
+
+
+    const removeButton =
+      event.target.closest(
+        '#removeFromAssemblyBtn'
+      );
+
+
+    if (
+      removeButton
+    ) {
+
+      event.preventDefault();
+
+
+      if (
+        removeButton.disabled
+      ) {
+
+        return;
+
+      }
+
+
+      removeSelectedFromAssembly();
+
+      return;
+
+    }
+
+  }
+);
+
 function assemblyView() {
 
   /*
@@ -8631,25 +8736,25 @@ function assemblyView() {
         <div class="toolbar">
 
 
-          <button
-            class="ghost"
-            id="selectAllAssembly"
-            type="button"
-          >
-            ☑ Выбрать все
-          </button>
-          <button
-            class="sp-btn secondary"
-            id="removeFromAssemblyBtn"
-            ${
-              state.assemblySelectedIds &&
-              state.assemblySelectedIds.size
-                ? ''
-                : 'disabled'
-            }
-          >
-            ↩ Убрать из сборки
-          </button>
+<button
+  class="sp-btn secondary"
+  id="removeFromAssemblyBtn"
+  ${
+    (
+      state.assemblySelectedIds &&
+      state.assemblySelectedIds.size
+    ) ||
+    (
+      state.assemblySelectedGroups &&
+      state.assemblySelectedGroups.size
+    )
+      ? ''
+      : 'disabled'
+  }
+  type="button"
+>
+  ↩ Убрать из сборки
+</button>
 
           <button
             class="primary"
@@ -9132,29 +9237,41 @@ function pickingRow(group) {
 }
 
 /* =========================================================
-   SELECT ALL ASSEMBLY GROUPS
+   TOGGLE ALL ASSEMBLY
    ========================================================= */
 
 function toggleSelectAllAssembly() {
 
   if (!state.assemblySelectedGroups) {
-    state.assemblySelectedGroups = new Set();
+    state.assemblySelectedGroups =
+      new Set();
   }
+
+  if (!state.assemblySelectedIds) {
+    state.assemblySelectedIds =
+      new Set();
+  }
+
 
   const groups =
     getGroupedPickingBoxes();
 
+
   if (!groups.length) {
+
     toast(
-      'В подборе нет групп',
+      'В подборе нет коробок',
       'error'
     );
+
     return;
+
   }
+
 
   /*
     Проверяем:
-    все ли группы уже выбраны.
+    выбраны ли уже ВСЕ группы.
   */
 
   const allSelected =
@@ -9165,26 +9282,24 @@ function toggleSelectAllAssembly() {
         )
     );
 
-  if (allSelected) {
+
+  if (
+    allSelected
+  ) {
 
     /*
-      Снять выбор со всех групп.
+      Снять всё.
     */
 
     state.assemblySelectedGroups.clear();
 
-    /*
-      И очищаем выбор отдельных коробок.
-    */
+    state.assemblySelectedIds.clear();
 
-    if (state.assemblySelectedIds) {
-      state.assemblySelectedIds.clear();
-    }
 
   } else {
 
     /*
-      Выбрать все группы.
+      Выбрать ВСЕ группы.
     */
 
     state.assemblySelectedGroups =
@@ -9195,16 +9310,14 @@ function toggleSelectAllAssembly() {
         )
       );
 
+
     /*
-      Выбираем все физические коробки
-      из всех групп.
+      И все физические коробки.
     */
 
-    if (!state.assemblySelectedIds) {
-      state.assemblySelectedIds = new Set();
-    }
+    state.assemblySelectedIds =
+      new Set();
 
-    state.assemblySelectedIds.clear();
 
     groups.forEach(
       group => {
@@ -9224,9 +9337,10 @@ function toggleSelectAllAssembly() {
 
   }
 
-  render();
-}
 
+  render();
+
+}
 function focusScanner() {
 
   const scanner =
@@ -9252,17 +9366,74 @@ function focusScanner() {
 
 async function removeSelectedFromAssembly() {
 
+  if (!state.assemblySelectedGroups) {
+    state.assemblySelectedGroups =
+      new Set();
+  }
+
   if (!state.assemblySelectedIds) {
-    state.assemblySelectedIds = new Set();
+    state.assemblySelectedIds =
+      new Set();
   }
 
 
+  /*
+    Собираем физические ID:
+
+    1. Уже выбранные отдельные коробки.
+    2. Все коробки выбранных групп.
+  */
+
   const ids =
-    [...state.assemblySelectedIds]
-      .map(id => String(id));
+    new Set(
+      [...state.assemblySelectedIds]
+        .map(
+          id =>
+            String(id)
+        )
+    );
 
 
-  if (!ids.length) {
+  const groups =
+    getGroupedPickingBoxes();
+
+
+  groups.forEach(
+    group => {
+
+      if (
+        state.assemblySelectedGroups.has(
+          group.key
+        )
+      ) {
+
+        group.ids.forEach(
+          id => {
+
+            ids.add(
+              String(id)
+            );
+
+          }
+        );
+
+      }
+
+    }
+  );
+
+
+  const uniqueIds =
+    [...ids];
+
+
+  /*
+    Ничего не выбрано.
+  */
+
+  if (
+    !uniqueIds.length
+  ) {
 
     toast(
       'Выберите коробки, которые нужно убрать из сборки',
@@ -9270,21 +9441,35 @@ async function removeSelectedFromAssembly() {
     );
 
     return;
+
   }
 
 
+  /*
+    Подтверждение.
+  */
+
   const confirmed =
     confirm(
-      `Убрать из сборки выбранные коробки: ${ids.length}?`
+      `Убрать из сборки выбранные коробки: ${uniqueIds.length}?`
     );
 
 
-  if (!confirmed) {
+  if (
+    !confirmed
+  ) {
+
     return;
+
   }
 
 
   try {
+
+    /*
+      Возвращаем физические коробки
+      из КПодбору обратно На складе.
+    */
 
     const {
       data,
@@ -9293,16 +9478,18 @@ async function removeSelectedFromAssembly() {
       await supabaseClient
         .from('boxes')
         .update({
+
           "Статус":
             STATUSES.STOCK,
 
           "Изменил":
             state.user?.email ||
             null
+
         })
         .in(
           'id',
-          ids
+          uniqueIds
         )
         .eq(
           'Статус',
@@ -9313,12 +9500,22 @@ async function removeSelectedFromAssembly() {
         );
 
 
-    if (error) {
+    if (
+      error
+    ) {
+
       throw error;
+
     }
 
 
-    if (Array.isArray(data)) {
+    /*
+      Обновляем локальную базу.
+    */
+
+    if (
+      Array.isArray(data)
+    ) {
 
       data.forEach(
         row => {
@@ -9335,15 +9532,21 @@ async function removeSelectedFromAssembly() {
 
 
     /*
-      Очищаем выделение.
+      Очищаем оба типа выделения.
     */
 
     state.assemblySelectedIds =
       new Set();
 
+    state.assemblySelectedGroups =
+      new Set();
+
+    state.assemblyExpandedGroups =
+      new Set();
+
 
     /*
-      Перерисовываем интерфейс.
+      Перерисовываем.
     */
 
     render();
@@ -9370,7 +9573,6 @@ async function removeSelectedFromAssembly() {
   }
 
 }
-
 async function completeSelectedAssembly() {
 
   if (!state.assemblySelectedGroups) {
