@@ -6120,6 +6120,14 @@ function baseView() {
       )
     ].sort();
 
+     const allFilteredSelected =
+    filtered.length > 0 &&
+    filtered.every(row =>
+      state.selectedIds.has(
+        String(row.id)
+      )
+    );
+
   return `
 
     <!-- =========================================
@@ -6454,7 +6462,16 @@ function baseView() {
       <tr>
 
         <th style="width:35px">
-          ✓
+          <input
+            type="checkbox"
+            id="selectAllBaseCheck"
+            title="Выделить все отфильтрованные"
+            ${
+              allFilteredSelected
+                ? 'checked'
+                : ''
+            }
+          >
         </th>
 
         <th>
@@ -7052,7 +7069,41 @@ function setupBase() {
       deleteSelectedBoxes
     );
 
+  $('#selectAllBaseCheck')
+    ?.addEventListener(
+      'change',
+      event => {
 
+        const filtered =
+          getFilteredBoxes();
+
+        if (
+          event.target.checked
+        ) {
+
+          filtered.forEach(
+            row =>
+              state.selectedIds.add(
+                String(row.id)
+              )
+          );
+
+        } else {
+
+          filtered.forEach(
+            row =>
+              state.selectedIds.delete(
+                String(row.id)
+              )
+          );
+
+        }
+
+        render();
+
+      }
+    );
+   
   $all('.base-check')
     .forEach(
       check => {
