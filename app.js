@@ -1244,6 +1244,70 @@ function normalizeBarcode(value) {
 
 }
 
+/**
+ * Преобразует значение в положительное число.
+ * Возвращает null, если значение некорректное.
+ */
+function parsePositiveNumber(value) {
+
+  if (
+    value === null ||
+    value === undefined ||
+    value === ''
+  ) {
+    return null;
+  }
+
+  const number = Number(
+    String(value)
+      .replace(',', '.')
+      .trim()
+  );
+
+  if (
+    !isFinite(number) ||
+    number <= 0
+  ) {
+    return null;
+  }
+
+  return number;
+
+}
+
+
+/**
+ * Разбирает строку вида
+ * "штрихкод<TAB>кол-во<TAB>делитель"
+ * (вставка из Excel) или
+ * "штрихкод - кол-во - делитель"
+ * (ручной ввод через дефис).
+ */
+function parseToolDataLine(line) {
+
+  let parts =
+    line.split('\t');
+
+  if (parts.length < 2) {
+
+    parts =
+      line.split(/\s*-\s*/);
+
+  }
+
+  if (parts.length < 2) {
+
+    parts =
+      line.split(/\s{2,}/);
+
+  }
+
+  return parts
+    .map(part => part.trim())
+    .filter(part => part !== '');
+
+}
+
 
 function normalizeHeader(value) {
 
@@ -16442,6 +16506,51 @@ function renderComparisonTable() {
 
 }
 
+/**
+ * Верхний переключатель вкладок
+ * внутри раздела "Сравнение / Инструменты".
+ */
+function toolsSubNav(active) {
+
+  const tabs = [
+    { key: 'compare', label: '⇄ Сравнение' },
+    { key: 'split', label: '✂ Деление' },
+    { key: 'sum', label: 'Σ Сумма' }
+  ];
+
+  return `
+
+    <div
+      class="sp-card"
+      style="
+        margin-bottom:16px;
+        display:flex;
+        gap:8px;
+        flex-wrap:wrap;
+      "
+    >
+
+      ${tabs.map(tab => `
+
+        <button
+          class="sp-btn ${
+            active === tab.key
+              ? ''
+              : 'secondary'
+          }"
+          type="button"
+          data-subtool="${tab.key}"
+        >
+          ${tab.label}
+        </button>
+
+      `).join('')}
+
+    </div>
+
+  `;
+
+}
 
 /*
   Сам экран.
@@ -16449,6 +16558,8 @@ function renderComparisonTable() {
 function comparisonView() {
 
   return `
+
+  ${toolsSubNav('compare')}
 
     <!-- =====================================================
          HEADER
@@ -16855,11 +16966,582 @@ function comparisonView() {
 
 }
 
+/* =========================================================
+   ДЕЛЕНИЕ ШТРИХКОДОВ
+   ========================================================= */
+
+function splitView() {
+
+  return `
+
+    ${toolsSubNav('split')}
+
+    <div
+      class="sp-card"
+      style="margin-bottom:16px;"
+    >
+
+      <h3>
+        ✂ Деление штрихкодов
+      </h3>
+
+      <p
+        class="sp-muted"
+        style="margin-top:4px;"
+      >
+        Каждая строка:
+        <b>штрихкод</b>,
+        <b>количество</b>,
+        <b>делим на</b> (необязательно,
+        по умолчанию 1).
+        Можно вставить прямо из Excel/Таблиц
+        (колонки через Tab) или ввести вручную
+        через дефис.
+      </p>
+
+      <div
+        style="
+          display:flex;
+          gap:10px;
+          flex-wrap:wrap;
+          margin:14px 0;
+        "
+      >
+
+        <button
+          class="sp-btn"
+          type="button"
+          id="runSplitBtn"
+        >
+          ✂ Разделить
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          id="clearSplitBtn"
+        >
+          Очистить
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          id="copySplitBtn"
+        >
+          📋 Скопировать результат
+        </button>
+
+      </div>
+
+      <textarea
+        id="splitInput"
+        placeholder="Например:
+
+4810122493866	4	2
+4810122659354	5
+
+или
+
+4810122493866 - 4 - 2
+4810122659354 - 5"
+        style="
+          width:100%;
+          min-height:130px;
+          box-sizing:border-box;
+          resize:vertical;
+          border:1px solid #ddd;
+          border-radius:12px;
+          padding:14px;
+          font-family:monospace;
+          font-size:14px;
+          line-height:1.6;
+          outline:none;
+        "
+      ></textarea>
+
+    </div>
+
+
+    <div class="sp-card">
+
+      <h3>
+        Результат
+      </h3>
+
+      <div
+        id="splitSummary"
+        class="sp-muted"
+        style="
+          margin:4px 0 12px;
+          font-size:12px;
+        "
+      >
+        Пока пусто.
+      </div>
+
+      <textarea
+        id="splitOutput"
+        readonly
+        style="
+          width:100%;
+          min-height:200px;
+          box-sizing:border-box;
+          resize:vertical;
+          border:1px solid #ddd;
+          border-radius:12px;
+          padding:14px;
+          font-family:monospace;
+          font-size:14px;
+          line-height:1.6;
+          outline:none;
+          background:#fafafa;
+        "
+      ></textarea>
+
+    </div>
+
+  `;
+
+}
+
+
+function runSplitBarcodes() {
+
+  const input =
+    $('#splitInput');
+
+  const summaryEl =
+    $('#splitSummary');
+
+  const outputEl =
+    $('#splitOutput');
+
+  if (
+    !input ||
+    !summaryEl ||
+    !outputEl
+  ) {
+    return;
+  }
+
+  const lines =
+    input.value
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line !== '');
+
+  const output = [];
+
+  let processedRows = 0;
+  let skippedRows = 0;
+  let totalCreated = 0;
+
+  lines.forEach(line => {
+
+    const parts =
+      parseToolDataLine(line);
+
+    const barcode =
+      normalizeBarcode(parts[0]);
+
+    const qty =
+      parsePositiveNumber(parts[1]);
+
+    let divisor =
+      parsePositiveNumber(parts[2]);
+
+    if (divisor === null) {
+      divisor = 1;
+    }
+
+    if (!barcode || qty === null) {
+      skippedRows++;
+      return;
+    }
+
+    const finalQty =
+      Math.ceil(qty / divisor);
+
+    for (let j = 0; j < finalQty; j++) {
+      output.push(barcode);
+    }
+
+    totalCreated += finalQty;
+    processedRows++;
+
+  });
+
+  outputEl.value =
+    output.join('\n');
+
+  summaryEl.textContent =
+    lines.length === 0
+      ? 'Пока пусто.'
+      : `Обработано строк: ${processedRows}` +
+        ` · Развернуто штрихкодов: ${totalCreated}` +
+        (
+          skippedRows > 0
+            ? ` · Пропущено некорректных строк: ${skippedRows}`
+            : ''
+        );
+
+}
+
+
+function setupSplit() {
+
+  $('#runSplitBtn')
+    ?.addEventListener(
+      'click',
+      runSplitBarcodes
+    );
+
+  $('#clearSplitBtn')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        const input =
+          $('#splitInput');
+
+        const outputEl =
+          $('#splitOutput');
+
+        const summaryEl =
+          $('#splitSummary');
+
+        if (input) input.value = '';
+        if (outputEl) outputEl.value = '';
+
+        if (summaryEl) {
+          summaryEl.textContent =
+            'Пока пусто.';
+        }
+
+      }
+    );
+
+  $('#copySplitBtn')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        const outputEl =
+          $('#splitOutput');
+
+        if (!outputEl || !outputEl.value) {
+          return;
+        }
+
+        navigator.clipboard
+          ?.writeText(outputEl.value)
+          .catch(() => {});
+
+      }
+    );
+
+  setupToolsSubNav();
+
+}
+
+
+/* =========================================================
+   СУММИРОВАНИЕ ШТРИХКОДОВ
+   ========================================================= */
+
+function sumView() {
+
+  return `
+
+    ${toolsSubNav('sum')}
+
+    <div
+      class="sp-card"
+      style="margin-bottom:16px;"
+    >
+
+      <h3>
+        Σ Суммирование штрихкодов
+      </h3>
+
+      <p
+        class="sp-muted"
+        style="margin-top:4px;"
+      >
+        Вставьте штрихкоды по одному
+        в строке (можно с повторами) —
+        скрипт посчитает, сколько раз
+        встретился каждый штрихкод.
+      </p>
+
+      <div
+        style="
+          display:flex;
+          gap:10px;
+          flex-wrap:wrap;
+          margin:14px 0;
+        "
+      >
+
+        <button
+          class="sp-btn"
+          type="button"
+          id="runSumBtn"
+        >
+          Σ Просуммировать
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          id="clearSumBtn"
+        >
+          Очистить
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          id="copySumBtn"
+        >
+          📋 Скопировать результат
+        </button>
+
+      </div>
+
+      <textarea
+        id="sumInput"
+        placeholder="Например:
+
+4810122620347
+4810122620347
+4810122544643
+4810122696182
+4810122696182
+4810122696182"
+        style="
+          width:100%;
+          min-height:130px;
+          box-sizing:border-box;
+          resize:vertical;
+          border:1px solid #ddd;
+          border-radius:12px;
+          padding:14px;
+          font-family:monospace;
+          font-size:14px;
+          line-height:1.6;
+          outline:none;
+        "
+      ></textarea>
+
+    </div>
+
+
+    <div class="sp-card">
+
+      <h3>
+        Результат
+      </h3>
+
+      <div
+        id="sumSummary"
+        class="sp-muted"
+        style="
+          margin:4px 0 12px;
+          font-size:12px;
+        "
+      >
+        Пока пусто.
+      </div>
+
+      <textarea
+        id="sumOutput"
+        readonly
+        style="
+          width:100%;
+          min-height:200px;
+          box-sizing:border-box;
+          resize:vertical;
+          border:1px solid #ddd;
+          border-radius:12px;
+          padding:14px;
+          font-family:monospace;
+          font-size:14px;
+          line-height:1.6;
+          outline:none;
+          background:#fafafa;
+        "
+      ></textarea>
+
+    </div>
+
+  `;
+
+}
+
+
+function runSumBarcodes() {
+
+  const input =
+    $('#sumInput');
+
+  const summaryEl =
+    $('#sumSummary');
+
+  const outputEl =
+    $('#sumOutput');
+
+  if (
+    !input ||
+    !summaryEl ||
+    !outputEl
+  ) {
+    return;
+  }
+
+  const lines =
+    input.value
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line !== '');
+
+  const counts = new Map();
+
+  let totalRows = 0;
+
+  lines.forEach(line => {
+
+    const parts =
+      parseToolDataLine(line);
+
+    const barcode =
+      normalizeBarcode(parts[0]);
+
+    if (!barcode) {
+      return;
+    }
+
+    totalRows++;
+
+    counts.set(
+      barcode,
+      (counts.get(barcode) || 0) + 1
+    );
+
+  });
+
+  const output = [];
+
+  counts.forEach((qty, barcode) => {
+    output.push(`${barcode}\t${qty}`);
+  });
+
+  outputEl.value =
+    output.join('\n');
+
+  summaryEl.textContent =
+    lines.length === 0
+      ? 'Пока пусто.'
+      : `Исходных штрихкодов: ${totalRows}` +
+        ` · Уникальных: ${output.length}`;
+
+}
+
+
+function setupSum() {
+
+  $('#runSumBtn')
+    ?.addEventListener(
+      'click',
+      runSumBarcodes
+    );
+
+  $('#clearSumBtn')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        const input =
+          $('#sumInput');
+
+        const outputEl =
+          $('#sumOutput');
+
+        const summaryEl =
+          $('#sumSummary');
+
+        if (input) input.value = '';
+        if (outputEl) outputEl.value = '';
+
+        if (summaryEl) {
+          summaryEl.textContent =
+            'Пока пусто.';
+        }
+
+      }
+    );
+
+  $('#copySumBtn')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        const outputEl =
+          $('#sumOutput');
+
+        if (!outputEl || !outputEl.value) {
+          return;
+        }
+
+        navigator.clipboard
+          ?.writeText(outputEl.value)
+          .catch(() => {});
+
+      }
+    );
+
+  setupToolsSubNav();
+
+}
+
+
+/**
+ * Общий обработчик переключателя
+ * Сравнение / Деление / Сумма.
+ */
+function setupToolsSubNav() {
+
+  $all('[data-subtool]')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          const tool =
+            button.dataset.subtool;
+
+          state.activeTool =
+            tool === 'compare'
+              ? ''
+              : tool;
+
+          goToPage('comparison');
+
+        }
+      );
+
+    });
+
+}
 
 /*
   Подключение событий.
 */
 function setupComparison() {
+
+   setupToolsSubNav();
 
   const input =
     $('#comparisonRequest');
@@ -22665,11 +23347,14 @@ function goToPage(
     comparison + split
   */
 
-  if (
+    if (
     page !== 'tools' &&
     !(
       page === 'comparison' &&
-      state.activeTool === 'split'
+      (
+        state.activeTool === 'split' ||
+        state.activeTool === 'sum'
+      )
     )
   ) {
 
@@ -22741,6 +23426,32 @@ function render() {
 
           heading:
             'Руководство пользователя SKLADAPLAN'
+
+        }
+
+         : state.currentPage === 'comparison' &&
+      state.activeTool === 'split'
+
+      ? {
+
+          title:
+            'Деление',
+
+          heading:
+            'Деление штрихкодов'
+
+        }
+
+    : state.currentPage === 'comparison' &&
+      state.activeTool === 'sum'
+
+      ? {
+
+          title:
+            'Сумма',
+
+          heading:
+            'Суммирование штрихкодов'
 
         }
 
@@ -22922,10 +23633,32 @@ function render() {
 
     case 'comparison':
 
-      content.innerHTML =
-        comparisonView();
+      if (
+        state.activeTool === 'split'
+      ) {
 
-      setupComparison();
+        content.innerHTML =
+          splitView();
+
+        setupSplit();
+
+      } else if (
+        state.activeTool === 'sum'
+      ) {
+
+        content.innerHTML =
+          sumView();
+
+        setupSum();
+
+      } else {
+
+        content.innerHTML =
+          comparisonView();
+
+        setupComparison();
+
+      }
 
       break;
 
@@ -23074,6 +23807,20 @@ function setupNavigation() {
 
               state.activeTool =
                 'split';
+
+              goToPage(
+                'comparison'
+              );
+
+            }
+
+                           else if (
+              button.dataset.tool ===
+              'sum'
+            ) {
+
+              state.activeTool =
+                'sum';
 
               goToPage(
                 'comparison'
