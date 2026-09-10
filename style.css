@@ -1471,18 +1471,14 @@ MOBILE <= 700
 body {
 padding-bottom: 78px;
 
-```
 overflow-x: hidden;
-```
 
 }
 
 .app {
 display: block;
 
-```
 min-height: 100vh;
-```
 
 }
 
@@ -1492,8 +1488,7 @@ SIDEBAR
 
 .sidebar {
 position: fixed;
-
-```
+  
 left: 0;
 top: 0;
 bottom: 0;
@@ -1512,7 +1507,6 @@ box-shadow:
   10px 0 40px rgba(0, 0, 0, .15);
 
 z-index: 1000;
-```
 
 }
 
@@ -1527,9 +1521,7 @@ MAIN
 main {
 width: 100%;
 
-```
 min-height: 100vh;
-```
 
 }
 
@@ -1540,7 +1532,6 @@ TOPBAR
 .topbar {
 height: 64px;
 
-```
 padding: 9px 12px;
 
 gap: 9px;
@@ -1548,14 +1539,12 @@ gap: 9px;
 position: sticky;
 
 top: 0;
-```
 
 }
 
 .mobile-menu {
 display: grid;
 
-```
 place-items: center;
 
 width: 40px;
@@ -1572,32 +1561,26 @@ background: #fff;
 font-size: 19px;
 
 cursor: pointer;
-```
 
 }
 
 .topbar-title {
 flex: 1;
 
-```
 min-width: 0;
-```
 
 }
 
 .crumb {
 font-size: 9px;
 
-```
 margin-bottom: 2px;
-```
 
 }
 
 .topbar h1 {
 font-size: 16px;
 
-```
 line-height: 1.2;
 
 white-space: nowrap;
@@ -1605,7 +1588,6 @@ white-space: nowrap;
 overflow: hidden;
 
 text-overflow: ellipsis;
-```
 
 }
 
@@ -1620,9 +1602,7 @@ display: none;
 .top-actions .primary {
 padding: 8px 10px;
 
-```
 font-size: 11px;
-```
 
 }
 
@@ -1633,11 +1613,9 @@ CONTENT
 #content {
 width: 100%;
 
-```
 max-width: none;
 
 padding: 12px 12px 90px;
-```
 
 }
 
@@ -1658,9 +1636,7 @@ align-items: stretch;
 .sp-toolbar button {
 width: 100%;
 
-```
 min-width: 0;
-```
 
 }
 
@@ -1692,9 +1668,7 @@ min-width: 850px;
 .sp-card {
 padding: 15px;
 
-```
 border-radius: 14px;
-```
 
 }
 
@@ -1721,27 +1695,21 @@ font-size: 27px;
 .panel {
 padding: 14px;
 
-```
 border-radius: 14px;
-```
 
 }
 
 .section-title {
 flex-direction: column;
 
-```
 gap: 8px;
-```
 
 }
 
 .toolbar {
 width: 100%;
 
-```
 align-items: stretch;
-```
 
 }
 
@@ -1749,18 +1717,14 @@ align-items: stretch;
 .toolbar button {
 width: 100%;
 
-```
 max-width: none !important;
-```
 
 }
 
 .table-wrap {
 width: 100%;
 
-```
 margin: 0;
-```
 
 }
 
@@ -1783,7 +1747,6 @@ MOBILE BOTTOM NAV
 .mobile-nav {
 position: fixed;
 
-```
 left: 0;
 right: 0;
 bottom: 0;
@@ -1814,7 +1777,6 @@ z-index: 500;
 padding:
   5px 6px
   env(safe-area-inset-bottom);
-```
 
 }
 
@@ -1825,7 +1787,6 @@ MOBILE NAV BUTTON
 .mobile-nav-btn {
 position: relative;
 
-```
 width: 100%;
 min-width: 0;
 
@@ -1864,37 +1825,31 @@ box-shadow: none;
 transition:
   background .15s ease,
   color .15s ease;
-```
 
 }
 
 .mobile-nav-btn:hover {
 background: #f7f7f7;
 
-```
 color: #555;
-```
 
 }
 
 /* -------------------------------------------------------
 MOBILE NAV ICON
 
-```
  IMPORTANT:
  NO CIRCLE
  NO BACKGROUND
  NO BORDER
  NO SHADOW
  ------------------------------------------------------- */
-```
 
 .mobile-nav-btn > span,
 .mobile-nav-btn .nav-icon,
 .mobile-nav-btn i {
 position: relative;
 
-```
 width: 26px;
 height: 26px;
 
@@ -1926,7 +1881,6 @@ line-height: 1;
 font-style: normal;
 
 transform: none;
-```
 
 }
 
@@ -1938,11 +1892,9 @@ transform: none;
 .mobile-nav-btn i::after {
 background: transparent !important;
 
-```
 border: 0 !important;
 
 box-shadow: none !important;
-```
 
 }
 
@@ -1953,7 +1905,6 @@ MOBILE NAV LABEL
 .mobile-nav-btn small {
 display: block;
 
-```
 max-width: 100%;
 
 font-size: 9px;
@@ -1969,23 +1920,19 @@ overflow: hidden;
 text-overflow: ellipsis;
 
 color: inherit;
-```
 
 }
 
 /* -------------------------------------------------------
 ACTIVE MOBILE BUTTON
 
-```
  ACTIVE STATE IS ON THE BUTTON ONLY.
  ICON DOES NOT RECEIVE ANY CIRCLE.
  ------------------------------------------------------- */
-```
 
 .mobile-nav-btn.active {
 background: #f3f3f3 !important;
 
-```
 color: #111 !important;
 
 border: 0 !important;
@@ -1993,7 +1940,6 @@ border: 0 !important;
 box-shadow: none !important;
 
 outline: none !important;
-```
 
 }
 
@@ -2002,7 +1948,6 @@ outline: none !important;
 .mobile-nav-btn.active i {
 background: transparent !important;
 
-```
 color: #111 !important;
 
 border: 0 !important;
@@ -2014,7 +1959,6 @@ box-shadow: none !important;
 outline: none !important;
 
 transform: none;
-```
 
 }
 
@@ -2033,9 +1977,7 @@ color: #666;
 .mobile-more-btn > span {
 font-size: 23px;
 
-```
 letter-spacing: 1px;
-```
 
 }
 
@@ -2046,7 +1988,6 @@ BADGE
 .mobile-nav-btn em {
 position: absolute;
 
-```
 top: 4px;
 right: 22%;
 
@@ -2074,7 +2015,6 @@ place-items: center;
 line-height: 1;
 
 box-shadow: none;
-```
 
 }
 
@@ -2088,9 +2028,7 @@ EXTRA PROTECTION AGAINST GENERIC BUTTON STYLES
 .mobile-nav button:active {
 outline: none;
 
-```
 box-shadow: none;
-```
 
 }
 
@@ -2108,13 +2046,11 @@ VERY SMALL PHONES
 .top-actions .primary {
 max-width: 90px;
 
-```
 overflow: hidden;
 
 text-overflow: ellipsis;
 
 white-space: nowrap;
-```
 
 }
 
@@ -2146,4 +2082,998 @@ grid-template-columns: 1fr !important;
 .sp-dashboard-actions {
 grid-template-columns: 1fr !important;
 }
+}
+
+/* =========================================================
+   SKLADAPLAN
+   FINAL SAFE UI OVERRIDES
+   Совместимо с текущим app.js
+   ========================================================= */
+
+
+/* =========================================================
+   NAVIGATION ICONS
+   Не даём символам превращаться в круглые/цветные emoji
+   ========================================================= */
+
+.nav-icon,
+.mobile-nav-btn > span {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border-radius: 0 !important;
+
+  font-family:
+    "Segoe UI Symbol",
+    "Noto Sans Symbols",
+    "Apple Symbols",
+    "Segoe UI",
+    sans-serif;
+
+  font-variant-emoji: text;
+}
+
+
+/* =========================================================
+   DESKTOP NAV
+   ========================================================= */
+
+.nav {
+  position: relative;
+}
+
+.nav-icon {
+  flex: 0 0 20px;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+
+  display: inline-grid;
+  place-items: center;
+
+  line-height: 1;
+}
+
+
+/*
+   Активный пункт.
+
+   app.js сам добавляет .active,
+   поэтому здесь только визуальное оформление.
+*/
+
+.nav.active {
+  background: #111 !important;
+  color: #fff !important;
+}
+
+.nav.active .nav-icon {
+  background: transparent !important;
+  color: #fff !important;
+}
+
+
+/*
+   Счётчик "Сборка".
+
+   ВАЖНО:
+   app.js сам задаёт ему inline-style.
+   Поэтому мы НЕ переопределяем его фон,
+   цвет или border-radius.
+*/
+
+.nav em {
+  font-style: normal;
+}
+
+
+/* =========================================================
+   MOBILE NAVIGATION
+   ========================================================= */
+
+.mobile-nav {
+  display: none;
+}
+
+
+/*
+   Базовая кнопка мобильной навигации.
+*/
+
+.mobile-nav-btn {
+  position: relative;
+
+  border: 0;
+  outline: 0;
+
+  background: transparent;
+
+  color: #777;
+
+  -webkit-tap-highlight-color: transparent;
+
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+}
+
+
+/*
+   Иконка мобильной навигации.
+
+   Никакого чёрного круга,
+   фона или тени.
+*/
+
+.mobile-nav-btn > span {
+  display: grid;
+  place-items: center;
+
+  width: 24px;
+  height: 24px;
+
+  padding: 0;
+  margin: 0;
+
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+
+  color: inherit;
+
+  font-size: 19px;
+  line-height: 1;
+
+  font-variant-emoji: text;
+}
+
+
+/*
+   Подпись.
+*/
+
+.mobile-nav-btn > small {
+  display: block;
+
+  margin-top: 3px;
+
+  color: inherit;
+
+  font-size: 10px;
+  line-height: 1.2;
+
+  font-weight: 500;
+}
+
+
+/*
+   Активная кнопка.
+
+   ВАЖНО:
+   активность остаётся видимой,
+   но сам значок не получает чёрный круг.
+*/
+
+.mobile-nav-btn.active {
+  background: #f3f3f3 !important;
+  color: #111 !important;
+
+  border-radius: 12px;
+}
+
+.mobile-nav-btn.active > span {
+  background: transparent !important;
+  color: #111 !important;
+
+  border: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+
+/* =========================================================
+   MOBILE ASSEMBLY BADGE
+   ========================================================= */
+
+/*
+   app.js сам управляет:
+   - текстом
+   - цветом
+   - размером
+   - позиционированием
+
+   Поэтому здесь только безопасная база.
+*/
+
+.mobile-nav-btn > em {
+  font-style: normal;
+  line-height: 1;
+}
+
+
+/*
+   Если badge пустой — его не видно.
+*/
+
+.mobile-nav-btn > em:empty {
+  display: none !important;
+}
+
+
+/*
+   Аналогично desktop badge.
+*/
+
+.nav > em:empty {
+  display: none !important;
+}
+
+
+/* =========================================================
+   MOBILE MENU BUTTON
+   ========================================================= */
+
+.mobile-menu {
+  border: 0;
+  outline: 0;
+
+  background: transparent;
+
+  color: #111;
+
+  cursor: pointer;
+
+  -webkit-tap-highlight-color: transparent;
+}
+
+
+/* =========================================================
+   CONTENT
+   ========================================================= */
+
+#content {
+  min-width: 0;
+}
+
+
+/* =========================================================
+   ASSEMBLY
+   ========================================================= */
+
+/*
+   Три карточки статистики на компьютере.
+*/
+
+.cards {
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+
+  gap: 14px;
+
+  width: 100%;
+}
+
+.card {
+  min-width: 0;
+}
+
+
+/*
+   Общая панель.
+*/
+
+.panel {
+  width: 100%;
+  min-width: 0;
+}
+
+
+/*
+   Заголовок секции.
+*/
+
+.section-title {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 16px;
+}
+
+
+/*
+   Панель инструментов.
+*/
+
+.toolbar {
+  display: flex;
+
+  align-items: center;
+
+  gap: 10px;
+
+  flex-wrap: wrap;
+
+  width: 100%;
+}
+
+
+/*
+   Поле поиска.
+*/
+
+.search {
+  min-height: 40px;
+
+  border: 1px solid #ddd;
+  border-radius: 10px;
+
+  background: #fff;
+
+  color: #111;
+
+  padding: 0 12px;
+
+  outline: none;
+}
+
+.search:focus {
+  border-color: #111;
+}
+
+
+/*
+   Таблица сборки.
+*/
+
+.table-wrap {
+  width: 100%;
+
+  overflow-x: auto;
+  overflow-y: visible;
+
+  border: 1px solid #e7e7e7;
+  border-radius: 14px;
+
+  background: #fff;
+}
+
+.data-table {
+  width: 100%;
+
+  min-width: 850px;
+
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 11px 12px;
+
+  border-bottom: 1px solid #eee;
+
+  text-align: left;
+
+  font-size: 13px;
+
+  white-space: nowrap;
+}
+
+.data-table th {
+  background: #f8f8f8;
+
+  font-weight: 700;
+}
+
+.data-table tr:hover {
+  background: #fafafa;
+}
+
+
+/* =========================================================
+   STATUS
+   ========================================================= */
+
+.status {
+  display: inline-flex;
+
+  align-items: center;
+
+  min-height: 24px;
+
+  padding: 4px 9px;
+
+  border-radius: 999px;
+
+  background: #f1f1f1;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   NOTICE
+   ========================================================= */
+
+.notice {
+  padding: 14px 16px;
+
+  border-radius: 12px;
+
+  background: #f5f5f5;
+
+  color: #555;
+
+  font-size: 13px;
+}
+
+
+/* =========================================================
+   EMPTY
+   ========================================================= */
+
+.empty {
+  padding: 40px 20px;
+
+  text-align: center;
+
+  color: #777;
+
+  font-size: 13px;
+}
+
+
+/* =========================================================
+   DASHBOARD
+   ========================================================= */
+
+.dashboard {
+  width: 100%;
+}
+
+.dashboard-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(auto-fit, minmax(220px, 1fr));
+
+  gap: 14px;
+}
+
+.dashboard-card {
+  min-width: 0;
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 700px) {
+
+
+  /* -------------------------------------------------------
+     APP
+     ------------------------------------------------------- */
+
+  .app {
+    display: block;
+
+    min-height: 100vh;
+  }
+
+
+  /* -------------------------------------------------------
+     SIDEBAR
+     ------------------------------------------------------- */
+
+  .sidebar {
+    position: fixed;
+
+    left: 0;
+    top: 0;
+    bottom: 0;
+
+    width: 280px;
+    min-width: 280px;
+
+    height: 100vh;
+    min-height: 100vh;
+
+    transform: translateX(-105%);
+
+    transition:
+      transform .22s ease;
+
+    z-index: 1000;
+
+    box-shadow:
+      15px 0 40px rgba(0,0,0,.12);
+  }
+
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+
+  /* -------------------------------------------------------
+     MAIN
+     ------------------------------------------------------- */
+
+  main {
+    width: 100%;
+
+    min-height: 100vh;
+
+    padding-bottom: 76px;
+  }
+
+
+  /* -------------------------------------------------------
+     TOPBAR
+     ------------------------------------------------------- */
+
+  .topbar {
+    height: 68px;
+
+    padding:
+      12px
+      16px;
+
+    gap: 12px;
+  }
+
+
+  .mobile-menu {
+    display: grid;
+
+    place-items: center;
+
+    width: 38px;
+    height: 38px;
+
+    flex: 0 0 38px;
+
+    border-radius: 10px;
+
+    font-size: 20px;
+  }
+
+
+  .mobile-menu:hover {
+    background: #f3f3f3;
+  }
+
+
+  .topbar-title {
+    min-width: 0;
+
+    flex: 1;
+  }
+
+
+  .crumb {
+    font-size: 9px;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+
+  .topbar h1 {
+    font-size: 17px;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+
+  .top-actions {
+    display: none;
+  }
+
+
+  /* -------------------------------------------------------
+     CONTENT
+     ------------------------------------------------------- */
+
+  #content {
+    width: 100%;
+
+    padding:
+      18px
+      14px
+      24px;
+  }
+
+
+  /* -------------------------------------------------------
+     MOBILE NAV
+     ------------------------------------------------------- */
+
+  .mobile-nav {
+    position: fixed;
+
+    display: grid;
+
+    grid-template-columns:
+      repeat(5, minmax(0, 1fr));
+
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    height: 68px;
+
+    padding:
+      6px
+      6px
+      calc(6px + env(safe-area-inset-bottom));
+
+    background: rgba(255,255,255,.96);
+
+    border-top: 1px solid #e6e6e6;
+
+    backdrop-filter: blur(14px);
+
+    z-index: 900;
+
+    box-shadow:
+      0 -4px 20px rgba(0,0,0,.05);
+  }
+
+
+  .mobile-nav-btn {
+    min-width: 0;
+
+    min-height: 54px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+    justify-content: center;
+
+    gap: 0;
+
+    padding:
+      5px
+      3px;
+
+    border-radius: 12px;
+  }
+
+
+  .mobile-nav-btn > span {
+    width: 24px;
+    height: 24px;
+
+    font-size: 18px;
+  }
+
+
+  .mobile-nav-btn > small {
+    max-width: 100%;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    white-space: nowrap;
+
+    font-size: 9px;
+  }
+
+
+  /*
+     Активная кнопка:
+     лёгкий серый фон,
+     но никакого круга вокруг иконки.
+  */
+
+  .mobile-nav-btn.active {
+    background: #f2f2f2 !important;
+
+    color: #111 !important;
+
+    border-radius: 12px;
+  }
+
+
+  .mobile-nav-btn.active > span {
+    background: transparent !important;
+
+    color: #111 !important;
+
+    border: 0 !important;
+
+    box-shadow: none !important;
+
+    border-radius: 0 !important;
+  }
+
+
+  /* -------------------------------------------------------
+     MOBILE BADGE
+     ------------------------------------------------------- */
+
+  .mobile-nav-btn > em {
+    position: absolute;
+
+    top: 4px;
+    right: 16%;
+
+    min-width: 16px;
+    height: 16px;
+
+    padding:
+      0
+      4px;
+
+    display: grid;
+    place-items: center;
+
+    border-radius: 999px;
+
+    background: #111;
+
+    color: #fff;
+
+    font-size: 9px;
+    font-weight: 700;
+
+    line-height: 1;
+  }
+
+
+  .mobile-nav-btn > em:empty {
+    display: none !important;
+  }
+
+
+  /* -------------------------------------------------------
+     ASSEMBLY
+     ------------------------------------------------------- */
+
+  .cards {
+    grid-template-columns: 1fr;
+
+    gap: 10px;
+  }
+
+
+  .card {
+    width: 100%;
+  }
+
+
+  .panel {
+    width: 100%;
+
+    overflow: hidden;
+  }
+
+
+  .section-title {
+    align-items: flex-start;
+
+    flex-direction: column;
+
+    gap: 8px;
+  }
+
+
+  .toolbar {
+    width: 100%;
+
+    flex-direction: column;
+
+    align-items: stretch;
+  }
+
+
+  .toolbar > * {
+    width: 100% !important;
+
+    max-width: none !important;
+  }
+
+
+  .search {
+    width: 100%;
+
+    max-width: none !important;
+  }
+
+
+  .table-wrap {
+    width: 100%;
+
+    overflow-x: auto;
+
+    -webkit-overflow-scrolling: touch;
+  }
+
+
+  .data-table {
+    min-width: 850px;
+  }
+
+
+  /* -------------------------------------------------------
+     SP COMPONENTS
+     ------------------------------------------------------- */
+
+  .sp-grid {
+    grid-template-columns: 1fr;
+
+    gap: 10px;
+  }
+
+
+  .sp-toolbar {
+    flex-direction: column;
+
+    align-items: stretch;
+  }
+
+
+  .sp-toolbar input,
+  .sp-toolbar select,
+  .sp-toolbar button {
+    width: 100%;
+
+    min-width: 0;
+  }
+
+
+  .sp-form {
+    grid-template-columns: 1fr;
+  }
+
+
+  .sp-form .full,
+  .sp-form-actions {
+    grid-column: 1;
+  }
+
+
+  .sp-table-wrap {
+    border-radius: 12px;
+
+    overflow-x: auto;
+
+    -webkit-overflow-scrolling: touch;
+  }
+
+
+  .sp-table {
+    min-width: 900px;
+  }
+
+
+  .sp-modal-backdrop {
+    padding: 12px;
+  }
+
+
+  .sp-modal {
+    max-height: 92vh;
+
+    padding: 18px;
+
+    border-radius: 16px;
+  }
+
+
+  /* -------------------------------------------------------
+     SCANNER
+     ------------------------------------------------------- */
+
+  .sp-scanner-input {
+    height: 54px;
+
+    font-size: 19px;
+  }
+
+
+  .scan-modal {
+    padding: 12px;
+  }
+
+
+  .scan-box {
+    padding: 18px;
+
+    border-radius: 16px;
+  }
+
+
+  .scan-controls {
+    grid-template-columns: 1fr;
+  }
+
+
+  /* -------------------------------------------------------
+     DASHBOARD
+     ------------------------------------------------------- */
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+
+    gap: 10px;
+  }
+
+
+}
+
+
+/* =========================================================
+   VERY SMALL SCREENS
+   ========================================================= */
+
+@media (max-width: 380px) {
+
+
+  #content {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+
+  .topbar {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+
+  .mobile-nav {
+    padding-left: 3px;
+    padding-right: 3px;
+  }
+
+
+  .mobile-nav-btn > small {
+    font-size: 8px;
+  }
+
+
+  .mobile-nav-btn > span {
+    font-size: 17px;
+  }
+
+
+}
+
+
+/* =========================================================
+   FOCUS
+   ========================================================= */
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline:
+    2px solid #111;
+
+  outline-offset:
+    2px;
 }
