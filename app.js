@@ -5459,62 +5459,65 @@ function baseView() {
     </div>
 
 
-    <!-- =========================================
-         ТАБЛИЦА
-         ========================================= -->
+<!-- =========================================
+     ТАБЛИЦА
+     ========================================= -->
 
-    <div class="sp-table-wrap">
+<div class="sp-table-wrap">
 
-      <table class="sp-table">
+  <table class="sp-table">
 
-        <thead>
+    <thead>
 
-          <tr>
+      <tr>
 
-            <th style="width:35px">
-              ✓
-            </th>
+        <th style="width:35px">
+          ✓
+        </th>
 
-            <th>
-              Штрихкод
-            </th>
+        <th>
+          Штрихкод
+        </th>
 
-            <th>
-              Артикул
-            </th>
+        <th>
+          Артикул
+        </th>
 
-            <th>
-              Зона / ряд
-            </th>
+        <th>
+          Кол-во
+        </th>
 
-            <th>
-              Поддон
-            </th>
+        <th>
+          Зона / ряд
+        </th>
 
-            <th>
-              Статус
-            </th>
+        <th>
+          Поддон
+        </th>
 
-            <th>
-              Направление
-            </th>
+        <th>
+          Статус
+        </th>
 
-            <th>
-              Склад
-            </th>
+        <th>
+          Направление
+        </th>
 
-            <th>
-              Дата
-            </th>
+        <th>
+          Склад
+        </th>
 
-            <th>
-              Действия
-            </th>
+        <th>
+          Дата
+        </th>
 
-          </tr>
+        <th>
+          Действия
+        </th>
 
-        </thead>
+      </tr>
 
+    </thead>
 
         <tbody>
 
@@ -5620,6 +5623,8 @@ function baseRow(row) {
       class="${selected ? 'selected' : ''}"
     >
 
+      <!-- ВЫБОР -->
+
       <td>
 
         <input
@@ -5636,41 +5641,87 @@ function baseRow(row) {
       </td>
 
 
+      <!-- ШТРИХКОД -->
+
       <td>
+
         <b>
-          ${escapeHtml(row.barcode)}
+          ${escapeHtml(
+            row.barcode
+          )}
         </b>
+
       </td>
 
+
+      <!-- АРТИКУЛ -->
 
       <td>
-        ${escapeHtml(row.article)}
+        ${escapeHtml(
+          row.article
+        )}
       </td>
 
+
+      <!-- КОЛИЧЕСТВО -->
 
       <td>
-        ${escapeHtml(row.quantity_in_box)}
+        ${escapeHtml(
+          row.quantity_in_box
+        )}
       </td>
 
+
+      <!-- ЗОНА / РЯД -->
 
       <td>
-        ${escapeHtml(row.zone_row)}
+        ${escapeHtml(
+          row.zone_row
+        )}
       </td>
 
+
+      <!-- ПОДДОН -->
 
       <td>
-        ${escapeHtml(row.pallet)}
+        ${escapeHtml(
+          row.pallet
+        )}
       </td>
 
+
+      <!-- СТАТУС -->
 
       <td>
 
         <span class="sp-status">
-          ${escapeHtml(row.status)}
+          ${escapeHtml(
+            row.status
+          )}
         </span>
 
       </td>
 
+
+      <!-- НАПРАВЛЕНИЕ -->
+
+      <td>
+        ${escapeHtml(
+          row.direction
+        )}
+      </td>
+
+
+      <!-- СКЛАД -->
+
+      <td>
+        ${escapeHtml(
+          row.warehouse
+        )}
+      </td>
+
+
+      <!-- ДАТА -->
 
       <td>
         ${escapeHtml(
@@ -5679,10 +5730,7 @@ function baseRow(row) {
       </td>
 
 
-      <td>
-        ${escapeHtml(row.warehouse)}
-      </td>
-
+      <!-- ДЕЙСТВИЯ -->
 
       <td>
 
