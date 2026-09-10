@@ -23087,78 +23087,79 @@ supabaseClient.auth
          ВХОД
          ===================================================== */
 
-      if (
-        event ===
-        'SIGNED_IN'
-      ) {
+     if (
+  event ===
+  'SIGNED_IN'
+) {
 
-        const newUserId =
-          session?.user?.id ||
-          null;
+  const newUserId =
+    session?.user?.id ||
+    null;
 
-        const currentUserId =
-          state.user?.id ||
-          null;
-
-
-        /*
-          Supabase может повторно отправить
-          SIGNED_IN для уже авторизованного
-          пользователя.
-
-          В таком случае НЕ загружаем
-          16 000+ коробок заново.
-
-          Повторная загрузка разрешается
-          только если действительно изменился
-          пользователь или приложение ещё
-          не имеет загруженной базы.
-        */
-
-        const sameUser =
-          Boolean(
-            newUserId &&
-            currentUserId &&
-            newUserId ===
-              currentUserId
-          );
+  const currentUserId =
+    state.user?.id ||
+    null;
 
 
-        if (
-          sameUser &&
-          state.boxes.length > 0
-        ) {
+  /*
+    Supabase может повторно отправить
+    SIGNED_IN для уже авторизованного
+    пользователя.
 
-          console.log(
-            'SKLADAPLAN: повторный SIGNED_IN — базу не перезагружаем'
-          );
+    Если это тот же пользователь,
+    а база уже загружается или уже
+    загружена — повторный запуск
+    НЕ нужен.
+  */
 
-          state.session =
-            session;
+  const sameUser =
+    Boolean(
+      newUserId &&
+      currentUserId &&
+      newUserId ===
+        currentUserId
+    );
 
-          return;
+
+  if (
+    sameUser &&
+    (
+      state.loading ||
+      state.boxes.length > 0
+    )
+  ) {
+
+    console.log(
+      'SKLADAPLAN: повторный SIGNED_IN — повторную загрузку не запускаем'
+    );
+
+    state.session =
+      session;
+
+    return;
+
+  }
+
+
+  /*
+    Настоящая авторизация
+    или первая загрузка приложения.
+  */
+
+  state.session =
+    session;
+
+  state.user =
+    session?.user ||
+    null;
+
+
+  await startAuthenticatedApp();
 
         }
-
-
-        /*
-          Настоящая новая авторизация.
-        */
-
-        state.session =
-          session;
-
-        state.user =
-          session?.user ||
-          null;
-
-
-        await startAuthenticatedApp();
-
+       
       }
-
-    }
-  );
+   );
 
 /* =========================================================
    ASSEMBLY SELECT ALL CHECKBOX
