@@ -22948,8 +22948,36 @@ async function startAuthenticatedApp() {
 
   try {
 
+    /*
+      База загружается как раньше.
+      Никаких изменений в Supabase Load.
+    */
+
     await loadBoxesFromSupabase();
 
+
+    /*
+      После авторизации Supabase уже передал
+      пользователя в state.user.
+
+      Здесь просто определяем его роль.
+    */
+
+    console.log(
+      'SKLADAPLAN USER:',
+      state.user?.email
+    );
+
+    console.log(
+      'SKLADAPLAN ROLE:',
+      getCurrentUserRole()
+    );
+
+
+    /*
+      Только после полной загрузки базы
+      рисуем приложение.
+    */
 
     render();
 
