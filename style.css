@@ -3115,3 +3115,21 @@ textarea:focus-visible {
   outline-offset:
     2px;
 }
+
+/* =========================================================
+   VIEWER MODE
+   ========================================================= */
+
+.viewer-disabled {
+  opacity: .45 !important;
+  cursor: not-allowed !important;
+}
+
+.viewer-disabled:hover {
+  transform: none !important;
+}
+
+body.viewer-mode .viewer-edit-only {
+  opacity: .45 !important;
+  cursor: not-allowed !important;
+}
