@@ -8603,12 +8603,6 @@ function assemblyView() {
 
       </div>
 
-<button
-  class="sp-btn secondary"
-  id="removeFromAssemblyBtn"
->
-  ↩ Убрать из сборки
-</button>
 
 
       <!-- ========================= -->
@@ -8663,7 +8657,18 @@ function assemblyView() {
           >
             ☑ Выбрать все
           </button>
-
+<button
+  class="sp-btn secondary"
+  id="removeFromAssemblyBtn"
+  ${
+    state.assemblySelectedIds &&
+    state.assemblySelectedIds.size
+      ? ''
+      : 'disabled'
+  }
+>
+  ↩ Убрать из сборки
+</button>
 
           <button
             class="primary"
