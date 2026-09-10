@@ -7458,15 +7458,13 @@ async function saveBox(event) {
       );
 
 
-    if (
-      !payload.barcode
-    ) {
-
-      throw new Error(
-        'Штрихкод обязателен'
-      );
-
-    }
+if (
+  !payload["Штрихкод"]
+) {
+  throw new Error(
+    'Штрихкод обязателен'
+  );
+}
 
 
     /*
