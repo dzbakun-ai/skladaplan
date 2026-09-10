@@ -160,67 +160,6 @@ function getRoleLabel() {
 
 }
 
-
-/* =========================================================
-   VIEWER EDIT ELEMENTS
-   ========================================================= */
-
-const EDITABLE_ELEMENT_SELECTORS = [
-
-  /* Новая заявка */
-
-  '#createPickingBtn',
-  '#requestImportBtn',
-  '#importRequestBtn',
-  '#requestFile',
-  '#requestExcelInput',
-  '#requestBarcodes',
-
-
-  /* База */
-
-  '#addBoxBtn',
-  '#deleteSelectedBtn',
-  '#markPickBtn',
-  '#setDirectionFromBaseBtn',
-
-
-  /* Сборка */
-
-  '#completeSelectedAssembly',
-  '#removeFromAssemblyBtn',
-
-
-  /* Собрано */
-
-  '#setCollectedDirectionBtn',
-  '#shipCollectedBtn',
-
-
-  /* Отгрузка */
-
-  '#shipBtn',
-  '#shipSelectedBtn',
-  '#completeShipmentBtn',
-
-
-  /* Приёмка */
-
-  '#receiveBtn',
-  '#receivePalletBtn',
-  '#saveReceivingBtn',
-  '#scanReceiveBtn',
-
-
-  /* Перемещение */
-
-  '#moveBtn',
-  '#moveSelectedBtn',
-  '#saveMoveBtn'
-
-];
-
-
 /* =========================================================
    APPLY VIEWER PERMISSIONS
    ========================================================= */
