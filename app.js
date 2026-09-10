@@ -389,61 +389,6 @@ document.addEventListener(
   true
 );
 
-
-/* =========================================================
-   OBSERVER
-   ========================================================= */
-
-let permissionsObserver =
-  null;
-
-
-function initPermissionsObserver() {
-
-  if (
-    permissionsObserver
-  ) {
-
-    return;
-
-  }
-
-
-  if (
-    !document.body
-  ) {
-
-    return;
-
-  }
-
-
-  permissionsObserver =
-    new MutationObserver(
-      function() {
-
-        applyViewerPermissions();
-
-      }
-    );
-
-
-  permissionsObserver.observe(
-    document.body,
-    {
-      childList: true,
-      subtree: true
-    }
-  );
-
-
-  applyViewerPermissions();
-
-}
-
-
-initPermissionsObserver();
-
 /*
   =========================================================
   ROLE
@@ -857,72 +802,6 @@ document.addEventListener(
   true
 );
 
-
-/*
-  =========================================================
-  АВТОПРИМЕНЕНИЕ ПОСЛЕ render()
-  =========================================================
-
-  SKLADAPLAN постоянно перерисовывает DOM.
-  Поэтому MutationObserver снова применяет
-  права после каждого render().
-*/
-
-let permissionsObserver = null;
-
-
-function initPermissionsObserver() {
-
-  if (
-    permissionsObserver
-  ) {
-
-    return;
-
-  }
-
-
-  const target =
-    document.body;
-
-
-  if (
-    !target
-  ) {
-
-    return;
-
-  }
-
-
-  permissionsObserver =
-    new MutationObserver(
-      function() {
-
-        applyViewerPermissions();
-
-      }
-    );
-
-
-  permissionsObserver.observe(
-    target,
-    {
-      childList: true,
-      subtree: true
-    }
-  );
-
-
-  /*
-    Первичное применение.
-  */
-
-  applyViewerPermissions();
-
-}
-
-
 /*
   =========================================================
   USER ROLE BADGE
@@ -942,14 +821,6 @@ function getRoleLabel() {
 
   ${getRoleLabel()}
 */
-
-
-/*
-  =========================================================
-  ИНИЦИАЛИЗАЦИЯ
-  ========================================================= */
-
-initPermissionsObserver();
 
 /* =========================================================
    STATE
