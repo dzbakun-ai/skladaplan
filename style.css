@@ -3062,6 +3062,44 @@ grid-template-columns: 1fr !important;
 
 }
 
+/* =========================================================
+   FIX — BUTTONS IN SP TOOLBAR
+   ========================================================= */
+
+.sp-toolbar button.sp-btn {
+  background: #111;
+  color: #fff;
+  border: 0;
+}
+
+.sp-toolbar button.sp-btn:hover {
+  background: #2a2a2a;
+}
+
+.sp-toolbar button.sp-btn.success {
+  background: #18794e;
+  color: #fff;
+}
+
+.sp-toolbar button.sp-btn.success:hover {
+  background: #146a43;
+}
+
+.sp-toolbar button.sp-btn.danger {
+  background: #b42318;
+  color: #fff;
+}
+
+.sp-toolbar button.sp-btn.secondary {
+  background: #f2f2f2;
+  color: #111;
+}
+
+.sp-toolbar button.sp-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
 
 /* =========================================================
    FOCUS
