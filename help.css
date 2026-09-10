@@ -1,6 +1,7 @@
 /* =========================================================
    SKLADAPLAN — HELP
    Стили страницы справки
+   Светлая тема в стиле основного интерфейса
    ========================================================= */
 
 
@@ -27,6 +28,8 @@
 .help-hero h1 {
   margin: 0 0 8px;
 
+  color: #111;
+
   font-size: 28px;
   line-height: 1.15;
   font-weight: 700;
@@ -38,7 +41,7 @@
 
   max-width: 760px;
 
-  color: rgba(255,255,255,.55);
+  color: #737373;
 
   font-size: 14px;
   line-height: 1.6;
@@ -57,18 +60,16 @@
   margin: 0 0 28px;
   padding: 14px;
 
-  border: 1px solid rgba(255,255,255,.07);
+  border: 1px solid #e6e6e6;
   border-radius: 16px;
 
-  background: rgba(255,255,255,.025);
+  background: #fafafa;
 }
 
 
-/*
-   ВАЖНО:
-   !important нужен из-за глобальных правил a / a:visited
-   в style.css, которые могли окрашивать ссылки в чёрный.
-*/
+/* ---------------------------------------------------------
+   Кнопки быстрой навигации
+   --------------------------------------------------------- */
 
 .help-quick-nav a,
 .help-quick-nav a:visited,
@@ -79,12 +80,12 @@
   min-height: 34px;
   padding: 0 12px;
 
-  border: 1px solid rgba(255,255,255,.08);
+  border: 1px solid #e1e1e1;
   border-radius: 10px;
 
-  color: rgba(255,255,255,.72) !important;
+  color: #111 !important;
 
-  background: rgba(255,255,255,.045) !important;
+  background: #fff !important;
 
   text-decoration: none !important;
 
@@ -101,11 +102,11 @@
 }
 
 .help-quick-nav a:hover {
-  color: rgba(255,255,255,.95) !important;
+  color: #111 !important;
 
-  background: rgba(255,255,255,.09) !important;
+  background: #f5f5f7 !important;
 
-  border-color: rgba(255,255,255,.14);
+  border-color: #d4d4d4;
 
   transform: translateY(-1px);
 }
@@ -119,10 +120,10 @@
   margin-bottom: 22px;
   padding: 22px;
 
-  border: 1px solid rgba(255,255,255,.07);
+  border: 1px solid #e6e6e6;
   border-radius: 18px;
 
-  background: rgba(255,255,255,.025);
+  background: #fff;
 }
 
 .help-section:last-child {
@@ -131,6 +132,8 @@
 
 .help-section h2 {
   margin: 0 0 12px;
+
+  color: #111;
 
   font-size: 18px;
   line-height: 1.3;
@@ -142,6 +145,8 @@
 .help-section h3 {
   margin: 20px 0 8px;
 
+  color: #111;
+
   font-size: 14px;
   line-height: 1.4;
   font-weight: 700;
@@ -150,7 +155,7 @@
 .help-section p {
   margin: 0 0 10px;
 
-  color: rgba(255,255,255,.64);
+  color: #737373;
 
   font-size: 13px;
   line-height: 1.65;
@@ -170,7 +175,7 @@
   margin: 10px 0 0;
   padding-left: 20px;
 
-  color: rgba(255,255,255,.64);
+  color: #737373;
 
   font-size: 13px;
   line-height: 1.65;
@@ -190,12 +195,13 @@
    --------------------------------------------------------- */
 
 .help-section strong {
-  color: rgba(255,255,255,.92);
+  color: #111;
+
   font-weight: 650;
 }
 
 .help-section em {
-  color: rgba(255,255,255,.78);
+  color: #555;
 }
 
 
@@ -208,12 +214,12 @@
 
   padding: 2px 6px;
 
-  border: 1px solid rgba(255,255,255,.07);
+  border: 1px solid #e2e2e2;
   border-radius: 6px;
 
-  color: rgba(255,255,255,.82);
+  color: #333;
 
-  background: rgba(255,255,255,.055);
+  background: #f5f5f7;
 
   font-family:
     ui-monospace,
@@ -235,20 +241,20 @@
   margin: 16px 0;
   padding: 14px 16px;
 
-  border: 1px solid rgba(255,255,255,.08);
+  border: 1px solid #e3e3e3;
   border-radius: 12px;
 
-  background: rgba(255,255,255,.035);
+  background: #fafafa;
 }
 
 .help-note p {
   margin: 0;
 
-  color: rgba(255,255,255,.68);
+  color: #666;
 }
 
 .help-note strong {
-  color: rgba(255,255,255,.94);
+  color: #111;
 }
 
 
@@ -260,20 +266,20 @@
   margin: 16px 0;
   padding: 15px 16px;
 
-  border: 1px solid rgba(255,180,80,.18);
+  border: 1px solid #ead8b8;
   border-radius: 12px;
 
-  background: rgba(255,180,80,.055);
+  background: #fffaf0;
 }
 
 .help-warning p {
   margin: 0;
 
-  color: rgba(255,255,255,.7);
+  color: #6f5b38;
 }
 
 .help-warning strong {
-  color: rgba(255,210,130,.95);
+  color: #8a5a00;
 }
 
 
@@ -285,20 +291,20 @@
   margin: 16px 0;
   padding: 15px 16px;
 
-  border: 1px solid rgba(100,220,150,.14);
+  border: 1px solid #cfe5d9;
   border-radius: 12px;
 
-  background: rgba(100,220,150,.045);
+  background: #f3faf6;
 }
 
 .help-success p {
   margin: 0;
 
-  color: rgba(255,255,255,.68);
+  color: #557064;
 }
 
 .help-success strong {
-  color: rgba(150,240,180,.95);
+  color: #18794e;
 }
 
 
@@ -323,10 +329,10 @@
 .help-card {
   padding: 16px;
 
-  border: 1px solid rgba(255,255,255,.07);
+  border: 1px solid #e6e6e6;
   border-radius: 14px;
 
-  background: rgba(255,255,255,.025);
+  background: #fafafa;
 
   transition:
     background .18s ease,
@@ -335,9 +341,9 @@
 }
 
 .help-card:hover {
-  background: rgba(255,255,255,.04);
+  background: #f5f5f7;
 
-  border-color: rgba(255,255,255,.11);
+  border-color: #dcdcdc;
 
   transform: translateY(-1px);
 }
@@ -345,11 +351,15 @@
 .help-card h3 {
   margin: 0 0 7px;
 
+  color: #111;
+
   font-size: 13px;
 }
 
 .help-card p {
   margin: 0;
+
+  color: #737373;
 
   font-size: 12px;
   line-height: 1.55;
@@ -375,12 +385,12 @@
   min-height: 28px;
   padding: 0 9px;
 
-  border: 1px solid rgba(255,255,255,.07);
+  border: 1px solid #e3e3e3;
   border-radius: 8px;
 
-  color: rgba(255,255,255,.7);
+  color: #555;
 
-  background: rgba(255,255,255,.035);
+  background: #fafafa;
 
   font-size: 11px;
   font-weight: 600;
@@ -398,7 +408,7 @@
 
   overflow-x: auto;
 
-  border: 1px solid rgba(255,255,255,.07);
+  border: 1px solid #e6e6e6;
   border-radius: 12px;
 }
 
@@ -414,22 +424,22 @@
 .help-table td {
   padding: 10px 12px;
 
-  border-bottom: 1px solid rgba(255,255,255,.055);
+  border-bottom: 1px solid #eeeeee;
 
   text-align: left;
   vertical-align: top;
 }
 
 .help-table th {
-  color: rgba(255,255,255,.85);
+  color: #333;
 
-  background: rgba(255,255,255,.035);
+  background: #fafafa;
 
   font-weight: 650;
 }
 
 .help-table td {
-  color: rgba(255,255,255,.62);
+  color: #737373;
 }
 
 .help-table tr:last-child td {
@@ -458,10 +468,10 @@
 
   padding: 13px 14px;
 
-  border: 1px solid rgba(255,255,255,.06);
+  border: 1px solid #e6e6e6;
   border-radius: 12px;
 
-  background: rgba(255,255,255,.025);
+  background: #fafafa;
 }
 
 .help-step-number {
@@ -476,9 +486,9 @@
 
   border-radius: 50%;
 
-  color: rgba(255,255,255,.85);
+  color: #fff;
 
-  background: rgba(255,255,255,.08);
+  background: #111;
 
   font-size: 11px;
   font-weight: 700;
@@ -493,11 +503,15 @@
 
   margin-bottom: 3px;
 
+  color: #111;
+
   font-size: 13px;
 }
 
 .help-step-content p {
   margin: 0;
+
+  color: #737373;
 
   font-size: 12px;
 }
@@ -525,19 +539,19 @@
 .help-excel td {
   padding: 9px 11px;
 
-  border: 1px solid rgba(255,255,255,.06);
+  border: 1px solid #e6e6e6;
 
   text-align: left;
 }
 
 .help-excel th {
-  color: rgba(255,255,255,.85);
+  color: #333;
 
-  background: rgba(255,255,255,.035);
+  background: #fafafa;
 }
 
 .help-excel td {
-  color: rgba(255,255,255,.62);
+  color: #737373;
 }
 
 
@@ -550,7 +564,7 @@
 
   margin: 24px 0;
 
-  background: rgba(255,255,255,.06);
+  background: #e6e6e6;
 }
 
 
@@ -568,10 +582,10 @@
    --------------------------------------------------------- */
 
 .help-page a:not(.help-quick-nav a) {
-  color: rgba(255,255,255,.8);
+  color: #333 !important;
 
   text-decoration: underline;
-  text-decoration-color: rgba(255,255,255,.2);
+  text-decoration-color: #d0d0d0;
   text-underline-offset: 3px;
 
   transition:
@@ -580,9 +594,9 @@
 }
 
 .help-page a:not(.help-quick-nav a):hover {
-  color: rgba(255,255,255,.98);
+  color: #111 !important;
 
-  text-decoration-color: rgba(255,255,255,.5);
+  text-decoration-color: #999;
 }
 
 
@@ -672,4 +686,50 @@
     justify-content: center;
   }
 
+}
+
+
+/* =========================================================
+   SAFETY OVERRIDES
+   Защита элементов справки от глобальных стилей приложения
+   ========================================================= */
+
+.help-page .help-quick-nav a,
+.help-page .help-quick-nav a:visited,
+.help-page .help-quick-nav a:active {
+  color: #111 !important;
+  background: #fff !important;
+  text-decoration: none !important;
+}
+
+.help-page .help-quick-nav a:hover {
+  color: #111 !important;
+  background: #f5f5f7 !important;
+}
+
+
+/* ---------------------------------------------------------
+   Предотвращаем появление тёмных inherited-стилей
+   --------------------------------------------------------- */
+
+.help-page,
+.help-page * {
+  box-sizing: border-box;
+}
+
+.help-page .help-hero h1,
+.help-page .help-section h2,
+.help-page .help-section h3,
+.help-page .help-card h3,
+.help-page .help-step-content strong {
+  color: #111;
+}
+
+.help-page .help-hero p,
+.help-page .help-section p,
+.help-page .help-section ul,
+.help-page .help-section ol,
+.help-page .help-card p,
+.help-page .help-step-content p {
+  color: #737373;
 }
