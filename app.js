@@ -83,18 +83,427 @@ const STATUSES = {
    USER ROLES & PERMISSIONS
    ========================================================= */
 
-/*
-  Пользователь с этим email получает
-  режим ТОЛЬКО ПРОСМОТР.
+function getCurrentUserRole() {
 
-  Все остальные авторизованные пользователи
-  считаются ADMIN.
-*/
+  const role =
+    String(
+      state.user?.app_metadata?.role ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
 
-const VIEW_ONLY_USERS = new Set([
-  'viewer@skladaplan.ru'
-]);
 
+  /*
+    Только две допустимые роли.
+
+    Если роль не указана —
+    считаем пользователя admin,
+    чтобы не сломать существующую
+    авторизацию.
+  */
+
+  if (
+    role === 'viewer'
+  ) {
+
+    return 'viewer';
+
+  }
+
+
+  return 'admin';
+
+}
+
+
+/* =========================================================
+   ROLE HELPERS
+   ========================================================= */
+
+function isViewer() {
+
+  return (
+    getCurrentUserRole() ===
+    'viewer'
+  );
+
+}
+
+
+function isAdmin() {
+
+  return (
+    getCurrentUserRole() ===
+    'admin'
+  );
+
+}
+
+
+function canEdit() {
+
+  return isAdmin();
+
+}
+
+
+/* =========================================================
+   ROLE LABEL
+   ========================================================= */
+
+function getRoleLabel() {
+
+  return isViewer()
+    ? 'Только просмотр'
+    : 'Администратор';
+
+}
+
+
+/* =========================================================
+   VIEWER EDIT ELEMENTS
+   ========================================================= */
+
+const EDITABLE_ELEMENT_SELECTORS = [
+
+  /* Новая заявка */
+
+  '#createPickingBtn',
+  '#requestImportBtn',
+  '#importRequestBtn',
+  '#requestFile',
+  '#requestExcelInput',
+  '#requestBarcodes',
+
+
+  /* База */
+
+  '#addBoxBtn',
+  '#deleteSelectedBtn',
+  '#markPickBtn',
+  '#setDirectionFromBaseBtn',
+
+
+  /* Сборка */
+
+  '#completeSelectedAssembly',
+  '#removeFromAssemblyBtn',
+
+
+  /* Собрано */
+
+  '#setCollectedDirectionBtn',
+  '#shipCollectedBtn',
+
+
+  /* Отгрузка */
+
+  '#shipBtn',
+  '#shipSelectedBtn',
+  '#completeShipmentBtn',
+
+
+  /* Приёмка */
+
+  '#receiveBtn',
+  '#receivePalletBtn',
+  '#saveReceivingBtn',
+  '#scanReceiveBtn',
+
+
+  /* Перемещение */
+
+  '#moveBtn',
+  '#moveSelectedBtn',
+  '#saveMoveBtn'
+
+];
+
+
+/* =========================================================
+   APPLY VIEWER PERMISSIONS
+   ========================================================= */
+
+function applyViewerPermissions() {
+
+  if (
+    !state.user
+  ) {
+
+    return;
+
+  }
+
+
+  const viewer =
+    isViewer();
+
+
+  document.body.classList.toggle(
+    'viewer-mode',
+    viewer
+  );
+
+
+  /*
+    Администратор:
+    восстанавливаем элементы,
+    которые могли быть заблокированы
+    ранее.
+  */
+
+  if (
+    !viewer
+  ) {
+
+    document
+      .querySelectorAll(
+        '.viewer-disabled'
+      )
+      .forEach(
+        element => {
+
+          element.classList.remove(
+            'viewer-disabled'
+          );
+
+          element.removeAttribute(
+            'aria-disabled'
+          );
+
+        }
+      );
+
+    return;
+
+  }
+
+
+  /*
+    Viewer.
+  */
+
+  EDITABLE_ELEMENT_SELECTORS.forEach(
+    selector => {
+
+      document
+        .querySelectorAll(
+          selector
+        )
+        .forEach(
+          element => {
+
+            element.classList.add(
+              'viewer-disabled'
+            );
+
+            element.setAttribute(
+              'aria-disabled',
+              'true'
+            );
+
+
+            /*
+              Кнопки и другие
+              disabled-совместимые элементы.
+            */
+
+            if (
+              'disabled' in element
+            ) {
+
+              element.disabled =
+                true;
+
+            }
+
+
+            /*
+              Поля ввода.
+            */
+
+            if (
+              element.matches(
+                'input, textarea, select'
+              )
+            ) {
+
+              element.readOnly =
+                true;
+
+            }
+
+
+            /*
+              File input.
+            */
+
+            if (
+              element.matches(
+                'input[type="file"]'
+              )
+            ) {
+
+              element.disabled =
+                true;
+
+            }
+
+          }
+        );
+
+    }
+  );
+
+}
+
+
+/* =========================================================
+   BLOCK VIEWER CLICKS
+   ========================================================= */
+
+document.addEventListener(
+  'click',
+  function(event) {
+
+    if (
+      !isViewer()
+    ) {
+
+      return;
+
+    }
+
+
+    const element =
+      event.target.closest(
+        EDITABLE_ELEMENT_SELECTORS.join(',')
+      );
+
+
+    if (
+      !element
+    ) {
+
+      return;
+
+    }
+
+
+    event.preventDefault();
+
+    event.stopPropagation();
+
+    event.stopImmediatePropagation();
+
+
+    toast(
+      'У вас права только на просмотр',
+      'error'
+    );
+
+  },
+  true
+);
+
+
+/* =========================================================
+   BLOCK VIEWER CHANGE
+   ========================================================= */
+
+document.addEventListener(
+  'change',
+  function(event) {
+
+    if (
+      !isViewer()
+    ) {
+
+      return;
+
+    }
+
+
+    const element =
+      event.target.closest(
+        EDITABLE_ELEMENT_SELECTORS.join(',')
+      );
+
+
+    if (
+      !element
+    ) {
+
+      return;
+
+    }
+
+
+    event.preventDefault();
+
+    event.stopPropagation();
+
+    event.stopImmediatePropagation();
+
+  },
+  true
+);
+
+
+/* =========================================================
+   OBSERVER
+   ========================================================= */
+
+let permissionsObserver =
+  null;
+
+
+function initPermissionsObserver() {
+
+  if (
+    permissionsObserver
+  ) {
+
+    return;
+
+  }
+
+
+  if (
+    !document.body
+  ) {
+
+    return;
+
+  }
+
+
+  permissionsObserver =
+    new MutationObserver(
+      function() {
+
+        applyViewerPermissions();
+
+      }
+    );
+
+
+  permissionsObserver.observe(
+    document.body,
+    {
+      childList: true,
+      subtree: true
+    }
+  );
+
+
+  applyViewerPermissions();
+
+}
+
+
+initPermissionsObserver();
 
 /*
   =========================================================
