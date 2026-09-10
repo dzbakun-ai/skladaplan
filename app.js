@@ -198,6 +198,32 @@ const state = {
 
 };
 
+  /* =======================================================
+     INVENTORY
+     ======================================================= */
+
+  activeTool: '',
+
+  inventory: {
+    mode: 'setup',
+
+    warehouse: '',
+    zone: '',
+    pallet: '',
+
+    expectedIds: new Set(),
+    scannedIds: new Set(),
+
+    lastScan: null,
+    recentScans: [],
+
+    startedAt: null,
+    finishedAt: null,
+
+    message: '',
+    messageType: 'success'
+  },
+
 
 /* =========================================================
    HELPERS
@@ -13887,8 +13913,2143 @@ function setupComparison() {
 
 }
 
+/* =========================================================
+   INVENTORY
+   ИНВЕНТАРИЗАЦИЯ
+   ========================================================= */
+
+function getInventoryWarehouses() {
+
+  return [
+    ...new Set(
+      state.boxes
+        .map(row => normalizeText(row.warehouse))
+        .filter(Boolean)
+    )
+  ].sort();
+
+}
+
+
+function getInventoryZones() {
+
+  const warehouse =
+    state.inventory.warehouse;
+
+  return [
+    ...new Set(
+      state.boxes
+        .filter(row => {
+
+          if (
+            warehouse &&
+            normalizeText(row.warehouse) !==
+              warehouse
+          ) {
+            return false;
+          }
+
+          return true;
+
+        })
+        .map(row =>
+          normalizeText(row.zone_row)
+        )
+        .filter(Boolean)
+    )
+  ].sort();
+
+}
+
+
+function getInventoryPallets() {
+
+  const warehouse =
+    state.inventory.warehouse;
+
+  const zone =
+    state.inventory.zone;
+
+  return [
+    ...new Set(
+      state.boxes
+        .filter(row => {
+
+          if (
+            warehouse &&
+            normalizeText(row.warehouse) !==
+              warehouse
+          ) {
+            return false;
+          }
+
+          if (
+            zone &&
+            normalizeText(row.zone_row) !==
+              zone
+          ) {
+            return false;
+          }
+
+          return true;
+
+        })
+        .map(row =>
+          normalizeText(row.pallet)
+        )
+        .filter(Boolean)
+    )
+  ].sort();
+
+}
+
+
+/*
+  Какие коробки физически должны
+  находиться на складе.
+
+  Отгруженные и пустые коробки
+  в инвентаризацию не включаем.
+*/
+function getInventoryExpectedBoxes() {
+
+  const warehouse =
+    state.inventory.warehouse;
+
+  const zone =
+    state.inventory.zone;
+
+  const pallet =
+    state.inventory.pallet;
+
+  return state.boxes.filter(row => {
+
+    if (
+      row.status ===
+      STATUSES.SHIPPED
+    ) {
+      return false;
+    }
+
+    if (
+      row.status ===
+      STATUSES.EMPTY
+    ) {
+      return false;
+    }
+
+    if (
+      warehouse &&
+      normalizeText(row.warehouse) !==
+        warehouse
+    ) {
+      return false;
+    }
+
+    if (
+      zone &&
+      normalizeText(row.zone_row) !==
+        zone
+    ) {
+      return false;
+    }
+
+    if (
+      pallet &&
+      normalizeText(row.pallet) !==
+        pallet
+    ) {
+      return false;
+    }
+
+    return true;
+
+  });
+
+}
+
+
+/*
+  Проверяем, есть ли barcode
+  вообще в системе.
+*/
+function getInventoryBoxesByBarcode(
+  barcode
+) {
+
+  return state.boxes.filter(
+    row =>
+      normalizeBarcode(
+        row.barcode
+      ) === barcode &&
+      row.status !==
+        STATUSES.SHIPPED &&
+      row.status !==
+        STATUSES.EMPTY
+  );
+
+}
+
+
+/*
+  Ищем первую ещё не проверенную
+  физическую коробку с этим barcode.
+*/
+function findInventoryExpectedBox(
+  barcode
+) {
+
+  const expected =
+    getInventoryExpectedBoxes();
+
+  return expected.find(
+    row =>
+      normalizeBarcode(
+        row.barcode
+      ) === barcode &&
+      !state.inventory.scannedIds.has(
+        String(row.id)
+      )
+  ) || null;
+
+}
+
+
+/*
+  Начало инвентаризации.
+*/
+function startInventory() {
+
+  const expected =
+    getInventoryExpectedBoxes();
+
+  if (!expected.length) {
+
+    toast(
+      'В выбранной области нет коробок для инвентаризации',
+      'error'
+    );
+
+    return;
+
+  }
+
+  state.inventory.mode =
+    'scanning';
+
+  state.inventory.expectedIds =
+    new Set(
+      expected.map(
+        row => String(row.id)
+      )
+    );
+
+  state.inventory.scannedIds =
+    new Set();
+
+  state.inventory.lastScan =
+    null;
+
+  state.inventory.recentScans =
+    [];
+
+  state.inventory.startedAt =
+    new Date().toISOString();
+
+  state.inventory.finishedAt =
+    null;
+
+  state.inventory.message =
+    '';
+
+  render();
+
+  setTimeout(
+    () => {
+      $('#inventoryScanner')
+        ?.focus();
+    },
+    50
+  );
+
+}
+
+
+/*
+  Полный сброс текущей инвентаризации.
+*/
+function resetInventory() {
+
+  if (
+    state.inventory.mode ===
+    'scanning'
+  ) {
+
+    const confirmed =
+      confirm(
+        'Сбросить текущий пересчёт? Все отсканированные коробки будут забыты.'
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+  }
+
+  state.inventory.mode =
+    'setup';
+
+  state.inventory.expectedIds =
+    new Set();
+
+  state.inventory.scannedIds =
+    new Set();
+
+  state.inventory.lastScan =
+    null;
+
+  state.inventory.recentScans =
+    [];
+
+  state.inventory.startedAt =
+    null;
+
+  state.inventory.finishedAt =
+    null;
+
+  state.inventory.message =
+    '';
+
+  render();
+
+}
+
+
+/*
+  Обработка одного barcode.
+*/
+function inventoryScan(
+  rawBarcode
+) {
+
+  const barcode =
+    normalizeBarcode(
+      rawBarcode
+    );
+
+  if (!barcode) {
+    return;
+  }
+
+  const expected =
+    findInventoryExpectedBox(
+      barcode
+    );
+
+  /*
+    1. Коробка уже была просканирована.
+  */
+
+  if (!expected) {
+
+    const alreadyScanned =
+      getInventoryExpectedBoxes()
+        .some(row =>
+          normalizeBarcode(
+            row.barcode
+          ) === barcode &&
+          state.inventory.scannedIds.has(
+            String(row.id)
+          )
+        );
+
+    if (alreadyScanned) {
+
+      state.inventory.lastScan = {
+        type: 'duplicate',
+        barcode,
+        message:
+          'Эта физическая коробка уже проверена'
+      };
+
+      state.inventory.recentScans.unshift(
+        state.inventory.lastScan
+      );
+
+      state.inventory.recentScans =
+        state.inventory.recentScans.slice(
+          0,
+          20
+        );
+
+      render();
+
+      setTimeout(
+        () =>
+          $('#inventoryScanner')
+            ?.focus(),
+        50
+      );
+
+      return;
+
+    }
+
+    /*
+      2. Barcode есть в базе,
+         но находится вне выбранной области.
+    */
+
+    const anywhere =
+      getInventoryBoxesByBarcode(
+        barcode
+      );
+
+    if (anywhere.length) {
+
+      const location =
+        anywhere[0];
+
+      state.inventory.lastScan = {
+
+        type: 'outside',
+
+        barcode,
+
+        message:
+          'Коробка найдена в другой области',
+
+        location: {
+
+          warehouse:
+            location.warehouse || '',
+
+          zone:
+            location.zone_row || '',
+
+          pallet:
+            location.pallet || ''
+
+        }
+
+      };
+
+      state.inventory.recentScans.unshift(
+        state.inventory.lastScan
+      );
+
+      state.inventory.recentScans =
+        state.inventory.recentScans.slice(
+          0,
+          20
+        );
+
+      render();
+
+      setTimeout(
+        () =>
+          $('#inventoryScanner')
+            ?.focus(),
+        50
+      );
+
+      return;
+
+    }
+
+    /*
+      3. Barcode вообще неизвестен.
+    */
+
+    state.inventory.lastScan = {
+
+      type: 'unknown',
+
+      barcode,
+
+      message:
+        'Штрихкод отсутствует в базе'
+
+    };
+
+    state.inventory.recentScans.unshift(
+      state.inventory.lastScan
+    );
+
+    state.inventory.recentScans =
+      state.inventory.recentScans.slice(
+        0,
+        20
+      );
+
+    render();
+
+    setTimeout(
+      () =>
+        $('#inventoryScanner')
+          ?.focus(),
+      50
+    );
+
+    return;
+
+  }
+
+
+  /*
+    4. Коробка найдена.
+  */
+
+  state.inventory.scannedIds.add(
+    String(expected.id)
+  );
+
+
+  state.inventory.lastScan = {
+
+    type: 'success',
+
+    barcode,
+
+    message:
+      'Коробка найдена',
+
+    box: expected
+
+  };
+
+
+  state.inventory.recentScans.unshift(
+    state.inventory.lastScan
+  );
+
+
+  state.inventory.recentScans =
+    state.inventory.recentScans.slice(
+      0,
+      20
+    );
+
+
+  render();
+
+
+  setTimeout(
+    () =>
+      $('#inventoryScanner')
+        ?.focus(),
+    50
+  );
+
+}
+
+
+/*
+  Завершение пересчёта.
+
+  Пока только фиксируем результат
+  локально.
+
+  Базу НЕ меняем.
+*/
+function finishInventory() {
+
+  const expected =
+    getInventoryExpectedBoxes();
+
+  const scanned =
+    expected.filter(
+      row =>
+        state.inventory.scannedIds.has(
+          String(row.id)
+        )
+    );
+
+  const missing =
+    expected.filter(
+      row =>
+        !state.inventory.scannedIds.has(
+          String(row.id)
+        )
+    );
+
+
+  state.inventory.finishedAt =
+    new Date().toISOString();
+
+  state.inventory.mode =
+    'finished';
+
+
+  state.inventory.result = {
+
+    expected: expected.length,
+
+    scanned: scanned.length,
+
+    missing: missing.length,
+
+    extra: state.inventory.recentScans
+      .filter(
+        scan =>
+          scan.type ===
+            'unknown' ||
+          scan.type ===
+            'outside'
+      )
+      .length
+
+  };
+
+
+  render();
+
+}
+
+
+/*
+  Экран настройки / сканирования /
+  результата.
+*/
+function inventoryView() {
+
+  if (
+    state.inventory.mode ===
+    'scanning'
+  ) {
+
+    return inventoryScanningView();
+
+  }
+
+
+  if (
+    state.inventory.mode ===
+    'finished'
+  ) {
+
+    return inventoryFinishedView();
+
+  }
+
+
+  return inventorySetupView();
+
+}
+
+
+/*
+  Первый экран.
+*/
+function inventorySetupView() {
+
+  const warehouses =
+    getInventoryWarehouses();
+
+  const zones =
+    getInventoryZones();
+
+  const pallets =
+    getInventoryPallets();
+
+  const expected =
+    getInventoryExpectedBoxes();
+
+
+  return `
+
+    <div
+      class="sp-card"
+      style="
+        max-width:900px;
+        margin-bottom:16px;
+      "
+    >
+
+      <div
+        style="
+          margin-bottom:22px;
+        "
+      >
+
+        <div
+          class="sp-card-label"
+        >
+          ИНВЕНТАРИЗАЦИЯ
+        </div>
+
+        <h2
+          style="
+            margin:4px 0 8px;
+          "
+        >
+          Проверка фактического наличия
+        </h2>
+
+        <p
+          class="sp-muted"
+          style="
+            margin:0;
+          "
+        >
+          Отсканируйте физические коробки
+          и сравните их с базой SKLADAPLAN.
+        </p>
+
+      </div>
+
+
+      <div
+        class="sp-form"
+      >
+
+        <label>
+
+          Склад
+
+          <select
+            id="inventoryWarehouse"
+          >
+
+            <option value="">
+              Все склады
+            </option>
+
+            ${warehouses.map(
+              warehouse => `
+
+                <option
+                  value="${escapeHtml(
+                    warehouse
+                  )}"
+                  ${
+                    state.inventory.warehouse ===
+                    warehouse
+                      ? 'selected'
+                      : ''
+                  }
+                >
+                  ${escapeHtml(
+                    warehouse
+                  )}
+                </option>
+
+              `
+            ).join('')}
+
+          </select>
+
+        </label>
+
+
+        <label>
+
+          Зона / ряд
+
+          <select
+            id="inventoryZone"
+          >
+
+            <option value="">
+              Все зоны
+            </option>
+
+            ${zones.map(
+              zone => `
+
+                <option
+                  value="${escapeHtml(
+                    zone
+                  )}"
+                  ${
+                    state.inventory.zone ===
+                    zone
+                      ? 'selected'
+                      : ''
+                  }
+                >
+                  ${escapeHtml(
+                    zone
+                  )}
+                </option>
+
+              `
+            ).join('')}
+
+          </select>
+
+        </label>
+
+
+        <label
+          class="full"
+        >
+
+          Палета
+
+          <select
+            id="inventoryPallet"
+          >
+
+            <option value="">
+              Все паллеты
+            </option>
+
+            ${pallets.map(
+              pallet => `
+
+                <option
+                  value="${escapeHtml(
+                    pallet
+                  )}"
+                  ${
+                    state.inventory.pallet ===
+                    pallet
+                      ? 'selected'
+                      : ''
+                  }
+                >
+                  ${escapeHtml(
+                    pallet
+                  )}
+                </option>
+
+              `
+            ).join('')}
+
+          </select>
+
+        </label>
+
+
+        <div
+          class="sp-card"
+          style="
+            grid-column:1 / -1;
+            background:#f7f7f7;
+            box-shadow:none;
+          "
+        >
+
+          <div
+            class="sp-card-label"
+          >
+            По системе
+          </div>
+
+          <div
+            class="sp-big-number"
+          >
+            ${expected.length}
+          </div>
+
+          <div
+            class="sp-muted"
+          >
+            физических коробок
+          </div>
+
+        </div>
+
+
+        <div
+          class="sp-form-actions"
+        >
+
+          <button
+            class="sp-btn secondary"
+            id="inventoryResetBtn"
+            type="button"
+          >
+            Сбросить
+          </button>
+
+          <button
+            class="sp-btn"
+            id="inventoryStartBtn"
+            type="button"
+            ${
+              expected.length
+                ? ''
+                : 'disabled'
+            }
+          >
+            Начать инвентаризацию
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+
+/*
+  Экран сканирования.
+*/
+function inventoryScanningView() {
+
+  const expected =
+    getInventoryExpectedBoxes();
+
+  const scanned =
+    expected.filter(
+      row =>
+        state.inventory.scannedIds.has(
+          String(row.id)
+        )
+    );
+
+  const missing =
+    expected.length -
+    scanned.length;
+
+  const progress =
+    expected.length
+      ? Math.round(
+          scanned.length /
+          expected.length *
+          100
+        )
+      : 0;
+
+  const last =
+    state.inventory.lastScan;
+
+
+  let resultHtml = '';
+
+
+  if (last) {
+
+    if (
+      last.type ===
+      'success'
+    ) {
+
+      resultHtml = `
+
+        <div
+          style="
+            padding:14px;
+            border-radius:12px;
+            background:#f0faf4;
+            color:#18794e;
+            margin-bottom:16px;
+          "
+        >
+
+          <b>
+            ✓ ${escapeHtml(
+              last.message
+            )}
+          </b>
+
+          <div
+            style="
+              margin-top:5px;
+              color:#555;
+            "
+          >
+
+            ${escapeHtml(
+              last.barcode
+            )}
+
+            ·
+
+            ${escapeHtml(
+              last.box?.zone_row ||
+              'Место не указано'
+            )}
+
+            ·
+
+            ${escapeHtml(
+              last.box?.pallet ||
+              'Паллета не указана'
+            )}
+
+          </div>
+
+        </div>
+
+      `;
+
+    } else if (
+      last.type ===
+      'duplicate'
+    ) {
+
+      resultHtml = `
+
+        <div
+          style="
+            padding:14px;
+            border-radius:12px;
+            background:#fff7e6;
+            color:#9a6700;
+            margin-bottom:16px;
+          "
+        >
+
+          <b>
+            ⚠ ${escapeHtml(
+              last.message
+            )}
+          </b>
+
+          <div
+            style="
+              margin-top:5px;
+            "
+          >
+            ${escapeHtml(
+              last.barcode
+            )}
+          </div>
+
+        </div>
+
+      `;
+
+    } else if (
+      last.type ===
+      'outside'
+    ) {
+
+      resultHtml = `
+
+        <div
+          style="
+            padding:14px;
+            border-radius:12px;
+            background:#fff7e6;
+            color:#9a6700;
+            margin-bottom:16px;
+          "
+        >
+
+          <b>
+            ⚠ Коробка находится
+            вне выбранной области
+          </b>
+
+          <div
+            style="
+              margin-top:5px;
+            "
+          >
+
+            ${escapeHtml(
+              last.barcode
+            )}
+
+            ·
+
+            ${escapeHtml(
+              last.location?.warehouse ||
+              ''
+            )}
+
+            ·
+
+            ${escapeHtml(
+              last.location?.zone ||
+              ''
+            )}
+
+            ·
+
+            ${escapeHtml(
+              last.location?.pallet ||
+              ''
+            )}
+
+          </div>
+
+        </div>
+
+      `;
+
+    } else {
+
+      resultHtml = `
+
+        <div
+          style="
+            padding:14px;
+            border-radius:12px;
+            background:#fff4f2;
+            color:#b42318;
+            margin-bottom:16px;
+          "
+        >
+
+          <b>
+            ✕ Штрихкод отсутствует в базе
+          </b>
+
+          <div
+            style="
+              margin-top:5px;
+            "
+          >
+            ${escapeHtml(
+              last.barcode
+            )}
+          </div>
+
+        </div>
+
+      `;
+
+    }
+
+  }
+
+
+  return `
+
+    <div
+      class="sp-card"
+      style="
+        margin-bottom:16px;
+      "
+    >
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:flex-start;
+          gap:16px;
+          flex-wrap:wrap;
+          margin-bottom:18px;
+        "
+      >
+
+        <div>
+
+          <div
+            class="sp-card-label"
+          >
+            ИНВЕНТАРИЗАЦИЯ
+          </div>
+
+          <h2
+            style="
+              margin:4px 0 4px;
+            "
+          >
+            Сканирование
+          </h2>
+
+          <div
+            class="sp-muted"
+          >
+            ${
+              state.inventory.warehouse ||
+              'Все склады'
+            }
+
+            ·
+
+            ${
+              state.inventory.zone ||
+              'Все зоны'
+            }
+
+            ·
+
+            ${
+              state.inventory.pallet ||
+              'Все паллеты'
+            }
+          </div>
+
+        </div>
+
+
+        <button
+          class="sp-btn secondary"
+          id="inventoryCancelBtn"
+          type="button"
+        >
+          Завершить позже
+        </button>
+
+      </div>
+
+
+      ${resultHtml}
+
+
+      <label
+        style="
+          display:block;
+          margin-bottom:18px;
+        "
+      >
+
+        <span
+          style="
+            display:block;
+            margin-bottom:7px;
+            font-size:13px;
+            font-weight:600;
+          "
+        >
+          Штрихкод
+        </span>
+
+        <input
+          id="inventoryScanner"
+          type="text"
+          autocomplete="off"
+          inputmode="none"
+          placeholder="Сканируйте штрихкод..."
+          style="
+            width:100%;
+            min-height:58px;
+            border:2px solid #111;
+            border-radius:14px;
+            padding:0 16px;
+            font-size:20px;
+            outline:none;
+            box-sizing:border-box;
+          "
+        >
+
+      </label>
+
+
+      <div
+        class="sp-grid"
+        style="
+          margin-bottom:18px;
+        "
+      >
+
+        <div class="sp-card">
+
+          <div
+            class="sp-card-label"
+          >
+            По системе
+          </div>
+
+          <div
+            class="sp-card-value"
+          >
+            ${expected.length}
+          </div>
+
+        </div>
+
+
+        <div class="sp-card">
+
+          <div
+            class="sp-card-label"
+          >
+            Проверено
+          </div>
+
+          <div
+            class="sp-card-value"
+          >
+            ${scanned.length}
+          </div>
+
+        </div>
+
+
+        <div class="sp-card">
+
+          <div
+            class="sp-card-label"
+          >
+            Осталось
+          </div>
+
+          <div
+            class="sp-card-value"
+          >
+            ${missing}
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div
+        style="
+          margin-bottom:20px;
+        "
+      >
+
+        <div
+          style="
+            display:flex;
+            justify-content:space-between;
+            margin-bottom:7px;
+            font-size:12px;
+            color:#777;
+          "
+        >
+
+          <span>
+            Прогресс
+          </span>
+
+          <b>
+            ${progress}%
+          </b>
+
+        </div>
+
+        <div
+          style="
+            height:9px;
+            background:#eee;
+            border-radius:999px;
+            overflow:hidden;
+          "
+        >
+
+          <div
+            style="
+              width:${progress}%;
+              height:100%;
+              background:#111;
+              border-radius:999px;
+              transition:width .2s ease;
+            "
+          ></div>
+
+        </div>
+
+      </div>
+
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          gap:10px;
+          margin-bottom:10px;
+        "
+      >
+
+        <h3
+          style="
+            margin:0;
+            font-size:15px;
+          "
+        >
+          Последние сканы
+        </h3>
+
+        <button
+          class="sp-btn secondary"
+          id="inventoryFinishBtn"
+          type="button"
+        >
+          Завершить пересчёт
+        </button>
+
+      </div>
+
+
+      <div
+        class="sp-table-wrap"
+      >
+
+        <table
+          class="sp-table"
+          style="
+            min-width:700px;
+          "
+        >
+
+          <thead>
+
+            <tr>
+
+              <th>
+                Результат
+              </th>
+
+              <th>
+                Штрихкод
+              </th>
+
+              <th>
+                Место
+              </th>
+
+              <th>
+                Паллета
+              </th>
+
+            </tr>
+
+          </thead>
+
+
+          <tbody>
+
+            ${
+              state.inventory.recentScans
+                .map(
+                  scan => {
+
+                    const color =
+                      scan.type ===
+                      'success'
+                        ? '#18794e'
+                        : scan.type ===
+                          'unknown'
+                          ? '#b42318'
+                          : '#9a6700';
+
+                    const label =
+                      scan.type ===
+                      'success'
+                        ? '✓ Найдено'
+                        : scan.type ===
+                          'duplicate'
+                          ? '⚠ Повтор'
+                          : scan.type ===
+                            'outside'
+                            ? '⚠ Другая область'
+                            : '✕ Неизвестно';
+
+                    return `
+
+                      <tr>
+
+                        <td>
+                          <b
+                            style="
+                              color:${color};
+                            "
+                          >
+                            ${label}
+                          </b>
+                        </td>
+
+                        <td>
+                          ${escapeHtml(
+                            scan.barcode
+                          )}
+                        </td>
+
+                        <td>
+                          ${escapeHtml(
+                            scan.box?.zone_row ||
+                            scan.location?.zone ||
+                            '—'
+                          )}
+                        </td>
+
+                        <td>
+                          ${escapeHtml(
+                            scan.box?.pallet ||
+                            scan.location?.pallet ||
+                            '—'
+                          )}
+                        </td>
+
+                      </tr>
+
+                    `;
+
+                  }
+                )
+                .join('')
+            }
+
+            ${
+              !state.inventory.recentScans.length
+                ? `
+
+                  <tr>
+
+                    <td
+                      colspan="4"
+                      class="empty"
+                    >
+                      Отсканированные коробки
+                      появятся здесь.
+                    </td>
+
+                  </tr>
+
+                `
+                : ''
+            }
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+
+/*
+  Финальный экран.
+*/
+function inventoryFinishedView() {
+
+  const expected =
+    getInventoryExpectedBoxes();
+
+  const scanned =
+    expected.filter(
+      row =>
+        state.inventory.scannedIds.has(
+          String(row.id)
+        )
+    );
+
+  const missing =
+    expected.filter(
+      row =>
+        !state.inventory.scannedIds.has(
+          String(row.id)
+        )
+    );
+
+  const outside =
+    state.inventory.recentScans.filter(
+      scan =>
+        scan.type ===
+        'outside'
+    );
+
+  const unknown =
+    state.inventory.recentScans.filter(
+      scan =>
+        scan.type ===
+        'unknown'
+    );
+
+  const progress =
+    expected.length
+      ? Math.round(
+          scanned.length /
+          expected.length *
+          100
+        )
+      : 0;
+
+
+  return `
+
+    <div
+      class="sp-card"
+      style="
+        margin-bottom:16px;
+      "
+    >
+
+      <div
+        style="
+          margin-bottom:20px;
+        "
+      >
+
+        <div
+          class="sp-card-label"
+        >
+          РЕЗУЛЬТАТ ИНВЕНТАРИЗАЦИИ
+        </div>
+
+        <h2
+          style="
+            margin:4px 0;
+          "
+        >
+          Пересчёт завершён
+        </h2>
+
+        <div
+          class="sp-muted"
+        >
+          ${escapeHtml(
+            state.inventory.warehouse ||
+            'Все склады'
+          )}
+
+          ·
+
+          ${escapeHtml(
+            state.inventory.zone ||
+            'Все зоны'
+          )}
+
+          ·
+
+          ${escapeHtml(
+            state.inventory.pallet ||
+            'Все паллеты'
+          )}
+        </div>
+
+      </div>
+
+
+      <div
+        class="sp-grid"
+      >
+
+        <div class="sp-card">
+
+          <div
+            class="sp-card-label"
+          >
+            По системе
+          </div>
+
+          <div
+            class="sp-card-value"
+          >
+            ${expected.length}
+          </div>
+
+        </div>
+
+
+        <div class="sp-card">
+
+          <div
+            class="sp-card-label"
+          >
+            Фактически
+          </div>
+
+          <div
+            class="sp-card-value"
+          >
+            ${scanned.length}
+          </div>
+
+        </div>
+
+
+        <div class="sp-card">
+
+          <div
+            class="sp-card-label"
+          >
+            Не найдено
+          </div>
+
+          <div
+            class="sp-card-value"
+          >
+            ${missing.length}
+          </div>
+
+        </div>
+
+
+        <div class="sp-card">
+
+          <div
+            class="sp-card-label"
+          >
+            Лишние / неизвестные
+          </div>
+
+          <div
+            class="sp-card-value"
+          >
+            ${outside.length + unknown.length}
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div
+        style="
+          padding:16px;
+          background:#f7f7f7;
+          border-radius:14px;
+          margin-bottom:18px;
+        "
+      >
+
+        <div
+          style="
+            display:flex;
+            justify-content:space-between;
+            margin-bottom:8px;
+          "
+        >
+
+          <b>
+            Совпадение
+          </b>
+
+          <b>
+            ${progress}%
+          </b>
+
+        </div>
+
+        <div
+          style="
+            height:9px;
+            background:#e5e5e5;
+            border-radius:999px;
+            overflow:hidden;
+          "
+        >
+
+          <div
+            style="
+              width:${progress}%;
+              height:100%;
+              background:#111;
+              border-radius:999px;
+            "
+          ></div>
+
+        </div>
+
+      </div>
+
+
+      ${
+        missing.length
+          ? `
+
+            <div
+              style="
+                margin-bottom:20px;
+              "
+            >
+
+              <h3>
+                Не найдено
+              </h3>
+
+              <div
+                class="sp-table-wrap"
+              >
+
+                <table
+                  class="sp-table"
+                >
+
+                  <thead>
+
+                    <tr>
+
+                      <th>
+                        Штрихкод
+                      </th>
+
+                      <th>
+                        Артикул
+                      </th>
+
+                      <th>
+                        Место
+                      </th>
+
+                      <th>
+                        Паллета
+                      </th>
+
+                    </tr>
+
+                  </thead>
+
+                  <tbody>
+
+                    ${missing.map(
+                      row => `
+
+                        <tr>
+
+                          <td>
+                            <b>
+                              ${escapeHtml(
+                                row.barcode
+                              )}
+                            </b>
+                          </td>
+
+                          <td>
+                            ${escapeHtml(
+                              row.article
+                            )}
+                          </td>
+
+                          <td>
+                            ${escapeHtml(
+                              row.zone_row
+                            )}
+                          </td>
+
+                          <td>
+                            ${escapeHtml(
+                              row.pallet
+                            )}
+                          </td>
+
+                        </tr>
+
+                      `
+                    ).join('')}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            </div>
+
+          `
+          : `
+
+            <div
+              class="notice"
+              style="
+                margin-bottom:20px;
+              "
+            >
+              ✓ Все коробки из выбранной
+              области найдены.
+            </div>
+
+          `
+      }
+
+
+      <div
+        style="
+          display:flex;
+          gap:10px;
+          flex-wrap:wrap;
+        "
+      >
+
+        <button
+          class="sp-btn secondary"
+          id="inventoryBackBtn"
+          type="button"
+        >
+          Новый пересчёт
+        </button>
+
+        <button
+          class="sp-btn"
+          id="inventoryExportBtn"
+          type="button"
+        >
+          Экспорт результата
+        </button>
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+
+/*
+  Обработчики экрана инвентаризации.
+*/
+function setupInventory() {
+
+  const warehouse =
+    $('#inventoryWarehouse');
+
+  const zone =
+    $('#inventoryZone');
+
+  const pallet =
+    $('#inventoryPallet');
+
+
+  warehouse?.addEventListener(
+    'change',
+    event => {
+
+      state.inventory.warehouse =
+        event.target.value;
+
+      state.inventory.zone =
+        '';
+
+      state.inventory.pallet =
+        '';
+
+      render();
+
+    }
+  );
+
+
+  zone?.addEventListener(
+    'change',
+    event => {
+
+      state.inventory.zone =
+        event.target.value;
+
+      state.inventory.pallet =
+        '';
+
+      render();
+
+    }
+  );
+
+
+  pallet?.addEventListener(
+    'change',
+    event => {
+
+      state.inventory.pallet =
+        event.target.value;
+
+      render();
+
+    }
+  );
+
+
+  $('#inventoryStartBtn')
+    ?.addEventListener(
+      'click',
+      startInventory
+    );
+
+
+  $('#inventoryResetBtn')
+    ?.addEventListener(
+      'click',
+      resetInventory
+    );
+
+
+  $('#inventoryCancelBtn')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        state.inventory.mode =
+          'setup';
+
+        render();
+
+      }
+    );
+
+
+  $('#inventoryFinishBtn')
+    ?.addEventListener(
+      'click',
+      finishInventory
+    );
+
+
+  $('#inventoryBackBtn')
+    ?.addEventListener(
+      'click',
+      resetInventory
+    );
+
+
+  $('#inventoryExportBtn')
+    ?.addEventListener(
+      'click',
+      exportInventoryResult
+    );
+
+
+  const scanner =
+    $('#inventoryScanner');
+
+
+  scanner?.addEventListener(
+    'keydown',
+    event => {
+
+      if (
+        event.key !==
+        'Enter'
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const value =
+        scanner.value;
+
+      scanner.value =
+        '';
+
+      inventoryScan(
+        value
+      );
+
+    }
+  );
+
+
+  setTimeout(
+    () => {
+
+      scanner?.focus();
+
+    },
+    50
+  );
+
+}
+
+
+/*
+  Экспорт результата без изменения базы.
+*/
+function exportInventoryResult() {
+
+  const expected =
+    getInventoryExpectedBoxes();
+
+  const scanned =
+    expected.filter(
+      row =>
+        state.inventory.scannedIds.has(
+          String(row.id)
+        )
+    );
+
+  const missing =
+    expected.filter(
+      row =>
+        !state.inventory.scannedIds.has(
+          String(row.id)
+        )
+    );
+
+
+  const result = {
+
+    app:
+      'SKLADAPLAN',
+
+    type:
+      'inventory',
+
+    created_at:
+      new Date().toISOString(),
+
+    started_at:
+      state.inventory.startedAt,
+
+    finished_at:
+      state.inventory.finishedAt,
+
+    warehouse:
+      state.inventory.warehouse ||
+      null,
+
+    zone:
+      state.inventory.zone ||
+      null,
+
+    pallet:
+      state.inventory.pallet ||
+      null,
+
+    expected:
+      expected.length,
+
+    scanned:
+      scanned.length,
+
+    missing:
+      missing.length,
+
+    missing_boxes:
+      missing.map(
+        row => ({
+          id:
+            row.id,
+
+          barcode:
+            normalizeBarcode(
+              row.barcode
+            ),
+
+          article:
+            row.article,
+
+          zone_row:
+            row.zone_row,
+
+          pallet:
+            row.pallet,
+
+          warehouse:
+            row.warehouse
+        })
+      ),
+
+    scans:
+      state.inventory.recentScans
+
+  };
+
+
+  downloadJSON(
+    result,
+    `skladaplan-inventory-${todayFileDate()}.json`
+  );
+
+
+  toast(
+    'Результат инвентаризации экспортирован'
+  );
+
+}
+
 function toolsView() {
 
+  if (
+    state.activeTool ===
+    'inventory'
+  ) {
+
+    return inventoryView();
+
+  }
   return `
 
     <div class="sp-grid">
@@ -13991,6 +16152,17 @@ function toolsView() {
 
 function setupTools() {
 
+  if (
+    state.activeTool ===
+    'inventory'
+  ) {
+
+    setupInventory();
+
+    return;
+
+  }
+   
   $('#openExcelBtn')
     ?.addEventListener(
       'click',
@@ -16117,6 +18289,15 @@ function goToPage(
   state.currentPage =
     page;
 
+   if (
+  page !== 'tools'
+) {
+
+  state.activeTool =
+    '';
+
+}
+
 
   state.basePage =
     page === 'base'
@@ -16152,13 +18333,26 @@ function render() {
     ] ||
     PAGE_META.dashboard;
 
+   const effectiveMeta =
+  state.currentPage === 'tools' &&
+  state.activeTool === 'inventory'
 
-  $('#pageTitle').textContent =
-    meta.title;
+    ? {
+        title:
+          'Инвентаризация',
+
+        heading:
+          'Инвентаризация склада'
+      }
+
+    : meta;
 
 
-  $('#heading').textContent =
-    meta.heading;
+$('#pageTitle').textContent =
+  effectiveMeta.title;
+
+$('#heading').textContent =
+  effectiveMeta.heading;
 
 
   $all('.nav')
@@ -16355,13 +18549,36 @@ function setupNavigation() {
     .forEach(
       button => {
 
-        button.addEventListener(
-          'click',
-          () => {
+button.addEventListener(
+  'click',
+  () => {
 
-            goToPage(
-              button.dataset.page
-            );
+    /*
+      Специальные инструменты.
+    */
+
+    if (
+      button.dataset.tool ===
+      'inventory'
+    ) {
+
+      state.activeTool =
+        'inventory';
+
+      goToPage(
+        'tools'
+      );
+
+    } else {
+
+      state.activeTool =
+        '';
+
+      goToPage(
+        button.dataset.page
+      );
+
+    }
 
 
             /*
