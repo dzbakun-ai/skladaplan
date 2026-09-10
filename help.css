@@ -1,74 +1,82 @@
 /* =========================================================
    SKLADAPLAN — HELP
-   Стили страницы справки
-   Светлая тема в стиле основного интерфейса
+   Минималистичная светлая тема
    ========================================================= */
 
 
-/* ---------------------------------------------------------
-   Основной контейнер
-   --------------------------------------------------------- */
+/* =========================================================
+   1. ОСНОВНОЙ КОНТЕЙНЕР
+   ========================================================= */
 
 .help-page {
   width: 100%;
-  max-width: 1180px;
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 0 0 48px;
+
+  padding: 8px 0 64px;
+
+  color: #171717;
 }
 
 
-/* ---------------------------------------------------------
-   Hero / заголовок
-   --------------------------------------------------------- */
+/* =========================================================
+   2. HERO
+   ========================================================= */
 
 .help-hero {
-  margin-bottom: 24px;
+  margin-bottom: 30px;
+  padding: 4px 2px 0;
 }
 
 .help-hero h1 {
-  margin: 0 0 8px;
+  margin: 0;
 
   color: #111;
 
-  font-size: 28px;
+  font-size: 30px;
   line-height: 1.15;
   font-weight: 700;
-  letter-spacing: -0.03em;
+
+  letter-spacing: -0.035em;
 }
 
 .help-hero p {
-  margin: 0;
+  max-width: 700px;
 
-  max-width: 760px;
+  margin: 11px 0 0;
 
   color: #737373;
 
   font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.65;
+
+  letter-spacing: -0.005em;
 }
 
 
-/* ---------------------------------------------------------
-   Быстрая навигация
-   --------------------------------------------------------- */
+/* =========================================================
+   3. БЫСТРАЯ НАВИГАЦИЯ
+   ========================================================= */
 
 .help-quick-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
 
-  margin: 0 0 28px;
-  padding: 14px;
+  gap: 7px;
 
-  border: 1px solid #e6e6e6;
-  border-radius: 16px;
+  margin: 0 0 34px;
+  padding: 6px;
 
-  background: #fafafa;
+  border: 1px solid #e7e7e7;
+  border-radius: 13px;
+
+  background: #f8f8f8;
 }
 
 
 /* ---------------------------------------------------------
-   Кнопки быстрой навигации
+   Навигационные кнопки
    --------------------------------------------------------- */
 
 .help-quick-nav a,
@@ -76,62 +84,80 @@
 .help-quick-nav a:active {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
 
   min-height: 34px;
-  padding: 0 12px;
 
-  border: 1px solid #e1e1e1;
-  border-radius: 10px;
+  padding: 0 13px;
 
-  color: #111 !important;
+  border: 1px solid transparent;
+  border-radius: 9px;
 
-  background: #fff !important;
+  color: #555 !important;
+
+  background: transparent !important;
 
   text-decoration: none !important;
 
   font-size: 12px;
+  line-height: 1;
   font-weight: 600;
+
+  white-space: nowrap;
 
   box-shadow: none !important;
 
   transition:
-    background .18s ease,
-    border-color .18s ease,
-    color .18s ease,
-    transform .18s ease;
+    color .16s ease,
+    background .16s ease,
+    border-color .16s ease,
+    transform .16s ease;
 }
 
 .help-quick-nav a:hover {
   color: #111 !important;
 
-  background: #f5f5f7 !important;
+  background: #fff !important;
 
-  border-color: #d4d4d4;
+  border-color: #e2e2e2;
 
-  transform: translateY(-1px);
+  transform: none;
+}
+
+.help-quick-nav a:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 2px;
 }
 
 
-/* ---------------------------------------------------------
-   Секции
-   --------------------------------------------------------- */
+/* =========================================================
+   4. СЕКЦИИ
+   ========================================================= */
 
 .help-section {
-  margin-bottom: 22px;
-  padding: 22px;
+  margin: 0 0 18px;
+  padding: 25px 26px;
 
-  border: 1px solid #e6e6e6;
-  border-radius: 18px;
+  border: 1px solid #e8e8e8;
+  border-radius: 16px;
 
   background: #fff;
+
+  box-shadow:
+    0 1px 2px rgba(0,0,0,.025);
 }
 
 .help-section:last-child {
   margin-bottom: 0;
 }
 
+
+/* ---------------------------------------------------------
+   Заголовок секции
+   --------------------------------------------------------- */
+
 .help-section h2 {
-  margin: 0 0 12px;
+  margin: 0 0 14px;
 
   color: #111;
 
@@ -139,26 +165,42 @@
   line-height: 1.3;
   font-weight: 700;
 
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
 }
 
-.help-section h3 {
-  margin: 20px 0 8px;
 
-  color: #111;
+/* ---------------------------------------------------------
+   Подзаголовки
+   --------------------------------------------------------- */
+
+.help-section h3 {
+  margin: 24px 0 9px;
+
+  color: #222;
 
   font-size: 14px;
   line-height: 1.4;
-  font-weight: 700;
+  font-weight: 650;
+
+  letter-spacing: -0.01em;
 }
 
+
+/* ---------------------------------------------------------
+   Основной текст
+   --------------------------------------------------------- */
+
 .help-section p {
-  margin: 0 0 10px;
+  max-width: 850px;
 
-  color: #737373;
+  margin: 0 0 11px;
 
-  font-size: 13px;
-  line-height: 1.65;
+  color: #626262;
+
+  font-size: 14px;
+  line-height: 1.7;
+
+  letter-spacing: -0.003em;
 }
 
 .help-section p:last-child {
@@ -166,23 +208,27 @@
 }
 
 
-/* ---------------------------------------------------------
-   Списки
-   --------------------------------------------------------- */
+/* =========================================================
+   5. СПИСКИ
+   ========================================================= */
 
 .help-section ul,
 .help-section ol {
-  margin: 10px 0 0;
-  padding-left: 20px;
+  max-width: 850px;
 
-  color: #737373;
+  margin: 12px 0 0;
+  padding-left: 22px;
 
-  font-size: 13px;
-  line-height: 1.65;
+  color: #626262;
+
+  font-size: 14px;
+  line-height: 1.7;
 }
 
 .help-section li {
-  margin-bottom: 6px;
+  margin-bottom: 7px;
+
+  padding-left: 2px;
 }
 
 .help-section li:last-child {
@@ -190,12 +236,12 @@
 }
 
 
-/* ---------------------------------------------------------
-   Выделение
-   --------------------------------------------------------- */
+/* =========================================================
+   6. ТЕКСТОВЫЕ АКЦЕНТЫ
+   ========================================================= */
 
 .help-section strong {
-  color: #111;
+  color: #171717;
 
   font-weight: 650;
 }
@@ -205,21 +251,22 @@
 }
 
 
-/* ---------------------------------------------------------
-   Код / названия полей
-   --------------------------------------------------------- */
+/* =========================================================
+   7. INLINE CODE
+   ========================================================= */
 
 .help-section code {
   display: inline-block;
 
+  margin: 0 2px;
   padding: 2px 6px;
 
-  border: 1px solid #e2e2e2;
+  border: 1px solid #e4e4e4;
   border-radius: 6px;
 
   color: #333;
 
-  background: #f5f5f7;
+  background: #f6f6f6;
 
   font-family:
     ui-monospace,
@@ -230,77 +277,93 @@
     monospace;
 
   font-size: 11px;
+  line-height: 1.45;
 }
 
 
-/* ---------------------------------------------------------
-   Информационные блоки
-   --------------------------------------------------------- */
+/* =========================================================
+   8. ИНФОРМАЦИОННЫЙ БЛОК
+   ========================================================= */
 
 .help-note {
-  margin: 16px 0;
-  padding: 14px 16px;
+  margin: 19px 0;
+  padding: 15px 17px;
 
-  border: 1px solid #e3e3e3;
-  border-radius: 12px;
+  border: 1px solid #e5e5e5;
+  border-radius: 11px;
 
-  background: #fafafa;
+  background: #f8f8f8;
 }
 
 .help-note p {
+  max-width: none;
+
   margin: 0;
 
-  color: #666;
+  color: #5f5f5f;
+
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .help-note strong {
-  color: #111;
+  color: #171717;
 }
 
 
-/* ---------------------------------------------------------
-   Важное предупреждение
-   --------------------------------------------------------- */
+/* =========================================================
+   9. ПРЕДУПРЕЖДЕНИЕ
+   ========================================================= */
 
 .help-warning {
-  margin: 16px 0;
-  padding: 15px 16px;
+  margin: 19px 0;
+  padding: 16px 17px;
 
-  border: 1px solid #ead8b8;
-  border-radius: 12px;
+  border: 1px solid #eadfc9;
+  border-radius: 11px;
 
-  background: #fffaf0;
+  background: #fcf9f2;
 }
 
 .help-warning p {
+  max-width: none;
+
   margin: 0;
 
-  color: #6f5b38;
+  color: #705f40;
+
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .help-warning strong {
-  color: #8a5a00;
+  color: #7b560d;
 }
 
 
-/* ---------------------------------------------------------
-   Успешный / рабочий статус
-   --------------------------------------------------------- */
+/* =========================================================
+   10. УСПЕШНЫЙ / РАБОЧИЙ БЛОК
+   ========================================================= */
 
 .help-success {
-  margin: 16px 0;
-  padding: 15px 16px;
+  margin: 19px 0;
+  padding: 16px 17px;
 
-  border: 1px solid #cfe5d9;
-  border-radius: 12px;
+  border: 1px solid #d9e9df;
+  border-radius: 11px;
 
-  background: #f3faf6;
+  background: #f5faf7;
 }
 
 .help-success p {
+  max-width: none;
+
   margin: 0;
 
-  color: #557064;
+  color: #557062;
+
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .help-success strong {
@@ -308,9 +371,9 @@
 }
 
 
-/* ---------------------------------------------------------
-   Карточки функций
-   --------------------------------------------------------- */
+/* =========================================================
+   11. КАРТОЧКИ
+   ========================================================= */
 
 .help-grid {
   display: grid;
@@ -318,98 +381,110 @@
   grid-template-columns:
     repeat(
       auto-fit,
-      minmax(220px, 1fr)
+      minmax(230px, 1fr)
     );
 
-  gap: 12px;
+  gap: 10px;
 
-  margin-top: 16px;
+  margin-top: 18px;
 }
 
 .help-card {
-  padding: 16px;
+  min-width: 0;
 
-  border: 1px solid #e6e6e6;
-  border-radius: 14px;
+  padding: 17px 18px;
+
+  border: 1px solid #e9e9e9;
+  border-radius: 13px;
 
   background: #fafafa;
 
   transition:
-    background .18s ease,
-    border-color .18s ease,
-    transform .18s ease;
+    border-color .16s ease,
+    background .16s ease;
 }
 
 .help-card:hover {
-  background: #f5f5f7;
+  border-color: #dedede;
 
-  border-color: #dcdcdc;
+  background: #f7f7f7;
 
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .help-card h3 {
   margin: 0 0 7px;
 
-  color: #111;
+  color: #181818;
 
   font-size: 13px;
+  line-height: 1.4;
+  font-weight: 650;
 }
 
 .help-card p {
+  max-width: none;
+
   margin: 0;
 
   color: #737373;
 
   font-size: 12px;
-  line-height: 1.55;
+  line-height: 1.6;
 }
 
 
-/* ---------------------------------------------------------
-   Статусы
-   --------------------------------------------------------- */
+/* =========================================================
+   12. СТАТУСЫ
+   ========================================================= */
 
 .help-status-list {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
 
-  margin-top: 12px;
+  margin-top: 14px;
 }
 
 .help-status {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
 
   min-height: 28px;
-  padding: 0 9px;
+
+  padding: 0 10px;
 
   border: 1px solid #e3e3e3;
   border-radius: 8px;
 
   color: #555;
 
-  background: #fafafa;
+  background: #f8f8f8;
 
   font-size: 11px;
+  line-height: 1;
   font-weight: 600;
+
+  white-space: nowrap;
 }
 
 
-/* ---------------------------------------------------------
-   Таблицы
-   --------------------------------------------------------- */
+/* =========================================================
+   13. ТАБЛИЦЫ
+   ========================================================= */
 
 .help-table-wrap {
   width: 100%;
 
-  margin-top: 14px;
+  margin-top: 17px;
 
   overflow-x: auto;
 
-  border: 1px solid #e6e6e6;
+  border: 1px solid #e5e5e5;
   border-radius: 12px;
+
+  background: #fff;
 }
 
 .help-table {
@@ -417,29 +492,34 @@
 
   border-collapse: collapse;
 
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .help-table th,
 .help-table td {
-  padding: 10px 12px;
+  padding: 11px 13px;
 
   border-bottom: 1px solid #eeeeee;
 
   text-align: left;
   vertical-align: top;
+
+  line-height: 1.5;
 }
 
 .help-table th {
   color: #333;
 
-  background: #fafafa;
+  background: #f8f8f8;
 
+  font-size: 12px;
   font-weight: 650;
+
+  white-space: nowrap;
 }
 
 .help-table td {
-  color: #737373;
+  color: #666;
 }
 
 .help-table tr:last-child td {
@@ -447,84 +527,97 @@
 }
 
 
-/* ---------------------------------------------------------
-   Шаги процесса
-   --------------------------------------------------------- */
+/* =========================================================
+   14. ШАГИ ПРОЦЕССА
+   ========================================================= */
 
 .help-steps {
   display: flex;
   flex-direction: column;
 
-  gap: 10px;
+  gap: 8px;
 
-  margin-top: 14px;
+  margin-top: 17px;
 }
 
 .help-step {
   display: flex;
   align-items: flex-start;
 
-  gap: 12px;
+  gap: 13px;
 
   padding: 13px 14px;
 
-  border: 1px solid #e6e6e6;
+  border: 1px solid #e9e9e9;
   border-radius: 12px;
 
   background: #fafafa;
 }
 
 .help-step-number {
-  flex: 0 0 28px;
+  flex: 0 0 27px;
 
   display: flex;
   align-items: center;
   justify-content: center;
 
-  width: 28px;
-  height: 28px;
+  width: 27px;
+  height: 27px;
 
-  border-radius: 50%;
+  border-radius: 8px;
 
   color: #fff;
 
   background: #111;
 
   font-size: 11px;
+  line-height: 1;
   font-weight: 700;
 }
 
 .help-step-content {
   flex: 1;
+  min-width: 0;
 }
 
 .help-step-content strong {
   display: block;
 
-  margin-bottom: 3px;
+  margin: 1px 0 4px;
 
-  color: #111;
+  color: #181818;
 
   font-size: 13px;
+  line-height: 1.4;
 }
 
 .help-step-content p {
+  max-width: none;
+
   margin: 0;
 
   color: #737373;
 
   font-size: 12px;
+  line-height: 1.6;
 }
 
 
-/* ---------------------------------------------------------
-   Excel
-   --------------------------------------------------------- */
+/* =========================================================
+   15. EXCEL
+   ========================================================= */
 
 .help-excel {
-  margin-top: 14px;
+  width: 100%;
+
+  margin-top: 17px;
 
   overflow-x: auto;
+
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+
+  background: #fff;
 }
 
 .help-excel table {
@@ -532,65 +625,76 @@
 
   border-collapse: collapse;
 
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .help-excel th,
 .help-excel td {
-  padding: 9px 11px;
+  padding: 10px 12px;
 
-  border: 1px solid #e6e6e6;
+  border-bottom: 1px solid #eeeeee;
 
   text-align: left;
+
+  line-height: 1.5;
+}
+
+.help-excel tr:last-child td {
+  border-bottom: none;
 }
 
 .help-excel th {
   color: #333;
 
-  background: #fafafa;
+  background: #f8f8f8;
+
+  font-size: 12px;
+  font-weight: 650;
+
+  white-space: nowrap;
 }
 
 .help-excel td {
-  color: #737373;
+  color: #666;
 }
 
 
-/* ---------------------------------------------------------
-   Горизонтальная линия
-   --------------------------------------------------------- */
+/* =========================================================
+   16. DIVIDER
+   ========================================================= */
 
 .help-divider {
   height: 1px;
 
-  margin: 24px 0;
+  margin: 28px 0;
 
-  background: #e6e6e6;
+  background: #ededed;
 }
 
 
-/* ---------------------------------------------------------
-   Якорные переходы
-   --------------------------------------------------------- */
+/* =========================================================
+   17. ЯКОРЯ
+   ========================================================= */
 
 .help-section[id] {
-  scroll-margin-top: 24px;
+  scroll-margin-top: 28px;
 }
 
 
-/* ---------------------------------------------------------
-   Ссылки внутри справки
-   --------------------------------------------------------- */
+/* =========================================================
+   18. ССЫЛКИ
+   ========================================================= */
 
 .help-page a:not(.help-quick-nav a) {
   color: #333 !important;
 
   text-decoration: underline;
-  text-decoration-color: #d0d0d0;
+  text-decoration-color: #d1d1d1;
   text-underline-offset: 3px;
 
   transition:
-    color .18s ease,
-    text-decoration-color .18s ease;
+    color .16s ease,
+    text-decoration-color .16s ease;
 }
 
 .help-page a:not(.help-quick-nav a):hover {
@@ -600,30 +704,68 @@
 }
 
 
-/* ---------------------------------------------------------
-   Адаптация под мобильные
-   --------------------------------------------------------- */
+/* =========================================================
+   19. ГЛОБАЛЬНАЯ ЗАЩИТА ТИПОГРАФИКИ
+   ========================================================= */
+
+.help-page,
+.help-page * {
+  box-sizing: border-box;
+}
+
+.help-page h1,
+.help-page h2,
+.help-page h3,
+.help-page p,
+.help-page ul,
+.help-page ol,
+.help-page table {
+  font-family: inherit;
+}
+
+
+/* =========================================================
+   20. MOBILE
+   ========================================================= */
 
 @media (max-width: 700px) {
 
   .help-page {
-    padding-bottom: 32px;
+    max-width: none;
+
+    padding: 2px 0 36px;
+  }
+
+
+  /* Hero */
+
+  .help-hero {
+    margin-bottom: 22px;
+    padding: 0;
   }
 
   .help-hero h1 {
-    font-size: 23px;
+    font-size: 24px;
+    line-height: 1.18;
   }
 
   .help-hero p {
+    margin-top: 9px;
+
     font-size: 13px;
+    line-height: 1.6;
   }
 
+
+  /* Навигация */
+
   .help-quick-nav {
-    padding: 11px;
+    gap: 5px;
 
-    gap: 6px;
+    margin-bottom: 22px;
+    padding: 5px;
 
-    border-radius: 14px;
+    border-radius: 12px;
   }
 
   .help-quick-nav a,
@@ -633,13 +775,125 @@
 
     padding: 0 10px;
 
+    border-radius: 8px;
+
     font-size: 11px;
   }
 
-  .help-section {
-    padding: 17px;
 
-    border-radius: 15px;
+  /* Секции */
+
+  .help-section {
+    margin-bottom: 12px;
+    padding: 19px 17px;
+
+    border-radius: 14px;
+  }
+
+  .help-section h2 {
+    margin-bottom: 11px;
+
+    font-size: 17px;
+  }
+
+  .help-section h3 {
+    margin-top: 20px;
+
+    font-size: 13px;
+  }
+
+  .help-section p,
+  .help-section ul,
+  .help-section ol {
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+
+  /* Карточки */
+
+  .help-grid {
+    grid-template-columns: 1fr;
+
+    gap: 8px;
+  }
+
+  .help-card {
+    padding: 15px 16px;
+
+    border-radius: 12px;
+  }
+
+
+  /* Шаги */
+
+  .help-step {
+    gap: 10px;
+
+    padding: 11px 12px;
+
+    border-radius: 11px;
+  }
+
+  .help-step-number {
+    flex-basis: 26px;
+
+    width: 26px;
+    height: 26px;
+
+    border-radius: 7px;
+  }
+
+
+  /* Таблицы */
+
+  .help-table,
+  .help-excel table {
+    font-size: 12px;
+  }
+
+  .help-table th,
+  .help-table td,
+  .help-excel th,
+  .help-excel td {
+    padding: 9px 10px;
+  }
+
+
+  /* Информационные блоки */
+
+  .help-note,
+  .help-warning,
+  .help-success {
+    padding: 13px 14px;
+
+    border-radius: 10px;
+  }
+}
+
+
+/* =========================================================
+   21. VERY SMALL SCREENS
+   ========================================================= */
+
+@media (max-width: 420px) {
+
+  .help-quick-nav {
+    display: grid;
+
+    grid-template-columns: 1fr 1fr;
+
+    width: 100%;
+  }
+
+  .help-quick-nav a,
+  .help-quick-nav a:visited,
+  .help-quick-nav a:active {
+    width: 100%;
+  }
+
+  .help-section {
+    padding: 17px 15px;
   }
 
   .help-section h2 {
@@ -649,87 +903,19 @@
   .help-section p,
   .help-section ul,
   .help-section ol {
-    font-size: 12px;
+    font-size: 12.5px;
   }
-
-  .help-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .help-step {
-    gap: 9px;
-
-    padding: 11px 12px;
-  }
-
-  .help-step-number {
-    flex-basis: 26px;
-
-    width: 26px;
-    height: 26px;
-  }
-
-}
-
-
-/* ---------------------------------------------------------
-   Очень маленькие экраны
-   --------------------------------------------------------- */
-
-@media (max-width: 420px) {
-
-  .help-quick-nav a,
-  .help-quick-nav a:visited,
-  .help-quick-nav a:active {
-    width: 100%;
-
-    justify-content: center;
-  }
-
 }
 
 
 /* =========================================================
-   SAFETY OVERRIDES
-   Защита элементов справки от глобальных стилей приложения
+   22. REDUCED MOTION
    ========================================================= */
 
-.help-page .help-quick-nav a,
-.help-page .help-quick-nav a:visited,
-.help-page .help-quick-nav a:active {
-  color: #111 !important;
-  background: #fff !important;
-  text-decoration: none !important;
-}
+@media (prefers-reduced-motion: reduce) {
 
-.help-page .help-quick-nav a:hover {
-  color: #111 !important;
-  background: #f5f5f7 !important;
-}
-
-
-/* ---------------------------------------------------------
-   Предотвращаем появление тёмных inherited-стилей
-   --------------------------------------------------------- */
-
-.help-page,
-.help-page * {
-  box-sizing: border-box;
-}
-
-.help-page .help-hero h1,
-.help-page .help-section h2,
-.help-page .help-section h3,
-.help-page .help-card h3,
-.help-page .help-step-content strong {
-  color: #111;
-}
-
-.help-page .help-hero p,
-.help-page .help-section p,
-.help-page .help-section ul,
-.help-page .help-section ol,
-.help-page .help-card p,
-.help-page .help-step-content p {
-  color: #737373;
+  .help-quick-nav a,
+  .help-card {
+    transition: none;
+  }
 }
