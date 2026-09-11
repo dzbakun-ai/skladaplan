@@ -80,316 +80,6 @@ const STATUSES = {
 };
 
 /* =========================================================
-   USER ROLES & PERMISSIONS
-   ========================================================= */
-
-function getCurrentUserRole() {
-
-  const role =
-    String(
-      state.user?.app_metadata?.role ||
-      ''
-    )
-      .trim()
-      .toLowerCase();
-
-
-  /*
-    Только две допустимые роли.
-
-    Если роль не указана —
-    считаем пользователя admin,
-    чтобы не сломать существующую
-    авторизацию.
-  */
-
-  if (
-    role === 'viewer'
-  ) {
-
-    return 'viewer';
-
-  }
-
-
-  return 'admin';
-
-}
-
-
-/* =========================================================
-   ROLE HELPERS
-   ========================================================= */
-
-function isViewer() {
-
-  return (
-    getCurrentUserRole() ===
-    'viewer'
-  );
-
-}
-
-
-function isAdmin() {
-
-  return (
-    getCurrentUserRole() ===
-    'admin'
-  );
-
-}
-
-
-function canEdit() {
-
-  return isAdmin();
-
-}
-
-
-/* =========================================================
-   ROLE LABEL
-   ========================================================= */
-
-function getRoleLabel() {
-
-  return isViewer()
-    ? 'Только просмотр'
-    : 'Администратор';
-
-}
-
-/* =========================================================
-   APPLY VIEWER PERMISSIONS
-   ========================================================= */
-
-function applyViewerPermissions() {
-
-  if (
-    !state.user
-  ) {
-
-    return;
-
-  }
-
-
-  const viewer =
-    isViewer();
-
-
-  document.body.classList.toggle(
-    'viewer-mode',
-    viewer
-  );
-
-
-  /*
-    Администратор:
-    восстанавливаем элементы,
-    которые могли быть заблокированы
-    ранее.
-  */
-
-  if (
-    !viewer
-  ) {
-
-    document
-      .querySelectorAll(
-        '.viewer-disabled'
-      )
-      .forEach(
-        element => {
-
-          element.classList.remove(
-            'viewer-disabled'
-          );
-
-          element.removeAttribute(
-            'aria-disabled'
-          );
-
-        }
-      );
-
-    return;
-
-  }
-
-
-  /*
-    Viewer.
-  */
-
-  EDITABLE_ELEMENT_SELECTORS.forEach(
-    selector => {
-
-      document
-        .querySelectorAll(
-          selector
-        )
-        .forEach(
-          element => {
-
-            element.classList.add(
-              'viewer-disabled'
-            );
-
-            element.setAttribute(
-              'aria-disabled',
-              'true'
-            );
-
-
-            /*
-              Кнопки и другие
-              disabled-совместимые элементы.
-            */
-
-            if (
-              'disabled' in element
-            ) {
-
-              element.disabled =
-                true;
-
-            }
-
-
-            /*
-              Поля ввода.
-            */
-
-            if (
-              element.matches(
-                'input, textarea, select'
-              )
-            ) {
-
-              element.readOnly =
-                true;
-
-            }
-
-
-            /*
-              File input.
-            */
-
-            if (
-              element.matches(
-                'input[type="file"]'
-              )
-            ) {
-
-              element.disabled =
-                true;
-
-            }
-
-          }
-        );
-
-    }
-  );
-
-}
-
-
-/* =========================================================
-   BLOCK VIEWER CLICKS
-   ========================================================= */
-
-document.addEventListener(
-  'click',
-  function(event) {
-
-    if (
-      !isViewer()
-    ) {
-
-      return;
-
-    }
-
-
-    const element =
-      event.target.closest(
-        EDITABLE_ELEMENT_SELECTORS.join(',')
-      );
-
-
-    if (
-      !element
-    ) {
-
-      return;
-
-    }
-
-
-    event.preventDefault();
-
-    event.stopPropagation();
-
-    event.stopImmediatePropagation();
-
-
-    toast(
-      'У вас права только на просмотр',
-      'error'
-    );
-
-  },
-  true
-);
-
-
-/* =========================================================
-   BLOCK VIEWER CHANGE
-   ========================================================= */
-
-document.addEventListener(
-  'change',
-  function(event) {
-
-    if (
-      !isViewer()
-    ) {
-
-      return;
-
-    }
-
-
-    const element =
-      event.target.closest(
-        EDITABLE_ELEMENT_SELECTORS.join(',')
-      );
-
-
-    if (
-      !element
-    ) {
-
-      return;
-
-    }
-
-
-    event.preventDefault();
-
-    event.stopPropagation();
-
-    event.stopImmediatePropagation();
-
-  },
-  true
-);
-
-/* =========================================================
    ROLE
    ========================================================= */
 
@@ -566,8 +256,12 @@ function applyViewerPermissions() {
   }
 
 
-  /*
+    /*
     Для ADMIN ничего не блокируем.
+
+    Если ранее элементы были
+    заблокированы в режиме viewer —
+    возвращаем их в исходное состояние.
   */
 
   if (
@@ -577,6 +271,44 @@ function applyViewerPermissions() {
     document.body.classList.remove(
       'viewer-mode'
     );
+
+    document
+      .querySelectorAll(
+        '.viewer-disabled'
+      )
+      .forEach(
+        element => {
+
+          element.classList.remove(
+            'viewer-disabled'
+          );
+
+          element.removeAttribute(
+            'aria-disabled'
+          );
+
+          if (
+            'disabled' in element
+          ) {
+
+            element.disabled =
+              false;
+
+          }
+
+          if (
+            element.matches(
+              'input, textarea, select'
+            )
+          ) {
+
+            element.readOnly =
+              false;
+
+          }
+
+        }
+      );
 
     return;
 
@@ -10872,121 +10604,6 @@ function updateAssemblySelectedCount() {
   const element =
     $('#assemblySelectedCount');
 
-
-  if (!element) {
-    return;
-  }
-
-
-  const selectedGroups =
-    state.assemblySelectedGroups
-      ? state.assemblySelectedGroups
-      : new Set();
-
-
-  const groups =
-    getGroupedPickingBoxes();
-
-
-  const selected =
-    groups.filter(
-      group =>
-        selectedGroups.has(
-          group.key
-        )
-    );
-
-
-  const groupCount =
-    selected.length;
-
-
-  const boxCount =
-    selected.reduce(
-      (
-        total,
-        group
-      ) =>
-        total +
-        (
-          Number(group.count) || 0
-        ),
-      0
-    );
-
-
-  element.textContent =
-    `Выбрано: ${groupCount} групп · ${boxCount} коробок`;
-
-}
-
-
-/*
-  Счётчик ручного выбора.
-
-  Показываем одновременно:
-  - количество выбранных групп;
-  - количество физических коробок.
-*/
-
-function updateAssemblySelectedCount() {
-
-  const element =
-    $('#assemblySelectedCount');
-
-
-  if (!element) {
-    return;
-  }
-
-
-  const selectedGroups =
-    state.assemblySelectedGroups
-      ? state.assemblySelectedGroups
-      : new Set();
-
-
-  const groups =
-    getGroupedPickingBoxes();
-
-
-  const selected =
-    groups.filter(
-      group =>
-        selectedGroups.has(
-          group.key
-        )
-    );
-
-
-  const groupCount =
-    selected.length;
-
-
-  const boxCount =
-    selected.reduce(
-      (
-        total,
-        group
-      ) =>
-        total +
-        (
-          Number(group.count) || 0
-        ),
-      0
-    );
-
-
-  element.textContent =
-    `Выбрано: ${groupCount} групп · ${boxCount} коробок`;
-
-}
-
-function updateAssemblySelectedCount() {
-
-  const element =
-    $('#assemblySelectedCount');
-
   if (!element) {
     return;
   }
@@ -14527,183 +14144,6 @@ Excel:
 
 /* =========================================================
    REQUEST PARSER
-   Одна общая логика разбора заявки
-   ========================================================= */
-
-function parseRequestText(raw) {
-
-  const requested = new Map();
-
-  let invalidLines = 0;
-
-  const lines =
-    String(raw || '')
-      .split(/\r?\n/)
-      .map(
-        line =>
-          line.trim()
-      )
-      .filter(Boolean);
-
-
-  for (const line of lines) {
-
-    /*
-      Ищем 13-значный штрихкод.
-    */
-
-    const barcodeMatch =
-      line.match(
-        /\b\d{13}\b/
-      );
-
-
-    if (!barcodeMatch) {
-
-      invalidLines++;
-
-      continue;
-
-    }
-
-
-    const barcode =
-      normalizeBarcode(
-        barcodeMatch[0]
-      );
-
-
-    if (!barcode) {
-
-      invalidLines++;
-
-      continue;
-
-    }
-
-
-    /*
-      Всё после штрихкода.
-    */
-
-    const rest =
-      line
-        .slice(
-          barcodeMatch.index +
-          barcodeMatch[0].length
-        )
-        .trim();
-
-
-    /*
-      По умолчанию:
-      одна коробка.
-    */
-
-    let quantity = 1;
-
-
-    /*
-      Если после штрихкода есть число —
-      используем именно его.
-
-      Поддерживается:
-
-      4810122638540 12
-      4810122638540    12
-      4810122638540 - 12
-      4810122638540 — 12
-      4810122638540 : 12
-      4810122638540 ; 12
-    */
-
-    const quantityMatch =
-      rest.match(
-        /(?:^|[-—–:;,]|\s+)(\d+(?:[.,]\d+)?)\s*$/
-      );
-
-
-    if (quantityMatch) {
-
-      quantity =
-        Number(
-          String(
-            quantityMatch[1]
-          ).replace(
-            ',',
-            '.'
-          )
-        );
-
-    }
-
-
-    /*
-      Проверяем количество.
-    */
-
-    if (
-      !Number.isFinite(
-        quantity
-      ) ||
-      quantity <= 0
-    ) {
-
-      invalidLines++;
-
-      continue;
-
-    }
-
-
-    quantity =
-      Math.floor(
-        quantity
-      );
-
-
-    if (quantity <= 0) {
-
-      invalidLines++;
-
-      continue;
-
-    }
-
-
-    /*
-      Повторяющиеся штрихкоды
-      складываем.
-
-      Например:
-
-      4810122638540 5
-      4810122638540 7
-
-      = 12
-    */
-
-    requested.set(
-      barcode,
-      (
-        requested.get(
-          barcode
-        ) || 0
-      ) + quantity
-    );
-
-  }
-
-
-  return {
-    requested,
-    invalidLines
-  };
-
-}
-
-/* =========================================================
-   REQUEST PARSER
    ЕДИНАЯ ЛОГИКА РАЗБОРА ЗАЯВКИ
    ========================================================= */
 
@@ -14735,7 +14175,7 @@ function parseRequestText(raw) {
 
     const barcodeMatch =
       line.match(
-        /\d{13}/
+        /\b\d{13}\b/
       );
 
 
@@ -17097,7 +16537,98 @@ function splitView() {
           outline:none;
           background:#fafafa;
         "
-      ></textarea>
+            ></textarea>
+
+      <div
+        id="splitLiveHint"
+        class="sp-muted"
+        style="
+          margin-top:8px;
+          font-size:12px;
+        "
+      ></div>
+
+      <div
+        style="
+          display:flex;
+          gap:10px;
+          flex-wrap:wrap;
+          align-items:center;
+          margin-top:14px;
+        "
+      >
+
+        <label class="sp-muted" style="font-size:13px;">
+          Склад для добавления
+          (необязательно):
+        </label>
+
+        <input
+          id="splitWarehouseInput"
+          type="text"
+          placeholder="Например: Склад 1"
+          style="
+            flex:1;
+            min-width:180px;
+            border:1px solid #ddd;
+            border-radius:10px;
+            padding:8px 12px;
+            font-size:14px;
+            outline:none;
+          "
+        >
+
+      </div>
+
+    </div>
+
+
+    <div class="sp-card">
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          gap:12px;
+          flex-wrap:wrap;
+        "
+      >
+
+        <h3 style="margin:0;">
+          Результат
+        </h3>
+
+        <div
+          style="
+            display:flex;
+            gap:10px;
+            flex-wrap:wrap;
+          "
+        >
+
+          <button
+            class="sp-btn secondary"
+            type="button"
+            id="downloadSplitBtn"
+          >
+            ⬇ Скачать .txt
+          </button>
+
+          <button
+            class="sp-btn success"
+            type="button"
+            id="addSplitToBaseBtn"
+          >
+            ➕ Добавить в Базу
+          </button>
+
+        </div>
+
+      </div>
+
+      <div
+        id="splitSummary"
 
     </div>
 
@@ -17105,6 +16636,63 @@ function splitView() {
 
 }
 
+/**
+ * Быстрая проверка ввода по мере набора,
+ * без полного пересчёта результата.
+ */
+function validateSplitInputLive() {
+
+  const input =
+    $('#splitInput');
+
+  const hintEl =
+    $('#splitLiveHint');
+
+  if (!input || !hintEl) {
+    return;
+  }
+
+  const lines =
+    input.value
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line !== '');
+
+  if (lines.length === 0) {
+    hintEl.textContent = '';
+    return;
+  }
+
+  let invalid = 0;
+
+  lines.forEach(line => {
+
+    const parts =
+      parseToolDataLine(line);
+
+    const barcode =
+      normalizeBarcode(parts[0]);
+
+    const qty =
+      parsePositiveNumber(parts[1]);
+
+    if (!barcode || qty === null) {
+      invalid++;
+    }
+
+  });
+
+  hintEl.textContent =
+    invalid > 0
+      ? `⚠ Некорректных строк: ${invalid} из ${lines.length}`
+      : `✓ Все строки (${lines.length}) выглядят корректно`;
+
+  hintEl.style.color =
+    invalid > 0
+      ? '#b42318'
+      : '#18794e';
+
+}
 
 function runSplitBarcodes() {
 
@@ -17188,6 +16776,131 @@ function runSplitBarcodes() {
 
 }
 
+/**
+ * Скачивает текст как .txt файл.
+ */
+function downloadTextFile(filename, text) {
+
+  const blob =
+    new Blob(
+      [text],
+      { type: 'text/plain;charset=utf-8' }
+    );
+
+  const url =
+    URL.createObjectURL(blob);
+
+  const link =
+    document.createElement('a');
+
+  link.href = url;
+  link.download = filename;
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+
+}
+
+
+/**
+ * Добавляет результат деления
+ * в Базу как новые коробки
+ * (по 1 штуке в каждой).
+ */
+async function addSplitResultToBase() {
+
+  const outputEl =
+    $('#splitOutput');
+
+  const button =
+    $('#addSplitToBaseBtn');
+
+  if (!outputEl || !outputEl.value.trim()) {
+
+    toast(
+      'Сначала выполните деление',
+      'error'
+    );
+
+    return;
+
+  }
+
+  const barcodes =
+    outputEl.value
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line !== '');
+
+  if (!barcodes.length) {
+    return;
+  }
+
+  const warehouse =
+    normalizeText(
+      $('#splitWarehouseInput')?.value
+    );
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Добавление...';
+  }
+
+  try {
+
+    const payloads =
+      barcodes.map(barcode =>
+        boxToPayload({
+          barcode,
+          quantity_in_box: 1,
+          warehouse
+        })
+      );
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from('boxes')
+        .insert(payloads)
+        .select(BOX_SELECT);
+
+    if (error) {
+      throw error;
+    }
+
+    (data || []).forEach(row => {
+      addLocalBox(row);
+    });
+
+    render();
+
+    toast(
+      `Добавлено коробок: ${(data || []).length}`
+    );
+
+  } catch (error) {
+
+    toast(
+      error.message ||
+        'Не удалось добавить в Базу',
+      'error'
+    );
+
+  } finally {
+
+    if (button) {
+      button.disabled = false;
+      button.textContent = '➕ Добавить в Базу';
+    }
+
+  }
+
+}
 
 function setupSplit() {
 
@@ -17195,6 +16908,38 @@ function setupSplit() {
     ?.addEventListener(
       'click',
       runSplitBarcodes
+    );
+
+  $('#splitInput')
+    ?.addEventListener(
+      'input',
+      validateSplitInputLive
+    );
+
+  $('#downloadSplitBtn')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        const outputEl =
+          $('#splitOutput');
+
+        if (!outputEl || !outputEl.value) {
+          return;
+        }
+
+        downloadTextFile(
+          'split-result.txt',
+          outputEl.value
+        );
+
+      }
+    );
+
+  $('#addSplitToBaseBtn')
+    ?.addEventListener(
+      'click',
+      addSplitResultToBase
     );
 
   $('#clearSplitBtn')
@@ -17211,12 +16956,19 @@ function setupSplit() {
         const summaryEl =
           $('#splitSummary');
 
+        const hintEl =
+          $('#splitLiveHint');
+
         if (input) input.value = '';
         if (outputEl) outputEl.value = '';
 
         if (summaryEl) {
           summaryEl.textContent =
             'Пока пусто.';
+        }
+
+        if (hintEl) {
+          hintEl.textContent = '';
         }
 
       }
@@ -17333,16 +17085,45 @@ function sumView() {
           line-height:1.6;
           outline:none;
         "
-      ></textarea>
+            ></textarea>
+
+      <div
+        id="sumLiveHint"
+        class="sp-muted"
+        style="
+          margin-top:8px;
+          font-size:12px;
+        "
+      ></div>
 
     </div>
 
 
     <div class="sp-card">
 
-      <h3>
-        Результат
-      </h3>
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          gap:12px;
+          flex-wrap:wrap;
+        "
+      >
+
+        <h3 style="margin:0;">
+          Результат
+        </h3>
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          id="downloadSumBtn"
+        >
+          ⬇ Скачать .txt
+        </button>
+
+      </div>
 
       <div
         id="sumSummary"
@@ -17380,6 +17161,59 @@ function sumView() {
 
 }
 
+/**
+ * Быстрая проверка ввода по мере набора.
+ */
+function validateSumInputLive() {
+
+  const input =
+    $('#sumInput');
+
+  const hintEl =
+    $('#sumLiveHint');
+
+  if (!input || !hintEl) {
+    return;
+  }
+
+  const lines =
+    input.value
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line !== '');
+
+  if (lines.length === 0) {
+    hintEl.textContent = '';
+    return;
+  }
+
+  let invalid = 0;
+
+  lines.forEach(line => {
+
+    const parts =
+      parseToolDataLine(line);
+
+    const barcode =
+      normalizeBarcode(parts[0]);
+
+    if (!barcode) {
+      invalid++;
+    }
+
+  });
+
+  hintEl.textContent =
+    invalid > 0
+      ? `⚠ Некорректных строк: ${invalid} из ${lines.length}`
+      : `✓ Все строки (${lines.length}) выглядят корректно`;
+
+  hintEl.style.color =
+    invalid > 0
+      ? '#b42318'
+      : '#18794e';
+
+}
 
 function runSumBarcodes() {
 
@@ -17457,6 +17291,32 @@ function setupSum() {
       runSumBarcodes
     );
 
+  $('#sumInput')
+    ?.addEventListener(
+      'input',
+      validateSumInputLive
+    );
+
+  $('#downloadSumBtn')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        const outputEl =
+          $('#sumOutput');
+
+        if (!outputEl || !outputEl.value) {
+          return;
+        }
+
+        downloadTextFile(
+          'sum-result.txt',
+          outputEl.value
+        );
+
+      }
+    );
+
   $('#clearSumBtn')
     ?.addEventListener(
       'click',
@@ -17471,12 +17331,19 @@ function setupSum() {
         const summaryEl =
           $('#sumSummary');
 
+        const hintEl =
+          $('#sumLiveHint');
+
         if (input) input.value = '';
         if (outputEl) outputEl.value = '';
 
         if (summaryEl) {
           summaryEl.textContent =
             'Пока пусто.';
+        }
+
+        if (hintEl) {
+          hintEl.textContent = '';
         }
 
       }
