@@ -79,6 +79,7 @@ const STATUSES = {
 
 };
 
+
 /* =========================================================
    ROLE
    ========================================================= */
@@ -256,7 +257,7 @@ function applyViewerPermissions() {
   }
 
 
-    /*
+  /*
     Для ADMIN ничего не блокируем.
 
     Если ранее элементы были
@@ -627,6 +628,19 @@ assemblyExpandedGroups: new Set(),
 
   currentPallet: '',
 
+  /*
+    Новая навигация по маршруту
+    сборки: Зона/ряд → Поддон → Штрихкод.
+  */
+
+  assemblyCurrentZone: '',
+
+  assemblyExpandedZones: new Set(),
+
+  assemblyExpandedPallets: new Set(),
+
+  assemblyFlashKey: '',
+
   scannerInput: '',
 
   scannerActive: false,
@@ -729,7 +743,28 @@ inventory: {
 
   message: '',
   messageType: 'success'
-}
+},
+
+
+  /* =======================================================
+     TASK MANAGER
+     ======================================================= */
+
+  tasks: [],
+
+  tasksView: 'list',
+
+  tasksCalendarMonth:
+    new Date().getMonth(),
+
+  tasksCalendarYear:
+    new Date().getFullYear(),
+
+  tasksFilter: 'all',
+
+  tasksSelectedDate: null,
+
+  taskEditingId: null
 
 };
 
@@ -1037,6 +1072,1025 @@ function parseToolDataLine(line) {
   return parts
     .map(part => part.trim())
     .filter(part => part !== '');
+
+}
+
+
+/* =========================================================
+   TASK MANAGER
+   ========================================================= */
+
+const TASKS_STORAGE_KEY =
+  'sklad_tasks_v1';
+
+
+function loadTasksFromStorage() {
+
+  try {
+
+    const raw =
+      localStorage.getItem(
+        TASKS_STORAGE_KEY
+      );
+
+    if (!raw) {
+      state.tasks = [];
+      return;
+    }
+
+    const parsed =
+      JSON.parse(raw);
+
+    state.tasks =
+      Array.isArray(parsed)
+        ? parsed
+        : [];
+
+  } catch (error) {
+
+    state.tasks = [];
+
+  }
+
+}
+
+
+function saveTasksToStorage() {
+
+  try {
+
+    localStorage.setItem(
+      TASKS_STORAGE_KEY,
+      JSON.stringify(state.tasks)
+    );
+
+  } catch (error) {
+
+    /*
+      Хранилище недоступно
+      (приватный режим и т.п.) —
+      тихо игнорируем.
+    */
+
+  }
+
+}
+
+
+function generateTaskId() {
+
+  return (
+    'task_' +
+    Date.now().toString(36) +
+    '_' +
+    Math.random()
+      .toString(36)
+      .slice(2, 8)
+  );
+
+}
+
+
+const TASK_PRIORITY_LABELS = {
+  low: 'Низкий',
+  medium: 'Средний',
+  high: 'Высокий'
+};
+
+
+const TASK_PRIORITY_COLORS = {
+  low: '#4a90d9',
+  medium: '#d99a00',
+  high: '#c0392b'
+};
+
+
+function addTask(taskData) {
+
+  const task = {
+
+    id: generateTaskId(),
+
+    title:
+      normalizeText(taskData.title),
+
+    notes:
+      normalizeText(taskData.notes || ''),
+
+    date:
+      taskData.date || '',
+
+    priority:
+      taskData.priority || 'medium',
+
+    done: false,
+
+    createdAt:
+      new Date().toISOString()
+
+  };
+
+  state.tasks.push(task);
+
+  saveTasksToStorage();
+
+  return task;
+
+}
+
+
+function updateTask(id, changes) {
+
+  const task =
+    state.tasks.find(
+      t => t.id === id
+    );
+
+  if (!task) {
+    return;
+  }
+
+  Object.assign(task, changes);
+
+  saveTasksToStorage();
+
+}
+
+
+function deleteTask(id) {
+
+  state.tasks =
+    state.tasks.filter(
+      t => t.id !== id
+    );
+
+  saveTasksToStorage();
+
+}
+
+
+function toggleTaskDone(id) {
+
+  const task =
+    state.tasks.find(
+      t => t.id === id
+    );
+
+  if (!task) {
+    return;
+  }
+
+  task.done = !task.done;
+
+  saveTasksToStorage();
+
+  render();
+
+}
+
+
+/**
+ * Возвращает задачи с учётом
+ * текущего фильтра
+ * (все / активные / выполненные).
+ */
+function getFilteredTasks() {
+
+  return state.tasks
+    .filter(task => {
+
+      if (state.tasksFilter === 'active') {
+        return !task.done;
+      }
+
+      if (state.tasksFilter === 'done') {
+        return task.done;
+      }
+
+      return true;
+
+    })
+    .slice()
+    .sort((a, b) => {
+
+      if (a.date && b.date) {
+        return a.date < b.date ? -1 : 1;
+      }
+
+      if (a.date) return -1;
+      if (b.date) return 1;
+
+      return 0;
+
+    });
+
+}
+
+
+function isTaskOverdue(task) {
+
+  if (!task.date || task.done) {
+    return false;
+  }
+
+  const today =
+    new Date();
+
+  today.setHours(0, 0, 0, 0);
+
+  const taskDate =
+    new Date(task.date + 'T00:00:00');
+
+  return taskDate < today;
+
+}
+
+
+/* =========================================================
+   TASKS VIEW — СПИСОК
+   ========================================================= */
+
+function tasksListHtml() {
+
+  const tasks =
+    getFilteredTasks();
+
+  if (!tasks.length) {
+
+    return `
+      <div class="sp-empty">
+        Задач нет.
+        Добавьте первую задачу выше.
+      </div>
+    `;
+
+  }
+
+  return tasks.map(task => `
+
+    <div
+      class="sp-card"
+      style="
+        margin-bottom:10px;
+        padding:14px 16px;
+        display:flex;
+        align-items:flex-start;
+        gap:12px;
+        ${
+          task.done
+            ? 'opacity:0.55;'
+            : ''
+        }
+      "
+    >
+
+      <input
+        type="checkbox"
+        class="task-toggle"
+        data-id="${escapeHtml(task.id)}"
+        ${task.done ? 'checked' : ''}
+        style="
+          margin-top:3px;
+          width:18px;
+          height:18px;
+          cursor:pointer;
+        "
+      >
+
+      <div style="flex:1;min-width:0;">
+
+        <div
+          style="
+            display:flex;
+            align-items:center;
+            gap:8px;
+            flex-wrap:wrap;
+          "
+        >
+
+          <b
+            style="
+              ${
+                task.done
+                  ? 'text-decoration:line-through;'
+                  : ''
+              }
+            "
+          >
+            ${escapeHtml(task.title)}
+          </b>
+
+          <span
+            style="
+              font-size:11px;
+              font-weight:700;
+              padding:2px 8px;
+              border-radius:999px;
+              color:#fff;
+              background:${
+                TASK_PRIORITY_COLORS[task.priority] ||
+                '#888'
+              };
+            "
+          >
+            ${
+              TASK_PRIORITY_LABELS[task.priority] ||
+              task.priority
+            }
+          </span>
+
+          ${
+            isTaskOverdue(task)
+              ? `
+                <span
+                  style="
+                    font-size:11px;
+                    font-weight:700;
+                    padding:2px 8px;
+                    border-radius:999px;
+                    color:#fff;
+                    background:#b42318;
+                  "
+                >
+                  Просрочено
+                </span>
+              `
+              : ''
+          }
+
+        </div>
+
+        ${
+          task.notes
+            ? `
+              <div
+                class="sp-muted"
+                style="margin-top:4px;font-size:13px;"
+              >
+                ${escapeHtml(task.notes)}
+              </div>
+            `
+            : ''
+        }
+
+        ${
+          task.date
+            ? `
+              <div
+                class="sp-muted"
+                style="margin-top:4px;font-size:12px;"
+              >
+                📅 ${escapeHtml(task.date)}
+              </div>
+            `
+            : ''
+        }
+
+      </div>
+
+      <button
+        class="sp-btn danger"
+        type="button"
+        data-delete-task="${escapeHtml(task.id)}"
+        style="padding:6px 10px;font-size:12px;"
+      >
+        Удалить
+      </button>
+
+    </div>
+
+  `).join('');
+
+}
+
+
+/* =========================================================
+   TASKS VIEW — КАЛЕНДАРЬ
+   ========================================================= */
+
+const CALENDAR_MONTH_NAMES = [
+  'Январь', 'Февраль', 'Март', 'Апрель',
+  'Май', 'Июнь', 'Июль', 'Август',
+  'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+];
+
+const CALENDAR_WEEKDAY_NAMES =
+  ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+
+
+function formatDateISO(date) {
+
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+
+  return `${y}-${m}-${d}`;
+
+}
+
+
+function tasksCalendarHtml() {
+
+  const year =
+    state.tasksCalendarYear;
+
+  const month =
+    state.tasksCalendarMonth;
+
+  const firstOfMonth =
+    new Date(year, month, 1);
+
+  /*
+    Понедельник = 0 ... Воскресенье = 6.
+  */
+  const firstWeekday =
+    (firstOfMonth.getDay() + 6) % 7;
+
+  const daysInMonth =
+    new Date(year, month + 1, 0).getDate();
+
+  const tasksByDate = {};
+
+  state.tasks.forEach(task => {
+
+    if (!task.date) return;
+
+    if (!tasksByDate[task.date]) {
+      tasksByDate[task.date] = [];
+    }
+
+    tasksByDate[task.date].push(task);
+
+  });
+
+  const todayISO =
+    formatDateISO(new Date());
+
+  const cells = [];
+
+  for (let i = 0; i < firstWeekday; i++) {
+    cells.push('<div></div>');
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+
+    const dateISO =
+      formatDateISO(
+        new Date(year, month, day)
+      );
+
+    const dayTasks =
+      tasksByDate[dateISO] || [];
+
+    const isToday =
+      dateISO === todayISO;
+
+    const isSelected =
+      dateISO === state.tasksSelectedDate;
+
+    cells.push(`
+
+      <div
+        class="calendar-day"
+        data-date="${dateISO}"
+        style="
+          min-height:64px;
+          border-radius:10px;
+          padding:6px;
+          cursor:pointer;
+          border:2px solid ${
+            isSelected
+              ? '#111'
+              : isToday
+                ? '#4a90d9'
+                : '#eee'
+          };
+          background:${
+            dayTasks.length
+              ? '#fffaf0'
+              : '#fff'
+          };
+        "
+      >
+
+        <div
+          style="
+            font-size:12px;
+            font-weight:${isToday ? '800' : '500'};
+          "
+        >
+          ${day}
+        </div>
+
+        ${
+          dayTasks.length
+            ? `
+              <div
+                style="
+                  margin-top:4px;
+                  font-size:11px;
+                  font-weight:700;
+                  color:#b8860b;
+                "
+              >
+                ${dayTasks.length} ${
+                  dayTasks.length === 1
+                    ? 'задача'
+                    : 'задач'
+                }
+              </div>
+            `
+            : ''
+        }
+
+      </div>
+
+    `);
+
+  }
+
+  const selectedDayTasks =
+    state.tasksSelectedDate
+      ? (tasksByDate[state.tasksSelectedDate] || [])
+      : [];
+
+  return `
+
+    <div
+      style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        margin-bottom:14px;
+      "
+    >
+
+      <button
+        class="sp-btn secondary"
+        type="button"
+        id="calendarPrevMonth"
+      >
+        ←
+      </button>
+
+      <b>
+        ${CALENDAR_MONTH_NAMES[month]} ${year}
+      </b>
+
+      <button
+        class="sp-btn secondary"
+        type="button"
+        id="calendarNextMonth"
+      >
+        →
+      </button>
+
+    </div>
+
+    <div
+      style="
+        display:grid;
+        grid-template-columns:repeat(7,1fr);
+        gap:4px;
+        margin-bottom:6px;
+      "
+    >
+
+      ${CALENDAR_WEEKDAY_NAMES.map(name => `
+        <div
+          class="sp-muted"
+          style="text-align:center;font-size:11px;font-weight:700;"
+        >
+          ${name}
+        </div>
+      `).join('')}
+
+    </div>
+
+    <div
+      style="
+        display:grid;
+        grid-template-columns:repeat(7,1fr);
+        gap:4px;
+      "
+    >
+      ${cells.join('')}
+    </div>
+
+    ${
+      state.tasksSelectedDate
+        ? `
+          <div style="margin-top:20px;">
+
+            <h3 style="margin:0 0 10px;">
+              Задачи на ${escapeHtml(state.tasksSelectedDate)}
+            </h3>
+
+            ${
+              selectedDayTasks.length
+                ? selectedDayTasks.map(task => `
+                  <div
+                    class="sp-card"
+                    style="
+                      margin-bottom:8px;
+                      padding:10px 14px;
+                      display:flex;
+                      align-items:center;
+                      gap:10px;
+                      ${task.done ? 'opacity:0.55;' : ''}
+                    "
+                  >
+
+                    <input
+                      type="checkbox"
+                      class="task-toggle"
+                      data-id="${escapeHtml(task.id)}"
+                      ${task.done ? 'checked' : ''}
+                    >
+
+                    <span
+                      style="
+                        flex:1;
+                        ${
+                          task.done
+                            ? 'text-decoration:line-through;'
+                            : ''
+                        }
+                      "
+                    >
+                      ${escapeHtml(task.title)}
+                    </span>
+
+                    <button
+                      class="sp-btn danger"
+                      type="button"
+                      data-delete-task="${escapeHtml(task.id)}"
+                      style="padding:4px 8px;font-size:11px;"
+                    >
+                      Удалить
+                    </button>
+
+                  </div>
+                `).join('')
+                : `<div class="sp-muted">Задач нет.</div>`
+            }
+
+          </div>
+        `
+        : ''
+    }
+
+  `;
+
+}
+
+
+/* =========================================================
+   TASKS VIEW — ГЛАВНАЯ ФУНКЦИЯ
+   ========================================================= */
+
+function tasksView() {
+
+  return `
+
+    <div
+      class="sp-card"
+      style="margin-bottom:16px;"
+    >
+
+      <h3>
+        + Новая задача
+      </h3>
+
+      <div
+        style="
+          display:grid;
+          grid-template-columns:2fr 1fr 1fr;
+          gap:10px;
+          margin-top:12px;
+        "
+      >
+
+        <input
+          id="taskTitleInput"
+          type="text"
+          placeholder="Что нужно сделать?"
+          style="
+            border:1px solid #ddd;
+            border-radius:10px;
+            padding:10px 12px;
+            font-size:14px;
+            outline:none;
+          "
+        >
+
+        <input
+          id="taskDateInput"
+          type="date"
+          style="
+            border:1px solid #ddd;
+            border-radius:10px;
+            padding:10px 12px;
+            font-size:14px;
+            outline:none;
+          "
+        >
+
+        <select
+          id="taskPriorityInput"
+          style="
+            border:1px solid #ddd;
+            border-radius:10px;
+            padding:10px 12px;
+            font-size:14px;
+            outline:none;
+          "
+        >
+          <option value="low">Низкий приоритет</option>
+          <option value="medium" selected>Средний приоритет</option>
+          <option value="high">Высокий приоритет</option>
+        </select>
+
+      </div>
+
+      <textarea
+        id="taskNotesInput"
+        placeholder="Заметка (необязательно)"
+        style="
+          width:100%;
+          min-height:60px;
+          box-sizing:border-box;
+          resize:vertical;
+          border:1px solid #ddd;
+          border-radius:10px;
+          padding:10px 12px;
+          font-size:14px;
+          margin-top:10px;
+          outline:none;
+        "
+      ></textarea>
+
+      <button
+        class="sp-btn"
+        type="button"
+        id="addTaskBtn"
+        style="margin-top:12px;"
+      >
+        + Добавить задачу
+      </button>
+
+    </div>
+
+
+    <div
+      class="sp-card"
+      style="margin-bottom:16px;"
+    >
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          flex-wrap:wrap;
+          gap:10px;
+        "
+      >
+
+        <div style="display:flex;gap:8px;">
+
+          <button
+            class="sp-btn ${state.tasksView === 'list' ? '' : 'secondary'}"
+            type="button"
+            data-tasks-view="list"
+          >
+            📋 Список
+          </button>
+
+          <button
+            class="sp-btn ${state.tasksView === 'calendar' ? '' : 'secondary'}"
+            type="button"
+            data-tasks-view="calendar"
+          >
+            📅 Календарь
+          </button>
+
+        </div>
+
+        ${
+          state.tasksView === 'list'
+            ? `
+              <div style="display:flex;gap:8px;">
+
+                <button
+                  class="sp-btn ${state.tasksFilter === 'all' ? '' : 'secondary'}"
+                  type="button"
+                  data-tasks-filter="all"
+                >
+                  Все
+                </button>
+
+                <button
+                  class="sp-btn ${state.tasksFilter === 'active' ? '' : 'secondary'}"
+                  type="button"
+                  data-tasks-filter="active"
+                >
+                  Активные
+                </button>
+
+                <button
+                  class="sp-btn ${state.tasksFilter === 'done' ? '' : 'secondary'}"
+                  type="button"
+                  data-tasks-filter="done"
+                >
+                  Выполненные
+                </button>
+
+              </div>
+            `
+            : ''
+        }
+
+      </div>
+
+    </div>
+
+
+    <div class="sp-card">
+
+      ${
+        state.tasksView === 'calendar'
+          ? tasksCalendarHtml()
+          : tasksListHtml()
+      }
+
+    </div>
+
+  `;
+
+}
+
+
+function setupTasks() {
+
+  $('#addTaskBtn')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        const title =
+          $('#taskTitleInput')?.value;
+
+        if (!normalizeText(title)) {
+
+          toast(
+            'Введите название задачи',
+            'error'
+          );
+
+          return;
+
+        }
+
+        addTask({
+          title,
+          date: $('#taskDateInput')?.value || '',
+          priority: $('#taskPriorityInput')?.value || 'medium',
+          notes: $('#taskNotesInput')?.value || ''
+        });
+
+        render();
+
+        toast('Задача добавлена');
+
+      }
+    );
+
+  $all('[data-tasks-view]')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          state.tasksView =
+            button.dataset.tasksView;
+
+          render();
+
+        }
+      );
+
+    });
+
+  $all('[data-tasks-filter]')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          state.tasksFilter =
+            button.dataset.tasksFilter;
+
+          render();
+
+        }
+      );
+
+    });
+
+  $all('.task-toggle')
+    .forEach(checkbox => {
+
+      checkbox.addEventListener(
+        'change',
+        event => {
+
+          toggleTaskDone(
+            event.target.dataset.id
+          );
+
+        }
+      );
+
+    });
+
+  $all('[data-delete-task]')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          deleteTask(
+            button.dataset.deleteTask
+          );
+
+          render();
+
+          toast('Задача удалена');
+
+        }
+      );
+
+    });
+
+  $('#calendarPrevMonth')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        state.tasksCalendarMonth--;
+
+        if (state.tasksCalendarMonth < 0) {
+          state.tasksCalendarMonth = 11;
+          state.tasksCalendarYear--;
+        }
+
+        render();
+
+      }
+    );
+
+  $('#calendarNextMonth')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        state.tasksCalendarMonth++;
+
+        if (state.tasksCalendarMonth > 11) {
+          state.tasksCalendarMonth = 0;
+          state.tasksCalendarYear++;
+        }
+
+        render();
+
+      }
+    );
+
+  $all('.calendar-day')
+    .forEach(cell => {
+
+      cell.addEventListener(
+        'click',
+        () => {
+
+          const date =
+            cell.dataset.date;
+
+          state.tasksSelectedDate =
+            state.tasksSelectedDate === date
+              ? null
+              : date;
+
+          render();
+
+        }
+      );
+
+    });
 
 }
 
@@ -5994,6 +7048,13 @@ function baseView() {
           Инструменты
         </button>
 
+        <button
+          class="sp-btn secondary"
+          data-page="tasks"
+        >
+          📋 Задачи
+        </button>
+
       </div>
 
     </div>
@@ -9168,51 +10229,143 @@ function getGroupedPickingBoxes() {
 
 }
 
-/* =========================================================
-   ASSEMBLY HEADER CHECKBOX
-   ========================================================= */
 
-document.addEventListener(
-  'change',
-  function(event) {
+/**
+ * Группирует коробки к подбору
+ * по маршруту:
+ * Зона/ряд → Поддон → Штрихкод.
+ *
+ * Зоны сортируются по алфавиту
+ * (А-Я), с учётом чисел внутри
+ * кода (А2 раньше А10).
+ *
+ * Группы без указанной зоны/ряда
+ * уходят в конец списка.
+ */
+function getZonedPickingGroups() {
 
-    if (
-      event.target.id !==
-      'selectAllAssemblyCheckbox'
-    ) {
+  const groups =
+    getGroupedPickingBoxes();
 
-      return;
+  const zonesMap =
+    new Map();
+
+  const NO_ZONE =
+    '(без зоны)';
+
+  const NO_PALLET =
+    '(без поддона)';
+
+  groups.forEach(group => {
+
+    const zoneName =
+      normalizeText(group.zone_row) ||
+      NO_ZONE;
+
+    if (!zonesMap.has(zoneName)) {
+
+      zonesMap.set(
+        zoneName,
+        {
+          zone: zoneName,
+          hasZone: zoneName !== NO_ZONE,
+          palletsMap: new Map(),
+          boxCount: 0,
+          groupCount: 0
+        }
+      );
 
     }
 
+    const zoneEntry =
+      zonesMap.get(zoneName);
 
-    toggleSelectAllAssembly();
+    zoneEntry.boxCount +=
+      group.count;
 
-  }
-);
+    zoneEntry.groupCount++;
 
-/* =========================================================
-   ASSEMBLY HEADER CHECKBOX
-   ========================================================= */
-
-document.addEventListener(
-  'change',
-  function(event) {
+    const palletName =
+      normalizeText(group.pallet) ||
+      NO_PALLET;
 
     if (
-      event.target.id !==
-      'selectAllAssemblyCheckbox'
+      !zoneEntry.palletsMap.has(
+        palletName
+      )
     ) {
 
-      return;
+      zoneEntry.palletsMap.set(
+        palletName,
+        {
+          pallet: palletName,
+          hasPallet: palletName !== NO_PALLET,
+          groups: [],
+          boxCount: 0
+        }
+      );
 
     }
 
+    const palletEntry =
+      zoneEntry.palletsMap.get(
+        palletName
+      );
 
-    toggleSelectAllAssembly();
+    palletEntry.boxCount +=
+      group.count;
 
-  }
-);
+    palletEntry.groups.push(
+      group
+    );
+
+  });
+
+  const zones =
+    [...zonesMap.values()].map(
+      zoneEntry => ({
+
+        zone: zoneEntry.zone,
+        hasZone: zoneEntry.hasZone,
+        boxCount: zoneEntry.boxCount,
+        groupCount: zoneEntry.groupCount,
+
+        pallets:
+          [...zoneEntry.palletsMap.values()]
+            .sort((a, b) =>
+              a.pallet.localeCompare(
+                b.pallet,
+                'ru',
+                {
+                  numeric: true,
+                  sensitivity: 'base'
+                }
+              )
+            )
+
+      })
+    );
+
+  zones.sort((a, b) => {
+
+    if (a.hasZone !== b.hasZone) {
+      return a.hasZone ? -1 : 1;
+    }
+
+    return a.zone.localeCompare(
+      b.zone,
+      'ru',
+      {
+        numeric: true,
+        sensitivity: 'base'
+      }
+    );
+
+  });
+
+  return zones;
+
+}
 
 
 /* =========================================================
@@ -9277,7 +10430,6 @@ function assemblyView() {
 
   /*
     Все физические коробки в подборе.
-    Используем для общей статистики.
   */
 
   const pickingBoxes =
@@ -9285,15 +10437,17 @@ function assemblyView() {
 
 
   /*
-    Сгруппированные коробки.
-
-    Одна строка =
-    штрихкод + артикул + зона/ряд +
-    поддон + склад.
+    Сгруппированные коробки
+    по маршруту:
+    Зона/ряд → Поддон → Штрихкод.
   */
 
-  const pickingGroups =
-    getGroupedPickingBoxes();
+  const zones =
+    getZonedPickingGroups();
+
+
+  const pickingGroupsCount =
+    getGroupedPickingBoxes().length;
 
 
   /*
@@ -9309,42 +10463,10 @@ function assemblyView() {
     ).length;
 
 
-  /*
-    Выбранные группы.
-  */
-
-  const selectedGroupSet =
-    state.assemblySelectedGroups
-      ? state.assemblySelectedGroups
+  const selectedIds =
+    state.assemblySelectedIds
+      ? state.assemblySelectedIds
       : new Set();
-
-
-  const selectedGroups =
-    pickingGroups.filter(
-      group =>
-        selectedGroupSet.has(
-          group.key
-        )
-    );
-
-
-  /*
-    Сколько физических коробок
-    находится внутри выбранных групп.
-  */
-
-  const selectedBoxesCount =
-    selectedGroups.reduce(
-      (
-        total,
-        group
-      ) =>
-        total +
-        (
-          Number(group.count) || 0
-        ),
-      0
-    );
 
 
   return `
@@ -9357,7 +10479,6 @@ function assemblyView() {
       <!-- ========================= -->
 
       <div class="cards">
-
 
         <div class="card">
 
@@ -9379,15 +10500,15 @@ function assemblyView() {
         <div class="card">
 
           <div class="label">
-            Групп
+            Зон/рядов
           </div>
 
           <div class="value">
-            ${pickingGroups.length}
+            ${zones.length}
           </div>
 
           <div class="sub">
-            Штрихкод · зона · поддон
+            В маршруте сборки
           </div>
 
         </div>
@@ -9409,13 +10530,12 @@ function assemblyView() {
 
         </div>
 
-
       </div>
 
 
 
       <!-- ========================= -->
-      <!-- ТЕКУЩИЙ ПОДДОН -->
+      <!-- ТЕКУЩЕЕ МЕСТО -->
       <!-- ========================= -->
 
       <div
@@ -9428,13 +10548,14 @@ function assemblyView() {
           <div>
 
             <h3>
-              Текущий поддон
+              Текущее место
             </h3>
 
             <div class="muted">
-              Если поддон указан,
-              сканирование разрешено
-              только для коробок этого поддона.
+              Заполняется автоматически
+              при сканировании места
+              или коробки. Можно
+              ввести вручную.
             </div>
 
           </div>
@@ -9442,25 +10563,37 @@ function assemblyView() {
         </div>
 
 
-        <div class="toolbar">
+        <div
+          class="toolbar"
+          style="flex-wrap:wrap;gap:8px;"
+        >
+
+          <input
+            id="assemblyZoneInput"
+            class="search"
+            style="max-width:200px"
+            placeholder="Зона/ряд, например А1"
+            value="${escapeHtml(
+              state.assemblyCurrentZone || ''
+            )}"
+          >
 
           <input
             id="currentPallet"
             class="search"
-            style="max-width:300px"
-            placeholder="Например: 1"
+            style="max-width:200px"
+            placeholder="Поддон, например 3"
             value="${escapeHtml(
               state.currentPallet || ''
             )}"
           >
-
 
           <button
             class="ghost"
             id="clearPallet"
             type="button"
           >
-            Сбросить
+            Сбросить место
           </button>
 
         </div>
@@ -9487,7 +10620,11 @@ function assemblyView() {
             </h3>
 
             <div class="muted">
-              Отсканируйте штрихкод коробки
+              Можно сканировать
+              зону/ряд, поддон или
+              штрихкод коробки —
+              по очереди или сразу
+              штрихкод.
             </div>
 
           </div>
@@ -9506,7 +10643,7 @@ function assemblyView() {
           autocomplete="off"
           autocorrect="off"
           spellcheck="false"
-          placeholder="Сканируйте штрихкод..."
+          placeholder="Сканируйте зону, поддон или штрихкод..."
         >
 
 
@@ -9526,7 +10663,7 @@ function assemblyView() {
 
 
       <!-- ========================= -->
-      <!-- РУЧНАЯ КОМПЛЕКТАЦИЯ -->
+      <!-- МАРШРУТ СБОРКИ -->
       <!-- ========================= -->
 
       <div
@@ -9539,94 +10676,24 @@ function assemblyView() {
           <div>
 
             <h3>
-              Ручная комплектация
-            </h3>
-
-           <div class="muted">
-
-             Галочка выбирает всю группу.
-             Кнопками − / + можно выбрать
-             отдельное количество физических коробок.
-             «Детали» показывает каждую коробку отдельно.
-
-           </div>
-
-          <div
-            id="assemblySelectedCount"
-            class="muted"
-          >
-
-            Выбрано:
-            ${selectedGroups.length}
-            групп ·
-            ${selectedBoxesCount}
-            коробок
-
-          </div>
-
-        </div>
-
-
-        <div class="toolbar">
-
-
-<button
-  class="sp-btn secondary"
-  id="removeFromAssemblyBtn"
-  ${
-    (
-      state.assemblySelectedIds &&
-      state.assemblySelectedIds.size
-    ) ||
-    (
-      state.assemblySelectedGroups &&
-      state.assemblySelectedGroups.size
-    )
-      ? ''
-      : 'disabled'
-  }
-  type="button"
->
-  ↩ Убрать из сборки
-</button>
-
-          <button
-            class="primary"
-            id="completeSelectedAssembly"
-            type="button"
-          >
-            ✓ Скомплектовать выбранные
-          </button>
-
-
-        </div>
-
-      </div>
-
-
-
-      <!-- ========================= -->
-      <!-- КОРОБКИ В ПОДБОРЕ -->
-      <!-- ========================= -->
-
-      <div
-        class="panel"
-        style="margin-top:14px"
-      >
-
-        <div class="section-title">
-
-          <div>
-
-            <h3>
-              Коробки в подборе
+              Маршрут сборки
             </h3>
 
             <div class="muted">
+              Зоны идут по порядку А-Я.
+              Откройте зону, затем поддон,
+              чтобы увидеть штрихкоды.
+              Отметьте нужное количество
+              галочкой или кнопками −/+.
+            </div>
 
-              ${pickingGroups.length}
-              групп ·
-              ${pickingBoxes.length}
+            <div
+              id="assemblySelectedCount"
+              class="muted"
+            >
+
+              Выбрано:
+              ${selectedIds.size}
               коробок
 
             </div>
@@ -9636,139 +10703,68 @@ function assemblyView() {
         </div>
 
 
-        <div class="table-wrap">
+        <div
+          class="toolbar"
+          style="flex-wrap:wrap;"
+        >
 
-          <table class="data-table">
+          <button
+            class="sp-btn secondary"
+            id="selectAllAssembly"
+            type="button"
+          >
+            Выбрать все ${pickingGroupsCount ? '(' + pickingBoxes.length + ')' : ''}
+          </button>
 
+          <button
+            class="sp-btn secondary"
+            id="removeFromAssemblyBtn"
+            ${
+              selectedIds.size
+                ? ''
+                : 'disabled'
+            }
+            type="button"
+          >
+            ↩ Убрать из сборки
+          </button>
 
-            <thead>
-
-              <tr>
-
-
-                <th
-                  style="
-                    width:45px;
-                    text-align:center;
-                  "
-                >
-
-                  <input
-                    type="checkbox"
-                    id="selectAllAssemblyCheckbox"
-                    title="Выбрать все группы"
-                  >
-
-                </th>
-
-
-                <th>
-                  Штрихкод
-                </th>
-
-
-                <th>
-                  Артикул
-                </th>
-
-
-                <th>
-                  Зона/ряд
-                </th>
-
-
-                <th>
-                  Поддон
-                </th>
-
-
-                <th>
-                  Склад
-                </th>
-
-
-                <th>
-                  Выбор
-                </th>
-
-
-                <th>
-                  Детализация
-                </th>
-
-
-              </tr>
-
-            </thead>
-
-
-            <tbody>
-
-
-              ${
-                pickingGroups.length
-
-                  ? pickingGroups
-                      .slice(0, 300)
-                      .map(pickingRow)
-                      .join('')
-
-                  : `
-
-                    <tr>
-
-                      <td
-                        colspan="8"
-                      >
-
-                        <div class="empty">
-
-                          В подборе пока
-                          ничего нет
-
-                        </div>
-
-                      </td>
-
-                    </tr>
-
-                  `
-              }
-
-
-            </tbody>
-
-
-          </table>
+          <button
+            class="primary"
+            id="completeSelectedAssembly"
+            ${
+              selectedIds.size
+                ? ''
+                : 'disabled'
+            }
+            type="button"
+          >
+            ✓ Скомплектовать выбранные
+            (${selectedIds.size})
+          </button>
 
         </div>
 
 
-        ${
-          pickingGroups.length > 300
+        <div style="margin-top:10px;">
 
-            ? `
+          ${
+            zones.length
+              ? zones
+                  .map(
+                    assemblyZoneBlock
+                  )
+                  .join('')
 
-              <div
-                class="muted"
-                style="
-                  margin-top:10px;
-                "
-              >
+              : `
+                <div class="empty">
+                  В подборе пока
+                  ничего нет
+                </div>
+              `
+          }
 
-                Показаны первые
-                300 групп.
-
-                Всего групп:
-                ${pickingGroups.length}
-
-              </div>
-
-            `
-
-            : ''
-        }
-
+        </div>
 
       </div>
 
@@ -9779,14 +10775,208 @@ function assemblyView() {
 
 }
 
-function pickingRow(group) {
 
-  const groupChecked =
-    state.assemblySelectedGroups?.has(
-      group.key
-    )
-      ? 'checked'
-      : '';
+/* =========================================================
+   МАРШРУТ СБОРКИ — ЗОНА / ПОДДОН / ШТРИХКОД
+   ========================================================= */
+
+function assemblyZoneBlock(zone) {
+
+  const isActiveZone =
+    normalizeText(
+      state.assemblyCurrentZone
+    ).toLowerCase() ===
+    normalizeText(zone.zone).toLowerCase() &&
+    zone.hasZone;
+
+  const expanded =
+    state.assemblyExpandedZones?.has(
+      zone.zone
+    ) ||
+    isActiveZone;
+
+  return `
+
+    <div
+      style="
+        margin-bottom:10px;
+        border:2px solid ${
+          isActiveZone
+            ? '#18794e'
+            : '#eee'
+        };
+        border-radius:12px;
+        overflow:hidden;
+      "
+    >
+
+      <button
+        type="button"
+        class="assembly-zone-toggle"
+        data-zone="${escapeHtml(zone.zone)}"
+        style="
+          width:100%;
+          text-align:left;
+          padding:12px 14px;
+          background:${
+            isActiveZone
+              ? '#eafbf0'
+              : '#fafafa'
+          };
+          border:none;
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          cursor:pointer;
+          font-size:14px;
+        "
+      >
+
+        <span style="font-weight:800;">
+          ${
+            zone.hasZone
+              ? '📍 ' + escapeHtml(zone.zone)
+              : 'Без указанной зоны'
+          }
+        </span>
+
+        <span
+          class="muted"
+          style="font-size:12px;white-space:nowrap;"
+        >
+          ${zone.groupCount} шк ·
+          ${zone.boxCount} кор
+          ${expanded ? '▲' : '▼'}
+        </span>
+
+      </button>
+
+      ${
+        expanded
+          ? `
+            <div style="padding:8px 10px;background:#fff;">
+              ${zone.pallets
+                .map(pallet =>
+                  assemblyPalletBlock(
+                    zone,
+                    pallet
+                  )
+                )
+                .join('')}
+            </div>
+          `
+          : ''
+      }
+
+    </div>
+
+  `;
+
+}
+
+
+function assemblyPalletBlock(
+  zone,
+  pallet
+) {
+
+  const isActivePallet =
+    normalizeText(
+      state.currentPallet
+    ).toLowerCase() ===
+    normalizeText(pallet.pallet).toLowerCase() &&
+    normalizeText(
+      state.assemblyCurrentZone
+    ).toLowerCase() ===
+    normalizeText(zone.zone).toLowerCase() &&
+    pallet.hasPallet;
+
+  const palletFullKey =
+    zone.zone + '||' + pallet.pallet;
+
+  const expanded =
+    state.assemblyExpandedPallets?.has(
+      palletFullKey
+    ) ||
+    isActivePallet;
+
+  return `
+
+    <div
+      style="
+        margin:6px 0;
+        border-radius:10px;
+        border:1px solid ${
+          isActivePallet
+            ? '#4a90d9'
+            : '#eee'
+        };
+        overflow:hidden;
+      "
+    >
+
+      <button
+        type="button"
+        class="assembly-pallet-toggle"
+        data-zone="${escapeHtml(zone.zone)}"
+        data-pallet="${escapeHtml(pallet.pallet)}"
+        style="
+          width:100%;
+          text-align:left;
+          padding:9px 12px;
+          background:${
+            isActivePallet
+              ? '#eaf3ff'
+              : '#fff'
+          };
+          border:none;
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          cursor:pointer;
+          font-size:13px;
+        "
+      >
+
+        <span style="font-weight:700;">
+          ${
+            pallet.hasPallet
+              ? '📦 Поддон ' + escapeHtml(pallet.pallet)
+              : 'Без указанного поддона'
+          }
+        </span>
+
+        <span
+          class="muted"
+          style="font-size:11px;white-space:nowrap;"
+        >
+          ${pallet.groups.length} шк ·
+          ${pallet.boxCount} кор
+          ${expanded ? '▲' : '▼'}
+        </span>
+
+      </button>
+
+      ${
+        expanded
+          ? `
+            <div style="padding:6px 8px;">
+              ${pallet.groups
+                .map(assemblyGroupRow)
+                .join('')}
+            </div>
+          `
+          : ''
+      }
+
+    </div>
+
+  `;
+
+}
+
+
+function assemblyGroupRow(group) {
 
   const selectedIds =
     state.assemblySelectedIds
@@ -9801,274 +10991,487 @@ function pickingRow(group) {
         )
     ).length;
 
-  const expanded =
-    state.assemblyExpandedGroups?.has(
-      group.key
-    );
+  const allSelected =
+    selectedCount === group.count &&
+    group.count > 0;
+
+  const flashing =
+    state.assemblyFlashKey ===
+    group.key;
 
   const encodedKey =
     encodeURIComponent(
       group.key
     );
 
-  const details =
-    expanded
-      ? `
-
-        <tr>
-
-          <td colspan="8">
-
-            <div
-              style="
-                padding:10px 14px;
-                background:#fafafa;
-                border-top:1px solid #eee;
-              "
-            >
-
-              <div
-                style="
-                  font-weight:700;
-                  margin-bottom:8px;
-                "
-              >
-                Физические коробки:
-                ${group.boxes.length}
-              </div>
-
-
-              <div
-                style="
-                  display:flex;
-                  flex-direction:column;
-                  gap:5px;
-                "
-              >
-
-                ${group.boxes.map(
-                  box => {
-
-                    const id =
-                      String(
-                        box.id
-                      );
-
-                    const checked =
-                      selectedIds.has(
-                        id
-                      )
-                        ? 'checked'
-                        : '';
-
-                    return `
-
-                      <label
-                        style="
-                          display:flex;
-                          align-items:center;
-                          gap:8px;
-                          padding:7px 9px;
-                          background:white;
-                          border:1px solid #eee;
-                          border-radius:8px;
-                          cursor:pointer;
-                        "
-                      >
-
-                        <input
-                          type="checkbox"
-                          class="assembly-box-checkbox"
-                          data-box-id="${escapeHtml(id)}"
-                          ${checked}
-                        >
-
-                        <span>
-                          ${escapeHtml(
-                            box.barcode
-                          )}
-                        </span>
-
-                        <span
-                          class="muted"
-                        >
-                          ${escapeHtml(
-                            box.zone_row
-                          )}
-                        </span>
-
-                        <span
-                          class="muted"
-                        >
-                          ${escapeHtml(
-                            box.pallet
-                          )}
-                        </span>
-
-                      </label>
-
-                    `;
-
-                  }
-                ).join('')}
-
-              </div>
-
-            </div>
-
-          </td>
-
-        </tr>
-
-      `
-      : '';
-
   return `
 
-    <tr>
+    <div
+      class="assembly-group-row"
+      data-group-key="${escapeHtml(encodedKey)}"
+      style="
+        display:flex;
+        align-items:center;
+        gap:10px;
+        padding:9px 10px;
+        margin:5px 0;
+        border-radius:10px;
+        border:1px solid ${
+          allSelected
+            ? '#18794e'
+            : '#eee'
+        };
+        background:${
+          flashing
+            ? '#a9f0bd'
+            : (
+                allSelected
+                  ? '#f0fbf4'
+                  : '#fff'
+              )
+        };
+        transition:background 0.5s ease;
+      "
+    >
 
-      <td
+      <input
+        type="checkbox"
+        class="assembly-group-checkbox"
+        data-group-key="${escapeHtml(encodedKey)}"
+        ${allSelected ? 'checked' : ''}
         style="
-          width:50px;
-          text-align:center;
+          width:20px;
+          height:20px;
+          flex-shrink:0;
         "
       >
 
-        <input
-          type="checkbox"
-          class="assembly-group-checkbox"
-          data-group-key="${escapeHtml(
-            encodedKey
-          )}"
-          ${groupChecked}
-        >
-
-      </td>
-
-
-      <td>
-
-        <b>
-          ${escapeHtml(
-            group.barcode
-          )}
-        </b>
-
-      </td>
-
-
-      <td>
-        ${escapeHtml(
-          group.article
-        )}
-      </td>
-
-
-      <td>
-        ${escapeHtml(
-          group.zone_row
-        )}
-      </td>
-
-
-      <td>
-        <b>
-          ${escapeHtml(
-            group.pallet
-          )}
-        </b>
-      </td>
-
-
-      <td>
-        ${escapeHtml(
-          group.warehouse
-        )}
-      </td>
-
-
-      <td>
+      <div style="flex:1;min-width:0;">
 
         <div
           style="
-            display:flex;
-            align-items:center;
-            gap:5px;
+            font-weight:700;
+            font-size:14px;
+            word-break:break-all;
           "
         >
-
-          <button
-            type="button"
-            class="assembly-qty-btn"
-            data-action="minus"
-            data-group-key="${escapeHtml(
-              encodedKey
-            )}"
-          >
-            −
-          </button>
-
-
-          <b
-            style="
-              min-width:28px;
-              text-align:center;
-            "
-          >
-            ${selectedCount}
-          </b>
-
-
-          <button
-            type="button"
-            class="assembly-qty-btn"
-            data-action="plus"
-            data-group-key="${escapeHtml(
-              encodedKey
-            )}"
-          >
-            +
-          </button>
-
-
-          <span
-            class="muted"
-            style="
-              margin-left:5px;
-            "
-          >
-            / ${group.count}
-          </span>
-
+          ${escapeHtml(group.barcode)}
         </div>
 
-      </td>
+        ${
+          group.article
+            ? `
+              <div class="muted" style="font-size:11px;">
+                ${escapeHtml(group.article)}
+              </div>
+            `
+            : ''
+        }
 
+      </div>
 
-      <td>
+      <div
+        style="
+          display:flex;
+          align-items:center;
+          gap:6px;
+          flex-shrink:0;
+        "
+      >
 
         <button
           type="button"
-          class="sp-btn secondary assembly-details-btn"
-          data-group-key="${escapeHtml(
-            encodedKey
-          )}"
+          class="assembly-qty-btn"
+          data-action="minus"
+          data-group-key="${escapeHtml(encodedKey)}"
         >
-          ${
-            expanded
-              ? 'Скрыть'
-              : 'Детали'
-          }
+          −
         </button>
 
-      </td>
+        <b
+          style="
+            min-width:22px;
+            text-align:center;
+          "
+        >
+          ${selectedCount}
+        </b>
 
-    </tr>
+        <button
+          type="button"
+          class="assembly-qty-btn"
+          data-action="plus"
+          data-group-key="${escapeHtml(encodedKey)}"
+        >
+          +
+        </button>
 
-    ${details}
+        <span
+          class="muted"
+          style="font-size:12px;"
+        >
+          / ${group.count}
+        </span>
+
+      </div>
+
+    </div>
 
   `;
+
 }
+
+
+/* =========================================================
+   SETUP ASSEMBLY
+   ========================================================= */
+
+function setupAssembly() {
+
+  if (!state.assemblySelectedIds) {
+    state.assemblySelectedIds = new Set();
+  }
+
+  if (!state.assemblySelectedGroups) {
+    state.assemblySelectedGroups = new Set();
+  }
+
+  if (!state.assemblyExpandedZones) {
+    state.assemblyExpandedZones = new Set();
+  }
+
+  if (!state.assemblyExpandedPallets) {
+    state.assemblyExpandedPallets = new Set();
+  }
+
+
+  /*
+    Разворачиваем/сворачиваем зону.
+  */
+
+  $all('.assembly-zone-toggle')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          const zone =
+            button.dataset.zone;
+
+          if (
+            state.assemblyExpandedZones.has(
+              zone
+            )
+          ) {
+
+            state.assemblyExpandedZones.delete(
+              zone
+            );
+
+          } else {
+
+            state.assemblyExpandedZones.add(
+              zone
+            );
+
+          }
+
+          render();
+
+        }
+      );
+
+    });
+
+
+  /*
+    Разворачиваем/сворачиваем поддон.
+  */
+
+  $all('.assembly-pallet-toggle')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          const key =
+            button.dataset.zone +
+            '||' +
+            button.dataset.pallet;
+
+          if (
+            state.assemblyExpandedPallets.has(
+              key
+            )
+          ) {
+
+            state.assemblyExpandedPallets.delete(
+              key
+            );
+
+          } else {
+
+            state.assemblyExpandedPallets.add(
+              key
+            );
+
+          }
+
+          render();
+
+        }
+      );
+
+    });
+
+
+  /*
+    Галочка группы —
+    выбрать/снять все коробки
+    этого штрихкода в этой ячейке.
+  */
+
+  $all('.assembly-group-checkbox')
+    .forEach(checkbox => {
+
+      checkbox.addEventListener(
+        'change',
+        event => {
+
+          const key =
+            decodeURIComponent(
+              event.target.dataset.groupKey
+            );
+
+          const group =
+            getGroupedPickingBoxes()
+              .find(
+                g => g.key === key
+              );
+
+          if (!group) {
+            return;
+          }
+
+          if (event.target.checked) {
+
+            group.ids.forEach(
+              id =>
+                state.assemblySelectedIds.add(
+                  String(id)
+                )
+            );
+
+          } else {
+
+            group.ids.forEach(
+              id =>
+                state.assemblySelectedIds.delete(
+                  String(id)
+                )
+            );
+
+          }
+
+          render();
+
+        }
+      );
+
+    });
+
+
+  /*
+    Кнопки −/+ —
+    точный выбор количества
+    физических коробок.
+  */
+
+  $all('.assembly-qty-btn')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          const key =
+            decodeURIComponent(
+              button.dataset.groupKey
+            );
+
+          const group =
+            getGroupedPickingBoxes()
+              .find(
+                g => g.key === key
+              );
+
+          if (!group) {
+            return;
+          }
+
+          if (
+            button.dataset.action ===
+            'plus'
+          ) {
+
+            const nextId =
+              group.ids.find(
+                id =>
+                  !state.assemblySelectedIds.has(
+                    String(id)
+                  )
+              );
+
+            if (nextId !== undefined) {
+
+              state.assemblySelectedIds.add(
+                String(nextId)
+              );
+
+            }
+
+          } else {
+
+            for (
+              let i = group.ids.length - 1;
+              i >= 0;
+              i--
+            ) {
+
+              const idStr =
+                String(group.ids[i]);
+
+              if (
+                state.assemblySelectedIds.has(
+                  idStr
+                )
+              ) {
+
+                state.assemblySelectedIds.delete(
+                  idStr
+                );
+
+                break;
+
+              }
+
+            }
+
+          }
+
+          render();
+
+        }
+      );
+
+    });
+
+
+  /*
+    Ручной ввод текущей зоны/ряда.
+  */
+
+  $('#assemblyZoneInput')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.assemblyCurrentZone =
+          normalizeText(
+            event.target.value
+          );
+
+        if (state.assemblyCurrentZone) {
+
+          state.assemblyExpandedZones.add(
+            state.assemblyCurrentZone
+          );
+
+        }
+
+        render();
+
+      }
+    );
+
+
+  /*
+    Ручной ввод текущего поддона.
+  */
+
+  $('#currentPallet')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.currentPallet =
+          normalizeText(
+            event.target.value
+          );
+
+        render();
+
+      }
+    );
+
+
+  $('#clearPallet')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        state.currentPallet = '';
+        state.assemblyCurrentZone = '';
+
+        render();
+
+      }
+    );
+
+
+  /*
+    СКАНЕР.
+
+    Работает как единое поле:
+    можно сканировать зону/ряд,
+    поддон или штрихкод коробки —
+    система сама определит, что это.
+  */
+
+  const scanner =
+    $('#scannerInput');
+
+  scanner
+    ?.addEventListener(
+      'keydown',
+      async event => {
+
+        if (event.key !== 'Enter') {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const value =
+          scanner.value;
+
+        scanner.value = '';
+
+        await processScan(value);
+
+      }
+    );
+
+  setTimeout(
+    focusScanner,
+    80
+  );
+
+}
+
 
 /* =========================================================
    TOGGLE ALL ASSEMBLY
@@ -10624,97 +12027,260 @@ function updateAssemblySelectedCount() {
 }
 
 async function processScan(
-  barcode
+  rawValue
 ) {
 
-  barcode =
-    normalizeBarcode(
-      barcode
-    );
+  const raw =
+    normalizeText(rawValue);
 
-
-  if (!barcode) {
-
+  if (!raw) {
     return;
-
   }
 
 
-  /*
-    Ищем коробку по штрихкоду
-    только среди коробок, которые
-    находятся в подборе.
+  const barcode =
+    normalizeBarcode(rawValue);
 
-    Поле pick больше не используется.
+
+  /*
+    Коробки, которые ещё
+    находятся в подборе.
   */
 
-  const candidates =
+  const pickingPool =
     state.boxes.filter(
       row =>
-        normalizeBarcode(
-          row.barcode
-        ) === barcode &&
-        (
-          row.status ===
-            STATUSES.PICK ||
-          row.status ===
-            STATUSES.RESERVED
-        )
+        row.status ===
+          STATUSES.PICK ||
+        row.status ===
+          STATUSES.RESERVED
     );
 
 
-  if (
-    !candidates.length
-  ) {
+  /* =========================================
+     1. ПРОБУЕМ КАК ШТРИХКОД КОРОБКИ
+     ========================================= */
 
-    showScannerResult(
-      `Штрихкод ${barcode} не найден среди коробок к подбору.`,
-      'error'
-    );
+  if (barcode) {
 
-
-    beep(false);
-
-    focusScanner();
-
-    return;
-
-  }
-
-
-  let box =
-    null;
-
-
-  /*
-    Если выбран текущий поддон,
-    разрешаем сканировать только
-    коробку с этого поддона.
-  */
-
-  if (
-    state.currentPallet
-  ) {
-
-    box =
-      candidates.find(
+    let candidates =
+      pickingPool.filter(
         row =>
-          normalizeText(
-            row.pallet
-          ).toLowerCase() ===
-          normalizeText(
-            state.currentPallet
-          ).toLowerCase()
+          normalizeBarcode(
+            row.barcode
+          ) === barcode
       );
 
 
-    if (!box) {
+    /*
+      Если задана текущая зона —
+      сначала ищем в её пределах.
+    */
+
+    if (
+      candidates.length &&
+      state.assemblyCurrentZone
+    ) {
+
+      const inZone =
+        candidates.filter(
+          row =>
+            normalizeText(
+              row.zone_row
+            ).toLowerCase() ===
+            normalizeText(
+              state.assemblyCurrentZone
+            ).toLowerCase()
+        );
+
+      if (inZone.length) {
+        candidates = inZone;
+      }
+
+    }
+
+
+    /*
+      Если задан текущий поддон —
+      сужаем ещё точнее.
+    */
+
+    if (
+      candidates.length &&
+      state.currentPallet
+    ) {
+
+      const onPallet =
+        candidates.filter(
+          row =>
+            normalizeText(
+              row.pallet
+            ).toLowerCase() ===
+            normalizeText(
+              state.currentPallet
+            ).toLowerCase()
+        );
+
+      if (onPallet.length) {
+        candidates = onPallet;
+      }
+
+    }
+
+
+    if (candidates.length) {
+
+      /*
+        Ищем среди кандидатов ту,
+        что ещё НЕ выбрана.
+      */
+
+      if (!state.assemblySelectedIds) {
+        state.assemblySelectedIds =
+          new Set();
+      }
+
+      const box =
+        candidates.find(
+          row =>
+            !state.assemblySelectedIds.has(
+              String(row.id)
+            )
+        );
+
+
+      if (!box) {
+
+        showScannerResult(
+          `Все коробки со штрихкодом ${barcode} на этом месте уже выбраны.`,
+          'success'
+        );
+
+        beep(true);
+
+        focusScanner();
+
+        return;
+
+      }
+
+
+      /*
+        Выбираем коробку
+        и подсвечиваем зелёным.
+      */
+
+      state.assemblySelectedIds.add(
+        String(box.id)
+      );
+
+
+      const groupKey =
+        [
+          normalizeBarcode(box.barcode),
+          String(box.article || '').trim(),
+          String(box.zone_row || '').trim(),
+          String(box.pallet || '').trim(),
+          String(box.warehouse || '').trim()
+        ].join('|');
+
+
+      state.assemblyFlashKey =
+        groupKey;
+
+
+      /*
+        Автоматически подхватываем
+        зону/поддон найденной коробки,
+        чтобы список сам развернулся.
+      */
+
+      if (box.zone_row) {
+
+        state.assemblyCurrentZone =
+          normalizeText(box.zone_row);
+
+        state.assemblyExpandedZones.add(
+          state.assemblyCurrentZone
+        );
+
+      }
+
+      if (box.pallet) {
+
+        state.currentPallet =
+          normalizeText(box.pallet);
+
+        state.assemblyExpandedPallets.add(
+          normalizeText(box.zone_row) +
+          '||' +
+          normalizeText(box.pallet)
+        );
+
+      }
+
 
       showScannerResult(
-        `Коробка найдена, но она находится не на текущем поддоне "${state.currentPallet}".`,
-        'error'
+        `✓ Штрихкод ${barcode} найден и выбран`,
+        'success'
       );
 
+      beep(true);
+
+      render();
+
+
+      /*
+        Гасим подсветку
+        через полторы секунды.
+      */
+
+      setTimeout(
+        () => {
+
+          if (
+            state.assemblyFlashKey ===
+            groupKey
+          ) {
+
+            state.assemblyFlashKey = '';
+
+            render();
+
+          }
+
+        },
+        1500
+      );
+
+
+      setTimeout(
+        focusScanner,
+        50
+      );
+
+      return;
+
+    }
+
+
+    /*
+      Штрихкод похож на реальный,
+      но среди коробок к подбору
+      его нет — дальше по цепочке
+      не проверяем зону/поддон,
+      сразу говорим об ошибке.
+    */
+
+    if (barcode.length >= 8) {
+
+      showScannerResult(
+        state.assemblyCurrentZone ||
+        state.currentPallet
+          ? `Штрихкод ${barcode} не найден на текущем месте.`
+          : `Штрихкод ${barcode} не найден среди коробок к подбору.`,
+        'error'
+      );
 
       beep(false);
 
@@ -10724,124 +12290,137 @@ async function processScan(
 
     }
 
-  } else {
-
-    box =
-      candidates[0];
-
   }
 
 
-  /*
-    Отмечаем коробку как собранную.
+  /* =========================================
+     2. ПРОБУЕМ КАК ЗОНУ/РЯД
+     ========================================= */
 
-    Используем реальные названия
-    колонок Supabase.
-  */
-
-  const {
-    data,
-    error
-  } =
-    await supabaseClient
-      .from('boxes')
-      .update({
-
-        "Статус":
-          STATUSES.COLLECTED,
-
-        "Изменил":
-          state.user?.email ||
-          null
-
-      })
-      .eq(
-        'id',
-        box.id
-      )
-      .select(
-        BOX_SELECT
-      )
-      .single();
-
-
-  if (error) {
-
-    console.error(
-      'Ошибка сканирования:',
-      error
+  const zoneMatch =
+    pickingPool.find(
+      row =>
+        normalizeText(
+          row.zone_row
+        ).toLowerCase() ===
+        raw.toLowerCase()
     );
 
+  if (zoneMatch) {
 
-    console.error(
-      'Message:',
-      error?.message
+    state.assemblyCurrentZone =
+      normalizeText(
+        zoneMatch.zone_row
+      );
+
+    state.currentPallet = '';
+
+    state.assemblyExpandedZones.add(
+      state.assemblyCurrentZone
     );
-
-
-    console.error(
-      'Details:',
-      error?.details
-    );
-
-
-    console.error(
-      'Hint:',
-      error?.hint
-    );
-
-
-    console.error(
-      'Code:',
-      error?.code
-    );
-
 
     showScannerResult(
-      error.message,
-      'error'
+      `📍 Зона/ряд «${state.assemblyCurrentZone}» выбрана. Сканируйте поддон или штрихкод.`,
+      'success'
     );
 
+    beep(true);
 
-    beep(false);
+    render();
 
-    focusScanner();
+    setTimeout(
+      focusScanner,
+      50
+    );
 
     return;
 
   }
 
 
-  /*
-    Обновляем локальную коробку.
-  */
+  /* =========================================
+     3. ПРОБУЕМ КАК ПОДДОН
+     ========================================= */
 
-  updateLocalBox(
-    box.id,
-    data
-  );
+  const palletPool =
+    state.assemblyCurrentZone
+      ? pickingPool.filter(
+          row =>
+            normalizeText(
+              row.zone_row
+            ).toLowerCase() ===
+            normalizeText(
+              state.assemblyCurrentZone
+            ).toLowerCase()
+        )
+      : pickingPool;
+
+  const palletMatch =
+    palletPool.find(
+      row =>
+        normalizeText(
+          row.pallet
+        ).toLowerCase() ===
+        raw.toLowerCase()
+    );
+
+  if (palletMatch) {
+
+    state.currentPallet =
+      normalizeText(
+        palletMatch.pallet
+      );
+
+    if (!state.assemblyCurrentZone) {
+
+      state.assemblyCurrentZone =
+        normalizeText(
+          palletMatch.zone_row
+        );
+
+      state.assemblyExpandedZones.add(
+        state.assemblyCurrentZone
+      );
+
+    }
+
+    state.assemblyExpandedPallets.add(
+      state.assemblyCurrentZone +
+      '||' +
+      state.currentPallet
+    );
+
+    showScannerResult(
+      `📦 Поддон «${state.currentPallet}» выбран. Сканируйте штрихкод коробки.`,
+      'success'
+    );
+
+    beep(true);
+
+    render();
+
+    setTimeout(
+      focusScanner,
+      50
+    );
+
+    return;
+
+  }
 
 
-  /*
-    Показываем успешный результат.
-  */
+  /* =========================================
+     4. НИЧЕГО НЕ НАЙДЕНО
+     ========================================= */
 
   showScannerResult(
-    `✓ Коробка ${barcode} скомплектована`,
-    'success'
+    `Не найдено среди зон, поддонов и штрихкодов к подбору: ${raw}`,
+    'error'
   );
 
+  beep(false);
 
-  beep(true);
-
-
-  render();
-
-
-  setTimeout(
-    focusScanner,
-    50
-  );
+  focusScanner();
 
 }
 
@@ -16500,45 +18079,6 @@ function splitView() {
         "
       ></textarea>
 
-    </div>
-
-
-    <div class="sp-card">
-
-      <h3>
-        Результат
-      </h3>
-
-      <div
-        id="splitSummary"
-        class="sp-muted"
-        style="
-          margin:4px 0 12px;
-          font-size:12px;
-        "
-      >
-        Пока пусто.
-      </div>
-
-      <textarea
-        id="splitOutput"
-        readonly
-        style="
-          width:100%;
-          min-height:200px;
-          box-sizing:border-box;
-          resize:vertical;
-          border:1px solid #ddd;
-          border-radius:12px;
-          padding:14px;
-          font-family:monospace;
-          font-size:14px;
-          line-height:1.6;
-          outline:none;
-          background:#fafafa;
-        "
-            ></textarea>
-
       <div
         id="splitLiveHint"
         class="sp-muted"
@@ -16629,12 +18169,40 @@ function splitView() {
 
       <div
         id="splitSummary"
+        class="sp-muted"
+        style="
+          margin:4px 0 12px;
+          font-size:12px;
+        "
+      >
+        Пока пусто.
+      </div>
+
+      <textarea
+        id="splitOutput"
+        readonly
+        style="
+          width:100%;
+          min-height:200px;
+          box-sizing:border-box;
+          resize:vertical;
+          border:1px solid #ddd;
+          border-radius:12px;
+          padding:14px;
+          font-family:monospace;
+          font-size:14px;
+          line-height:1.6;
+          outline:none;
+          background:#fafafa;
+        "
+      ></textarea>
 
     </div>
 
   `;
 
 }
+
 
 /**
  * Быстрая проверка ввода по мере набора,
@@ -16693,6 +18261,7 @@ function validateSplitInputLive() {
       : '#18794e';
 
 }
+
 
 function runSplitBarcodes() {
 
@@ -16775,6 +18344,7 @@ function runSplitBarcodes() {
         );
 
 }
+
 
 /**
  * Скачивает текст как .txt файл.
@@ -16901,6 +18471,7 @@ async function addSplitResultToBase() {
   }
 
 }
+
 
 function setupSplit() {
 
@@ -17085,7 +18656,7 @@ function sumView() {
           line-height:1.6;
           outline:none;
         "
-            ></textarea>
+      ></textarea>
 
       <div
         id="sumLiveHint"
@@ -17161,6 +18732,7 @@ function sumView() {
 
 }
 
+
 /**
  * Быстрая проверка ввода по мере набора.
  */
@@ -17214,6 +18786,7 @@ function validateSumInputLive() {
       : '#18794e';
 
 }
+
 
 function runSumBarcodes() {
 
@@ -21057,9 +22630,355 @@ function toolsView() {
 
       </div>
 
+      <div class="sp-card">
+
+        <h3>
+          📦 Калькулятор коробок
+        </h3>
+
+        <p class="sp-muted">
+          Сколько коробок нужно
+          для данного количества товара.
+        </p>
+
+        <div
+          style="
+            display:flex;
+            gap:8px;
+            margin:10px 0;
+            flex-wrap:wrap;
+          "
+        >
+
+          <input
+            id="calcBoxesQty"
+            type="number"
+            min="0"
+            placeholder="Кол-во штук"
+            style="
+              flex:1;
+              min-width:110px;
+              border:1px solid #ddd;
+              border-radius:10px;
+              padding:8px 10px;
+              font-size:14px;
+              outline:none;
+            "
+          >
+
+          <input
+            id="calcBoxesPerBox"
+            type="number"
+            min="0"
+            placeholder="Штук в коробке"
+            style="
+              flex:1;
+              min-width:110px;
+              border:1px solid #ddd;
+              border-radius:10px;
+              padding:8px 10px;
+              font-size:14px;
+              outline:none;
+            "
+          >
+
+        </div>
+
+        <div
+          id="calcBoxesResult"
+          class="sp-muted"
+          style="font-size:14px;font-weight:700;"
+        >
+          Коробок: —
+        </div>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <h3>
+          🧮 Быстрый калькулятор
+        </h3>
+
+        <p class="sp-muted">
+          Простые вычисления:
+          + − × ÷ и скобки.
+        </p>
+
+        <input
+          id="calcQuickInput"
+          type="text"
+          placeholder="Например: (120 + 30) / 6"
+          style="
+            width:100%;
+            box-sizing:border-box;
+            border:1px solid #ddd;
+            border-radius:10px;
+            padding:8px 10px;
+            font-size:14px;
+            margin:10px 0;
+            outline:none;
+          "
+        >
+
+        <div
+          id="calcQuickResult"
+          class="sp-muted"
+          style="font-size:14px;font-weight:700;"
+        >
+          Результат: —
+        </div>
+
+      </div>
+
     </div>
 
   `;
+
+}
+
+
+/**
+ * Калькулятор коробок.
+ * Аналог calculateBoxes() из Apps Script:
+ * округление количества коробок вверх.
+ */
+function updateBoxesCalculator() {
+
+  const resultEl =
+    $('#calcBoxesResult');
+
+  if (!resultEl) {
+    return;
+  }
+
+  const qty =
+    parsePositiveNumber(
+      $('#calcBoxesQty')?.value
+    );
+
+  const perBox =
+    parsePositiveNumber(
+      $('#calcBoxesPerBox')?.value
+    );
+
+  if (qty === null || perBox === null) {
+    resultEl.textContent =
+      'Коробок: —';
+    return;
+  }
+
+  const boxes =
+    Math.ceil(qty / perBox);
+
+  resultEl.textContent =
+    `Коробок: ${boxes}` +
+    ` (остаток в последней: ${
+      qty % perBox === 0
+        ? perBox
+        : qty % perBox
+    } шт.)`;
+
+}
+
+
+/**
+ * Безопасный калькулятор арифметики.
+ *
+ * ВАЖНО: eval() не используется.
+ * Разрешены только цифры,
+ * точка, +  −  *  /  ( ) и пробелы.
+ */
+function safeEvaluateExpression(expr) {
+
+  const cleaned =
+    String(expr || '').trim();
+
+  if (!cleaned) {
+    return null;
+  }
+
+  if (
+    !/^[\d\s+\-*/().,]+$/.test(cleaned)
+  ) {
+    return null;
+  }
+
+  const normalized =
+    cleaned.replace(/,/g, '.');
+
+  /*
+    Токенизация и разбор
+    рекурсивным спуском —
+    без Function()/eval().
+  */
+
+  let pos = 0;
+
+  function peek() {
+    return normalized[pos];
+  }
+
+  function parseNumber() {
+
+    let start = pos;
+
+    while (
+      pos < normalized.length &&
+      /[\d.]/.test(normalized[pos])
+    ) {
+      pos++;
+    }
+
+    if (start === pos) {
+      throw new Error('bad number');
+    }
+
+    return parseFloat(
+      normalized.slice(start, pos)
+    );
+
+  }
+
+  function parseFactor() {
+
+    while (peek() === ' ') pos++;
+
+    if (peek() === '(') {
+
+      pos++;
+
+      const value = parseExpr();
+
+      while (peek() === ' ') pos++;
+
+      if (peek() !== ')') {
+        throw new Error('expected )');
+      }
+
+      pos++;
+
+      return value;
+
+    }
+
+    if (peek() === '-') {
+      pos++;
+      return -parseFactor();
+    }
+
+    if (peek() === '+') {
+      pos++;
+      return parseFactor();
+    }
+
+    return parseNumber();
+
+  }
+
+  function parseTerm() {
+
+    let value = parseFactor();
+
+    while (true) {
+
+      while (peek() === ' ') pos++;
+
+      if (peek() === '*') {
+        pos++;
+        value *= parseFactor();
+      } else if (peek() === '/') {
+        pos++;
+        const divisor = parseFactor();
+        if (divisor === 0) {
+          throw new Error('divide by zero');
+        }
+        value /= divisor;
+      } else {
+        break;
+      }
+
+    }
+
+    return value;
+
+  }
+
+  function parseExpr() {
+
+    let value = parseTerm();
+
+    while (true) {
+
+      while (peek() === ' ') pos++;
+
+      if (peek() === '+') {
+        pos++;
+        value += parseTerm();
+      } else if (peek() === '-') {
+        pos++;
+        value -= parseTerm();
+      } else {
+        break;
+      }
+
+    }
+
+    return value;
+
+  }
+
+  try {
+
+    const result = parseExpr();
+
+    while (peek() === ' ') pos++;
+
+    if (pos !== normalized.length) {
+      return null;
+    }
+
+    return isFinite(result)
+      ? result
+      : null;
+
+  } catch (error) {
+
+    return null;
+
+  }
+
+}
+
+
+function updateQuickCalculator() {
+
+  const resultEl =
+    $('#calcQuickResult');
+
+  if (!resultEl) {
+    return;
+  }
+
+  const input =
+    $('#calcQuickInput')?.value;
+
+  const result =
+    safeEvaluateExpression(input);
+
+  resultEl.textContent =
+    result === null
+      ? (
+          normalizeText(input)
+            ? 'Результат: ошибка в выражении'
+            : 'Результат: —'
+        )
+      : `Результат: ${
+          Number(
+            result.toFixed(6)
+          )
+        }`;
 
 }
 
@@ -21077,6 +22996,24 @@ function setupTools() {
 
   }
    
+  $('#calcBoxesQty')
+    ?.addEventListener(
+      'input',
+      updateBoxesCalculator
+    );
+
+  $('#calcBoxesPerBox')
+    ?.addEventListener(
+      'input',
+      updateBoxesCalculator
+    );
+
+  $('#calcQuickInput')
+    ?.addEventListener(
+      'input',
+      updateQuickCalculator
+    );
+
   $('#openExcelBtn')
     ?.addEventListener(
       'click',
@@ -23181,6 +25118,15 @@ received: {
 
     heading:
       'Сравнение заявки'
+  },
+
+
+  tasks: {
+    title:
+      'Задачи',
+
+    heading:
+      'Планировщик задач'
   }
 
 };
@@ -23536,6 +25482,16 @@ function render() {
         toolsView();
 
       setupTools();
+
+      break;
+
+
+    case 'tasks':
+
+      content.innerHTML =
+        tasksView();
+
+      setupTasks();
 
       break;
 
@@ -23915,6 +25871,8 @@ async function startApp() {
 
   setupNavigation();
 
+  loadTasksFromStorage();
+
   /*
     Получаем текущую сессию.
   */
@@ -24072,26 +26030,6 @@ async function startApp() {
 
 }
 
-
-/* =========================================================
-   ASSEMBLY SELECT ALL CHECKBOX
-   ========================================================= */
-
-document.addEventListener(
-  'change',
-  function(event) {
-
-    if (
-      event.target.id ===
-      'selectAllAssemblyCheckbox'
-    ) {
-
-      toggleSelectAllAssembly();
-    
-    }
-
-  }
-);
 
 /* =========================================================
    ASSEMBLY BUTTON HANDLERS
