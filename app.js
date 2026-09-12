@@ -81,6 +81,15 @@ const STATUSES = {
 
 
 /* =========================================================
+   ДАННЫЕ КАРТЫ СКЛАДА (СОХ / НС)
+   Извлечено из исходного Excel-файла клиента.
+   ========================================================= */
+
+const WAREHOUSE_MAP_DATA = {"soh_entries":[{"ryad":5,"row":3,"col":4,"places":[1,2,3]},{"ryad":1,"row":3,"col":6,"places":[1,2,3]},{"ryad":4,"row":4,"col":4,"places":[1,2,3]},{"ryad":2,"row":4,"col":6,"places":[1,2,3]},{"ryad":3,"row":5,"col":4,"places":[1,2,3]},{"ryad":3,"row":5,"col":6,"places":[1,2,3]},{"ryad":2,"row":6,"col":4,"places":[1,2,3]},{"ryad":4,"row":6,"col":6,"places":[1,2,3]},{"ryad":1,"row":7,"col":4,"places":[1,2,3]},{"ryad":5,"row":7,"col":6,"places":[1,2,3]},{"ryad":6,"row":8,"col":6,"places":[1,2,3]},{"ryad":7,"row":9,"col":6,"places":[1,2,3]},{"ryad":8,"row":10,"col":6,"places":[1,2,3]},{"ryad":9,"row":11,"col":6,"places":[1,2,3]},{"ryad":10,"row":12,"col":6,"places":[1,2,3]},{"ryad":1,"row":16,"col":7,"places":[1,2,3,4]},{"ryad":18,"row":16,"col":17,"places":[1,2,3,4]},{"ryad":2,"row":17,"col":7,"places":[1,2,3,4]},{"ryad":17,"row":17,"col":17,"places":[1,2,3,4]},{"ryad":3,"row":18,"col":7,"places":[1,2,3,4]},{"ryad":16,"row":18,"col":17,"places":[1,2,3,4]},{"ryad":15,"row":18,"col":27,"places":[1,2]},{"ryad":14,"row":18,"col":34,"places":[1,2,3]},{"ryad":4,"row":19,"col":7,"places":[1,2,3,4]},{"ryad":15,"row":19,"col":17,"places":[1,2,3,4]},{"ryad":16,"row":19,"col":27,"places":[1,2]},{"ryad":13,"row":19,"col":34,"places":[1,2,3]},{"ryad":5,"row":20,"col":7,"places":[1,2,3,4]},{"ryad":14,"row":20,"col":17,"places":[1,2,3,4]},{"ryad":17,"row":20,"col":27,"places":[1,2]},{"ryad":12,"row":20,"col":34,"places":[1,2,3]},{"ryad":6,"row":21,"col":7,"places":[1,2,3,4]},{"ryad":13,"row":21,"col":17,"places":[1,2,3,4]},{"ryad":18,"row":21,"col":27,"places":[1,2]},{"ryad":11,"row":21,"col":34,"places":[1,2,3]},{"ryad":7,"row":22,"col":7,"places":[1,2,3,4]},{"ryad":12,"row":22,"col":17,"places":[1,2,3,4]},{"ryad":19,"row":22,"col":27,"places":[1,2]},{"ryad":10,"row":22,"col":34,"places":[1,2,3]},{"ryad":8,"row":23,"col":7,"places":[1,2,3,4]},{"ryad":11,"row":23,"col":17,"places":[1,2,3,4]},{"ryad":20,"row":23,"col":27,"places":[1,2]},{"ryad":9,"row":23,"col":34,"places":[1,2,3]},{"ryad":1,"row":24,"col":5,"places":[1,2,3,4]},{"ryad":9,"row":24,"col":7,"places":[1,2,3,4]},{"ryad":10,"row":24,"col":17,"places":[1,2,3,4]},{"ryad":21,"row":24,"col":27,"places":[1,2]},{"ryad":8,"row":24,"col":34,"places":[1,2,3]},{"ryad":2,"row":25,"col":5,"places":[1,2,3,4]},{"ryad":10,"row":25,"col":7,"places":[1,2,3,4]},{"ryad":9,"row":25,"col":17,"places":[1,2,3,4]},{"ryad":22,"row":25,"col":27,"places":[1,2]},{"ryad":7,"row":25,"col":34,"places":[1,2,3]},{"ryad":3,"row":26,"col":5,"places":[1,2,3,4]},{"ryad":11,"row":26,"col":7,"places":[1,2,3,4]},{"ryad":8,"row":26,"col":17,"places":[1,2,3,4]},{"ryad":23,"row":26,"col":27,"places":[1,2]},{"ryad":6,"row":26,"col":34,"places":[1,2,3]},{"ryad":4,"row":27,"col":5,"places":[1,2,3,4]},{"ryad":12,"row":27,"col":7,"places":[1,2,3,4]},{"ryad":7,"row":27,"col":17,"places":[1,2,3,4]},{"ryad":24,"row":27,"col":27,"places":[1,2]},{"ryad":5,"row":27,"col":34,"places":[1,2,3]},{"ryad":5,"row":28,"col":5,"places":[1,2,3,4]},{"ryad":13,"row":28,"col":7,"places":[1,2,3,4]},{"ryad":6,"row":28,"col":17,"places":[1,2,3,4]},{"ryad":25,"row":28,"col":27,"places":[1,2]},{"ryad":4,"row":28,"col":34,"places":[1,2,3]},{"ryad":6,"row":29,"col":5,"places":[1,2,3,4]},{"ryad":14,"row":29,"col":7,"places":[1,2,3,4]},{"ryad":5,"row":29,"col":17,"places":[1,2,3,4]},{"ryad":26,"row":29,"col":27,"places":[1,2]},{"ryad":3,"row":29,"col":34,"places":[1,2,3]},{"ryad":7,"row":30,"col":5,"places":[1,2,3,4]},{"ryad":15,"row":30,"col":7,"places":[1,2,3,4]},{"ryad":4,"row":30,"col":17,"places":[1,2,3,4]},{"ryad":27,"row":30,"col":27,"places":[1,2]},{"ryad":2,"row":30,"col":34,"places":[1,2,3]},{"ryad":8,"row":31,"col":5,"places":[1,2,3,4]},{"ryad":16,"row":31,"col":7,"places":[1,2,3,4]},{"ryad":3,"row":31,"col":17,"places":[1,2,3,4]},{"ryad":28,"row":31,"col":27,"places":[1,2]},{"ryad":1,"row":31,"col":34,"places":[1,2,3]},{"ryad":9,"row":32,"col":5,"places":[1,2,3,4]},{"ryad":17,"row":32,"col":7,"places":[1,2,3,4]},{"ryad":2,"row":32,"col":17,"places":[1,2,3,4]},{"ryad":10,"row":33,"col":5,"places":[1,2,3,4]},{"ryad":18,"row":33,"col":7,"places":[1,2,3,4]},{"ryad":1,"row":33,"col":17,"places":[1,2,3,4]},{"ryad":11,"row":34,"col":5,"places":[1,2,3,4]},{"ryad":19,"row":34,"col":7,"places":[1,2,3,4]},{"ryad":12,"row":35,"col":5,"places":[1,2,3,4]},{"ryad":20,"row":35,"col":7,"places":[1,2,3,4]},{"ryad":13,"row":36,"col":5,"places":[1,2,3,4]},{"ryad":21,"row":36,"col":7,"places":[1,2,3,4]}],"soh_landmarks":["ВХОД","ворота","выход","за машиной","низлев","низправ","низцент","пк","сзади","слеваверх","справа"],"ns_zones":{"B":["B1-1","B1-10","B1-11","B1-12","B1-13","B1-14","B1-15","B1-16","B1-17","B1-18","B1-19","B1-2","B1-20","B1-21","B1-22","B1-23","B1-24","B1-3","B1-4","B1-5","B1-6","B1-7","B1-8","B1-9","B2-1","B2-10","B2-11","B2-12","B2-13","B2-14","B2-15","B2-16","B2-17","B2-18","B2-19","B2-2","B2-20","B2-21","B2-22","B2-23","B2-24","B2-3","B2-4","B2-5","B2-6","B2-7","B2-8","B2-9","B3-1","B3-10","B3-11","B3-12","B3-13","B3-14","B3-15","B3-16","B3-17","B3-18","B3-19","B3-2","B3-20","B3-21","B3-22","B3-23","B3-24","B3-3","B3-4","B3-5","B3-6","B3-7","B3-8","B3-9"],"C":["C1-1","C1-10","C1-11","C1-12","C1-13","C1-14","C1-15","C1-16","C1-17","C1-18","C1-19","C1-2","C1-20","C1-21","C1-22","C1-23","C1-24","C1-3","C1-4","C1-5","C1-6","C1-7","C1-8","C1-9","C2-1","C2-10","C2-11","C2-12","C2-13","C2-14","C2-15","C2-16","C2-17","C2-18","C2-19","C2-2","C2-20","C2-21","C2-22","C2-23","C2-24","C2-3","C2-4","C2-5","C2-6","C2-7","C2-8","C2-9","C3-1","C3-10","C3-11","C3-12","C3-13","C3-14","C3-15","C3-16","C3-17","C3-18","C3-19","C3-2","C3-20","C3-21","C3-22","C3-23","C3-24","C3-3","C3-4","C3-5","C3-6","C3-7","C3-8","C3-9"],"D":["D1-1","D1-2","D1-3","D1-4","D1-5","D1-6","D1-7","D1-8","D1-9","D2-1","D2-2","D2-3","D2-4","D2-5","D2-6","D2-7","D2-8","D2-9","D3-1","D3-2","D3-3","D3-4","D3-5","D3-6","D3-7","D3-8","D3-9"],"E":["E1-1","E1-10","E1-11","E1-12","E1-2","E1-3","E1-4","E1-5","E1-6","E1-7","E1-8","E1-9","E2-1","E2-10","E2-11","E2-12","E2-2","E2-3","E2-4","E2-5","E2-6","E2-7","E2-8","E2-9","E3-1","E3-10","E3-11","E3-12","E3-2","E3-3","E3-4","E3-5","E3-6","E3-7","E3-8","E3-9"],"F":["F1-1","F1-10","F1-11","F1-12","F1-2","F1-3","F1-4","F1-5","F1-6","F1-7","F1-8","F1-9","F2-1","F2-10","F2-11","F2-12","F2-2","F2-3","F2-4","F2-5","F2-6","F2-7","F2-8","F2-9","F3-1","F3-10","F3-11","F3-12","F3-2","F3-3","F3-4","F3-5","F3-6","F3-7","F3-8","F3-9"],"G":["G1-1","G1-10","G1-11","G1-12","G1-2","G1-3","G1-4","G1-5","G1-6","G1-7","G1-8","G1-9","G2-1","G2-10","G2-11","G2-12","G2-2","G2-3","G2-4","G2-5","G2-6","G2-7","G2-8","G2-9","G3-1","G3-10","G3-11","G3-12","G3-2","G3-3","G3-4","G3-5","G3-6","G3-7","G3-8","G3-9"],"H":["H1-1","H1-10","H1-11","H1-12","H1-2","H1-3","H1-4","H1-5","H1-6","H1-7","H1-8","H1-9","H2-1","H2-10","H2-11","H2-12","H2-2","H2-3","H2-4","H2-5","H2-6","H2-7","H2-8","H2-9","H3-1","H3-10","H3-11","H3-12","H3-2","H3-3","H3-4","H3-5","H3-6","H3-7","H3-8","H3-9"],"K":["K1-1","K1-10","K1-11","K1-12","K1-2","K1-3","K1-4","K1-5","K1-6","K1-7","K1-8","K1-9","K2-1","K2-10","K2-11","K2-12","K2-2","K2-3","K2-4","K2-5","K2-6","K2-7","K2-8","K2-9","K3-1","K3-10","K3-11","K3-12","K3-2","K3-3","K3-4","K3-5","K3-6","K3-7","K3-8","K3-9"],"L":["L1-1","L1-10","L1-11","L1-12","L1-2","L1-3","L1-4","L1-5","L1-6","L1-7","L1-8","L1-9","L2-1","L2-10","L2-11","L2-12","L2-2","L2-3","L2-4","L2-5","L2-6","L2-7","L2-8","L2-9","L3-1","L3-10","L3-11","L3-12","L3-2","L3-3","L3-4","L3-5","L3-6","L3-7","L3-8","L3-9"],"R":["R1-1","R1-10","R1-11","R1-12","R1-2","R1-3","R1-4","R1-5","R1-6","R1-7","R1-8","R1-9","R2-1","R2-10","R2-11","R2-12","R2-2","R2-3","R2-4","R2-5","R2-6","R2-7","R2-8","R2-9","R3-1","R3-10","R3-11","R3-12","R3-2","R3-3","R3-4","R3-5","R3-6","R3-7","R3-8","R3-9"],"А":["А-01-01","А-01-02","А-01-03","А-01-04","А-01-05","А-01-06","А-01-07","А-01-08","А-01-09","А-01-10","А-01-11","А-01-12","А-01-13","А-01-14","А-01-15","А-01-16","А-01-17","А-01-18","А-01-19","А-01-20","А-01-21","А-01-22","А-01-23","А-01-24","А-01-25","А-01-26","А-01-27","А-02-01","А-02-02","А-02-03","А-02-04","А-02-05","А-02-06","А-02-07","А-02-08","А-02-09","А-02-10","А-02-11","А-02-12","А-02-13","А-02-14","А-02-15","А-02-16","А-02-17","А-02-18","А-02-19","А-02-20","А-02-21","А-02-22","А-02-23","А-02-24","А-02-25","А-02-26","А-02-27","А-03-01","А-03-02","А-03-03","А-03-04","А-03-05","А-03-06","А-03-07","А-03-08","А-03-09","А-03-10","А-03-11","А-03-12","А-03-13","А-03-14","А-03-15","А-03-16","А-03-17","А-03-18","А-03-19","А-03-20","А-03-21","А-03-22","А-03-23","А-03-24","А-03-25","А-03-26","А-03-27"]}};
+
+
+
+/* =========================================================
    ROLE
    ========================================================= */
 
@@ -641,6 +650,14 @@ assemblyExpandedGroups: new Set(),
 
   assemblyFlashKey: '',
 
+  /*
+    Карта склада: СОХ / НС.
+  */
+
+  mapType: 'soh',
+
+  mapExpandedKeys: new Set(),
+
   scannerInput: '',
 
   scannerActive: false,
@@ -693,6 +710,10 @@ assemblyExpandedGroups: new Set(),
   comparisonLoaded: false,
 
   comparisonLoading: false,
+
+  diffFile1Data: null,
+
+  diffFile2Data: null,
 
   comparisonError: '',
 
@@ -6092,6 +6113,8 @@ async function closeReceiving() {
 
 function setupReceived() {
 
+  setupQuickToolsBar();
+
   /*
     ЗАГРУЗКА ДАННЫХ
 
@@ -7055,9 +7078,33 @@ function baseView() {
           📋 Задачи
         </button>
 
+        <button
+          class="sp-btn secondary"
+          data-page="excel"
+        >
+          📊 Excel
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="data"
+        >
+          👤 Данные
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          data-page="map"
+        >
+          🗺 Карта
+        </button>
+
       </div>
 
     </div>
+
+
+    ${quickToolsBar()}
 
 
     <!-- =========================================
@@ -7720,6 +7767,8 @@ async function setDirectionForSelectedBoxes() {
 
 function setupBase() {
 
+  setupQuickToolsBar();
+
   $('#baseSearch')
     ?.addEventListener(
       'input',
@@ -8290,8 +8339,16 @@ function openBoxModal(
     );
 
 
-  $('#boxBarcode')
-    ?.focus();
+  /*
+    ВАЖНО: намеренно НЕ ставим
+    автофокус на #boxBarcode —
+    на телефоне это сразу открывало
+    системную клавиатуру при каждом
+    открытии карточки коробки.
+    Клавиатура должна появляться
+    только когда пользователь сам
+    нажал на поле.
+  */
 
 
   modal.addEventListener(
@@ -10473,6 +10530,8 @@ function assemblyView() {
 
     <div>
 
+      ${quickToolsBar()}
+
 
       <!-- ========================= -->
       <!-- СТАТИСТИКА -->
@@ -11127,6 +11186,8 @@ function assemblyGroupRow(group) {
    ========================================================= */
 
 function setupAssembly() {
+
+  setupQuickToolsBar();
 
   if (!state.assemblySelectedIds) {
     state.assemblySelectedIds = new Set();
@@ -12584,6 +12645,8 @@ function collectedView() {
 
   return `
 
+    ${quickToolsBar()}
+
     <div
       class="sp-toolbar"
       style="
@@ -13058,6 +13121,8 @@ async function setDirectionForCollected() {
 
 function setupCollected() {
 
+  setupQuickToolsBar();
+
   $('#shipCollectedBtn')
     ?.addEventListener(
       'click',
@@ -13413,6 +13478,8 @@ function receivedView() {
   return `
 
     <div class="sp-receiving-page">
+
+      ${quickToolsBar()}
 
       <!-- ==========================================
            HEADER
@@ -14073,6 +14140,8 @@ function shippedView() {
 
   return `
 
+    ${quickToolsBar()}
+
     <div class="sp-card">
 
       <div class="sp-card-label">
@@ -14177,10 +14246,112 @@ function shippedView() {
 
 }
 
+function setupShipped() {
+
+  setupQuickToolsBar();
+
+}
+
+
+
 
 /* =========================================================
    DASHBOARD
    ========================================================= */
+
+/**
+ * Компактный список задач
+ * для главной страницы —
+ * до 5 активных задач,
+ * ближайшие по дате сверху.
+ */
+function homeTasksListHtml() {
+
+  const tasks =
+    state.tasks
+      .filter(task => !task.done)
+      .slice()
+      .sort((a, b) => {
+
+        if (a.date && b.date) {
+          return a.date < b.date ? -1 : 1;
+        }
+
+        if (a.date) return -1;
+        if (b.date) return 1;
+
+        return 0;
+
+      })
+      .slice(0, 5);
+
+  if (!tasks.length) {
+
+    return `
+      <div class="sp-muted" style="font-size:13px;">
+        Активных задач нет.
+      </div>
+    `;
+
+  }
+
+  return tasks.map(task => `
+
+    <div
+      style="
+        display:flex;
+        align-items:center;
+        gap:10px;
+        padding:8px 0;
+        border-bottom:1px solid #f0f0f0;
+      "
+    >
+
+      <input
+        type="checkbox"
+        class="home-task-toggle"
+        data-id="${escapeHtml(task.id)}"
+        style="width:18px;height:18px;cursor:pointer;flex-shrink:0;"
+      >
+
+      <span style="flex:1;font-size:14px;">
+        ${escapeHtml(task.title)}
+      </span>
+
+      ${
+        isTaskOverdue(task)
+          ? `
+            <span
+              style="
+                font-size:10px;
+                font-weight:700;
+                padding:2px 7px;
+                border-radius:999px;
+                color:#fff;
+                background:#b42318;
+                flex-shrink:0;
+              "
+            >
+              Просрочено
+            </span>
+          `
+          : (
+              task.date
+                ? `
+                  <span class="sp-muted" style="font-size:11px;flex-shrink:0;">
+                    ${escapeHtml(task.date)}
+                  </span>
+                `
+                : ''
+            )
+      }
+
+    </div>
+
+  `).join('');
+
+}
+
 
 function dashboardView() {
 
@@ -14252,6 +14423,37 @@ function dashboardView() {
 
 
   return `
+
+    <!-- =====================================================
+         БЫСТРАЯ НАВИГАЦИЯ (ГЛАВНАЯ)
+         ===================================================== -->
+
+    <div
+      class="sp-card"
+      style="margin-bottom:20px;"
+    >
+
+      <div
+        style="
+          display:flex;
+          flex-wrap:wrap;
+          gap:8px;
+        "
+      >
+
+        <button class="sp-btn secondary" data-page="base">База</button>
+        <button class="sp-btn secondary" data-page="received">Приёмка</button>
+        <button class="sp-btn secondary" data-page="assembly">Сборка</button>
+        <button class="sp-btn secondary" data-page="collected">Собрано</button>
+        <button class="sp-btn secondary" data-page="shipped">Убыло</button>
+        <button class="sp-btn secondary" data-page="map">🗺 Карта</button>
+        <button class="sp-btn secondary" data-page="excel">📊 Excel</button>
+        <button class="sp-btn secondary" data-page="data">👤 Данные</button>
+
+      </div>
+
+    </div>
+
 
     <!-- =====================================================
          НОВАЯ ЗАЯВКА
@@ -14577,6 +14779,251 @@ Excel:
         >
           📦 Сформировать подбор
         </button>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         ЗАДАЧИ (главная)
+         ===================================================== -->
+
+    <div
+      class="sp-card"
+      style="margin-bottom:20px;"
+    >
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          gap:12px;
+          flex-wrap:wrap;
+          margin-bottom:12px;
+        "
+      >
+
+        <h2 style="margin:0;font-size:18px;">
+          📋 Задачи
+        </h2>
+
+        <button
+          class="ghost"
+          type="button"
+          data-page="tasks"
+        >
+          Все задачи →
+        </button>
+
+      </div>
+
+      <div
+        style="
+          display:flex;
+          gap:8px;
+          margin-bottom:12px;
+        "
+      >
+
+        <input
+          id="homeTaskTitleInput"
+          type="text"
+          placeholder="Быстро добавить задачу..."
+          style="
+            flex:1;
+            border:1px solid #ddd;
+            border-radius:10px;
+            padding:9px 12px;
+            font-size:14px;
+            outline:none;
+          "
+        >
+
+        <button
+          class="sp-btn"
+          type="button"
+          id="homeAddTaskBtn"
+        >
+          +
+        </button>
+
+      </div>
+
+      <div id="homeTasksList">
+        ${homeTasksListHtml()}
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         ИНСТРУМЕНТЫ (главная)
+         ===================================================== -->
+
+    <div
+      class="sp-card"
+      style="margin-bottom:20px;"
+    >
+
+      <h2 style="margin:0 0 12px;font-size:18px;">
+        🛠 Инструменты
+      </h2>
+
+      <div
+        style="
+          display:flex;
+          gap:8px;
+          flex-wrap:wrap;
+        "
+      >
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          data-home-tool="compare"
+        >
+          ⇄ Сравнение
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          data-home-tool="split"
+        >
+          ✂ Деление
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          data-home-tool="sum"
+        >
+          Σ Сумма
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          data-home-tool="convert"
+        >
+          📦 Заявка → Коробки
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         КАЛЬКУЛЯТОРЫ (главная)
+         ===================================================== -->
+
+    <div
+      class="sp-grid"
+      style="margin-bottom:20px;"
+    >
+
+      <div class="sp-card">
+
+        <h3>
+          📦 Калькулятор коробок
+        </h3>
+
+        <p class="sp-muted">
+          Сколько коробок нужно
+          для данного количества товара.
+        </p>
+
+        <div
+          style="
+            display:flex;
+            gap:8px;
+            margin:10px 0;
+            flex-wrap:wrap;
+          "
+        >
+
+          <input
+            id="calcBoxesQty"
+            type="number"
+            min="0"
+            placeholder="Кол-во штук"
+            style="
+              flex:1;
+              min-width:110px;
+              border:1px solid #ddd;
+              border-radius:10px;
+              padding:8px 10px;
+              font-size:14px;
+              outline:none;
+            "
+          >
+
+          <input
+            id="calcBoxesPerBox"
+            type="number"
+            min="0"
+            placeholder="Штук в коробке"
+            style="
+              flex:1;
+              min-width:110px;
+              border:1px solid #ddd;
+              border-radius:10px;
+              padding:8px 10px;
+              font-size:14px;
+              outline:none;
+            "
+          >
+
+        </div>
+
+        <div
+          id="calcBoxesResult"
+          class="sp-muted"
+          style="font-size:14px;font-weight:700;"
+        >
+          Коробок: —
+        </div>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <h3>
+          🧮 Быстрый калькулятор
+        </h3>
+
+        <p class="sp-muted">
+          Простые вычисления:
+          + − × ÷ и скобки.
+        </p>
+
+        <input
+          id="calcQuickInput"
+          type="text"
+          placeholder="Например: (120 + 30) / 6"
+          style="
+            width:100%;
+            box-sizing:border-box;
+            border:1px solid #ddd;
+            border-radius:10px;
+            padding:8px 10px;
+            font-size:14px;
+            margin:10px 0;
+            outline:none;
+          "
+        >
+
+        <div
+          id="calcQuickResult"
+          class="sp-muted"
+          style="font-size:14px;font-weight:700;"
+        >
+          Результат: —
+        </div>
 
       </div>
 
@@ -15721,6 +16168,136 @@ Excel:
 
 }
 
+
+/* =========================================================
+   SETUP DASHBOARD
+   ========================================================= */
+
+function setupDashboard() {
+
+  /*
+    Быстрое добавление задачи.
+  */
+
+  $('#homeAddTaskBtn')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        const input =
+          $('#homeTaskTitleInput');
+
+        const title =
+          input?.value;
+
+        if (!normalizeText(title)) {
+          return;
+        }
+
+        addTask({
+          title,
+          date: '',
+          priority: 'medium',
+          notes: ''
+        });
+
+        if (input) {
+          input.value = '';
+        }
+
+        render();
+
+      }
+    );
+
+  $('#homeTaskTitleInput')
+    ?.addEventListener(
+      'keydown',
+      event => {
+
+        if (event.key === 'Enter') {
+
+          event.preventDefault();
+
+          $('#homeAddTaskBtn')
+            ?.click();
+
+        }
+
+      }
+    );
+
+  $all('.home-task-toggle')
+    .forEach(checkbox => {
+
+      checkbox.addEventListener(
+        'change',
+        event => {
+
+          toggleTaskDone(
+            event.target.dataset.id
+          );
+
+        }
+      );
+
+    });
+
+
+  /*
+    Быстрый переход к инструментам.
+  */
+
+  $all('[data-home-tool]')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          const tool =
+            button.dataset.homeTool;
+
+          state.activeTool =
+            tool === 'compare'
+              ? ''
+              : tool;
+
+          goToPage('comparison');
+
+        }
+      );
+
+    });
+
+
+  /*
+    Калькуляторы на главной —
+    используют те же функции,
+    что и на странице Инструменты.
+  */
+
+  $('#calcBoxesQty')
+    ?.addEventListener(
+      'input',
+      updateBoxesCalculator
+    );
+
+  $('#calcBoxesPerBox')
+    ?.addEventListener(
+      'input',
+      updateBoxesCalculator
+    );
+
+  $('#calcQuickInput')
+    ?.addEventListener(
+      'input',
+      updateQuickCalculator
+    );
+
+}
+
+
 /* =========================================================
    REQUEST PARSER
    ЕДИНАЯ ЛОГИКА РАЗБОРА ЗАЯВКИ
@@ -16488,6 +17065,34 @@ function getCollectedCountForBarcode(
 }
 
 
+/**
+ * Сколько физических коробок
+ * с этим штрихкодом сейчас
+ * стоит в статусе «К подбору».
+ */
+function getPickingCountForBarcode(
+  barcode
+) {
+
+  return state.boxes
+    .filter(
+      row =>
+        row.status ===
+          STATUSES.PICK ||
+        row.status ===
+          STATUSES.RESERVED
+    )
+    .filter(
+      row =>
+        normalizeBarcode(
+          row.barcode
+        ) === barcode
+    )
+    .length;
+
+}
+
+
 /*
   Разбор строки заявки.
 
@@ -16649,6 +17254,12 @@ function buildComparisonRows(
         );
 
 
+      const pickingBoxes =
+        getPickingCountForBarcode(
+          barcode
+        );
+
+
       let difference =
         null;
 
@@ -16713,6 +17324,8 @@ function buildComparisonRows(
         requiredBoxes,
 
         collectedBoxes,
+
+        pickingBoxes,
 
         difference,
 
@@ -17185,6 +17798,10 @@ function renderComparisonTable() {
     $('#comparisonCollected');
 
 
+  const totalPicking =
+    $('#comparisonPicking');
+
+
   const totalDifference =
     $('#comparisonDifference');
 
@@ -17211,7 +17828,7 @@ function renderComparisonTable() {
       <tr>
 
         <td
-          colspan="7"
+          colspan="8"
           class="empty"
         >
           Загрузите заявку или вставьте
@@ -17251,6 +17868,14 @@ function renderComparisonTable() {
     if (totalCollected) {
 
       totalCollected.textContent =
+        '0';
+
+    }
+
+
+    if (totalPicking) {
+
+      totalPicking.textContent =
         '0';
 
     }
@@ -17359,6 +17984,11 @@ function renderComparisonTable() {
 
 
             <td>
+              ${row.pickingBoxes}
+            </td>
+
+
+            <td>
 
               <span
                 class="sp-status ${statusClass}"
@@ -17409,6 +18039,15 @@ function renderComparisonTable() {
       (sum, row) =>
         sum +
         row.collectedBoxes,
+      0
+    );
+
+
+  const picking =
+    rows.reduce(
+      (sum, row) =>
+        sum +
+        row.pickingBoxes,
       0
     );
 
@@ -17481,6 +18120,14 @@ function renderComparisonTable() {
   }
 
 
+  if (totalPicking) {
+
+    totalPicking.textContent =
+      picking;
+
+  }
+
+
   if (totalDifference) {
 
     totalDifference.textContent =
@@ -17529,12 +18176,119 @@ function renderComparisonTable() {
  * Верхний переключатель вкладок
  * внутри раздела "Сравнение / Инструменты".
  */
+/**
+ * Компактная строка быстрого
+ * доступа к инструментам —
+ * для вставки в шапку основных
+ * разделов (База/Сборка/Приёмка/
+ * Собрано/Убыло), чтобы не нужно
+ * было каждый раз возвращаться
+ * на главную.
+ */
+function quickToolsBar() {
+
+  return `
+
+    <div
+      style="
+        display:flex;
+        gap:6px;
+        flex-wrap:wrap;
+        margin-bottom:14px;
+      "
+    >
+
+      <button
+        class="ghost"
+        type="button"
+        data-home-tool="compare"
+        style="font-size:12px;"
+      >
+        ⇄ Сравнение
+      </button>
+
+      <button
+        class="ghost"
+        type="button"
+        data-home-tool="split"
+        style="font-size:12px;"
+      >
+        ✂ Деление
+      </button>
+
+      <button
+        class="ghost"
+        type="button"
+        data-home-tool="sum"
+        style="font-size:12px;"
+      >
+        Σ Сумма
+      </button>
+
+      <button
+        class="ghost"
+        type="button"
+        data-home-tool="convert"
+        style="font-size:12px;"
+      >
+        📦 Заявка→Коробки
+      </button>
+
+      <button
+        class="ghost"
+        type="button"
+        data-page="tools"
+        style="font-size:12px;"
+      >
+        🧮 Калькулятор
+      </button>
+
+    </div>
+
+  `;
+
+}
+
+
+/**
+ * Подключает клики по кнопкам
+ * quickToolsBar() — переиспользует
+ * ту же логику, что и на главной.
+ */
+function setupQuickToolsBar() {
+
+  $all('[data-home-tool]')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          const tool =
+            button.dataset.homeTool;
+
+          state.activeTool =
+            tool === 'compare'
+              ? ''
+              : tool;
+
+          goToPage('comparison');
+
+        }
+      );
+
+    });
+
+}
+
+
 function toolsSubNav(active) {
 
   const tabs = [
     { key: 'compare', label: '⇄ Сравнение' },
     { key: 'split', label: '✂ Деление' },
-    { key: 'sum', label: 'Σ Сумма' }
+    { key: 'sum', label: 'Σ Сумма' },
+    { key: 'convert', label: '📦 Заявка → Коробки' }
   ];
 
   return `
@@ -17574,6 +18328,529 @@ function toolsSubNav(active) {
 /*
   Сам экран.
 */
+/* =========================================================
+   СРАВНЕНИЕ ДВУХ ФАЙЛОВ (ЕСТЬ В ОБОИХ / ТОЛЬКО В 1 / ТОЛЬКО В 2)
+   ========================================================= */
+
+/**
+ * Читает Excel-файл и возвращает
+ * "сырые" строки (массив массивов).
+ */
+function readExcelFileAsRows(file) {
+
+  return new Promise(
+    (resolve, reject) => {
+
+      const reader =
+        new FileReader();
+
+      reader.onload = event => {
+
+        try {
+
+          const data =
+            new Uint8Array(
+              event.target.result
+            );
+
+          const workbook =
+            XLSX.read(
+              data,
+              { type: 'array' }
+            );
+
+          const sheet =
+            workbook.Sheets[
+              workbook.SheetNames[0]
+            ];
+
+          const rows =
+            XLSX.utils.sheet_to_json(
+              sheet,
+              {
+                header: 1,
+                defval: '',
+                raw: false
+              }
+            );
+
+          resolve(rows);
+
+        } catch (error) {
+
+          reject(error);
+
+        }
+
+      };
+
+      reader.onerror = () =>
+        reject(
+          new Error(
+            'Не удалось прочитать файл'
+          )
+        );
+
+      reader.readAsArrayBuffer(
+        file
+      );
+
+    }
+  );
+
+}
+
+
+/**
+ * Превращает сырые строки Excel
+ * в Map(штрихкод → количество).
+ *
+ * Пытается найти столбцы
+ * «Штрихкод» и «Количество»
+ * по заголовку; если заголовка
+ * нет — берёт 1-й и 2-й столбцы.
+ */
+function excelRowsToBarcodeMap(
+  rows
+) {
+
+  const map =
+    new Map();
+
+  if (!rows || !rows.length) {
+    return map;
+  }
+
+  const header =
+    (rows[0] || []).map(
+      value =>
+        normalizeHeader(value)
+    );
+
+  const foundBarcodeCol =
+    header.findIndex(
+      name =>
+        name.includes('штрихкод') ||
+        name.includes('barcode') ||
+        name.includes('баркод')
+    );
+
+  const foundQtyCol =
+    header.findIndex(
+      name =>
+        name.includes('количество') ||
+        name.includes('колво') ||
+        name.includes('qty')
+    );
+
+  let barcodeCol =
+    foundBarcodeCol !== -1
+      ? foundBarcodeCol
+      : 0;
+
+  let qtyCol =
+    foundQtyCol !== -1
+      ? foundQtyCol
+      : 1;
+
+  let startRow;
+
+  if (foundBarcodeCol !== -1) {
+
+    startRow = 1;
+
+  } else {
+
+    /*
+      Заголовка нет — проверяем,
+      похожа ли первая строка
+      на штрихкод сама по себе.
+    */
+
+    const looksLikeBarcode =
+      normalizeBarcode(
+        (rows[0] || [])[0]
+      );
+
+    startRow =
+      looksLikeBarcode ? 0 : 1;
+
+  }
+
+  for (
+    let i = startRow;
+    i < rows.length;
+    i++
+  ) {
+
+    const row = rows[i] || [];
+
+    const barcode =
+      normalizeBarcode(
+        row[barcodeCol]
+      );
+
+    if (!barcode) {
+      continue;
+    }
+
+    const qty =
+      parsePositiveNumber(
+        row[qtyCol]
+      ) || 1;
+
+    map.set(
+      barcode,
+      (map.get(barcode) || 0) + qty
+    );
+
+  }
+
+  return map;
+
+}
+
+
+/**
+ * Превращает вручную вставленный
+ * текст в Map(штрихкод → количество),
+ * переиспользуя существующий парсер.
+ */
+function textToBarcodeMap(text) {
+
+  const map =
+    new Map();
+
+  parseComparisonText(text)
+    .forEach(row => {
+
+      map.set(
+        row.barcode,
+        row.requestedUnits
+      );
+
+    });
+
+  return map;
+
+}
+
+
+/**
+ * Загрузка одного из двух файлов
+ * для сравнения между собой.
+ */
+async function importDiffExcel(
+  event,
+  fileNum
+) {
+
+  const file =
+    event.target.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  const statusEl =
+    $(`#diffFile${fileNum}Status`);
+
+  if (statusEl) {
+
+    statusEl.textContent =
+      'Загрузка...';
+
+  }
+
+  try {
+
+    const rows =
+      await readExcelFileAsRows(
+        file
+      );
+
+    const map =
+      excelRowsToBarcodeMap(rows);
+
+    if (!map.size) {
+
+      throw new Error(
+        'Не найдено штрихкодов в файле'
+      );
+
+    }
+
+    if (fileNum === 1) {
+      state.diffFile1Data = map;
+    } else {
+      state.diffFile2Data = map;
+    }
+
+    if (statusEl) {
+
+      statusEl.textContent =
+        `✓ ${file.name} — ${map.size} штрихкодов`;
+
+    }
+
+  } catch (error) {
+
+    if (statusEl) {
+
+      statusEl.textContent =
+        'Ошибка чтения файла';
+
+    }
+
+    toast(
+      error.message ||
+        'Не удалось прочитать Excel',
+      'error'
+    );
+
+  }
+
+}
+
+
+/**
+ * Рендерит результат сравнения
+ * трёх карточек: есть в обоих /
+ * только в файле 1 / только в файле 2.
+ */
+function renderDiffResult(
+  both,
+  only1,
+  only2
+) {
+
+  const container =
+    $('#diffResult');
+
+  if (!container) {
+    return;
+  }
+
+  function rowsBlock(
+    title,
+    color,
+    rows,
+    twoColumns
+  ) {
+
+    return `
+
+      <div
+        class="sp-card"
+        style="
+          margin-bottom:12px;
+          border-left:4px solid ${color};
+        "
+      >
+
+        <div
+          style="
+            font-weight:800;
+            font-size:13px;
+            margin-bottom:8px;
+          "
+        >
+          ${title} (${rows.length})
+        </div>
+
+        ${
+          rows.length
+            ? `
+              <div style="max-height:260px;overflow:auto;">
+                <table class="data-table">
+                  <tbody>
+                    ${rows.map(row => `
+                      <tr>
+                        <td style="font-family:monospace;">
+                          ${escapeHtml(row.barcode)}
+                        </td>
+                        <td style="text-align:right;white-space:nowrap;">
+                          ${
+                            twoColumns
+                              ? `${row.qty1} / ${row.qty2}`
+                              : row.qty
+                          }
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            `
+            : `
+              <div class="sp-muted" style="font-size:12px;">
+                Пусто
+              </div>
+            `
+        }
+
+      </div>
+
+    `;
+
+  }
+
+  container.innerHTML =
+    rowsBlock(
+      'ЕСТЬ В ОБОИХ',
+      '#18794e',
+      both,
+      true
+    ) +
+    rowsBlock(
+      'ТОЛЬКО В ФАЙЛЕ 1',
+      '#b8860b',
+      only1,
+      false
+    ) +
+    rowsBlock(
+      'ТОЛЬКО В ФАЙЛЕ 2',
+      '#4a90d9',
+      only2,
+      false
+    );
+
+}
+
+
+function runDiffComparison() {
+
+  const text1 =
+    $('#diffFile1Text')?.value ||
+    '';
+
+  const text2 =
+    $('#diffFile2Text')?.value ||
+    '';
+
+  const map1 =
+    state.diffFile1Data &&
+    state.diffFile1Data.size
+      ? state.diffFile1Data
+      : textToBarcodeMap(text1);
+
+  const map2 =
+    state.diffFile2Data &&
+    state.diffFile2Data.size
+      ? state.diffFile2Data
+      : textToBarcodeMap(text2);
+
+  if (!map1.size && !map2.size) {
+
+    toast(
+      'Загрузите хотя бы один файл или вставьте данные',
+      'error'
+    );
+
+    return;
+
+  }
+
+  const both = [];
+  const only1 = [];
+  const only2 = [];
+
+  const allBarcodes =
+    new Set([
+      ...map1.keys(),
+      ...map2.keys()
+    ]);
+
+  allBarcodes.forEach(barcode => {
+
+    const inFirst =
+      map1.has(barcode);
+
+    const inSecond =
+      map2.has(barcode);
+
+    if (inFirst && inSecond) {
+
+      both.push({
+        barcode,
+        qty1: map1.get(barcode),
+        qty2: map2.get(barcode)
+      });
+
+    } else if (inFirst) {
+
+      only1.push({
+        barcode,
+        qty: map1.get(barcode)
+      });
+
+    } else {
+
+      only2.push({
+        barcode,
+        qty: map2.get(barcode)
+      });
+
+    }
+
+  });
+
+  renderDiffResult(
+    both,
+    only1,
+    only2
+  );
+
+}
+
+
+function clearDiffComparison() {
+
+  state.diffFile1Data = null;
+  state.diffFile2Data = null;
+
+  const text1 =
+    $('#diffFile1Text');
+
+  const text2 =
+    $('#diffFile2Text');
+
+  const status1 =
+    $('#diffFile1Status');
+
+  const status2 =
+    $('#diffFile2Status');
+
+  const file1 =
+    $('#diffFile1Input');
+
+  const file2 =
+    $('#diffFile2Input');
+
+  const result =
+    $('#diffResult');
+
+  if (text1) text1.value = '';
+  if (text2) text2.value = '';
+
+  if (status1) {
+    status1.textContent =
+      'Файл не загружен';
+  }
+
+  if (status2) {
+    status2.textContent =
+      'Файл не загружен';
+  }
+
+  if (file1) file1.value = '';
+  if (file2) file2.value = '';
+
+  if (result) result.innerHTML = '';
+
+}
+
+
 function comparisonView() {
 
   return `
@@ -17759,7 +19036,7 @@ function comparisonView() {
       style="
         display:grid;
         grid-template-columns:
-          repeat(4,minmax(0,1fr));
+          repeat(5,minmax(0,1fr));
         gap:12px;
         margin-bottom:16px;
       "
@@ -17831,6 +19108,32 @@ function comparisonView() {
 
         <div
           id="comparisonCollected"
+          style="
+            font-size:28px;
+            font-weight:750;
+            margin-top:7px;
+          "
+        >
+          0
+        </div>
+
+      </div>
+
+
+      <div
+        class="sp-card"
+        style="
+          margin:0;
+          padding:18px;
+        "
+      >
+
+        <div class="sp-card-label">
+          К подбору
+        </div>
+
+        <div
+          id="comparisonPicking"
           style="
             font-size:28px;
             font-weight:750;
@@ -17947,6 +19250,10 @@ function comparisonView() {
               </th>
 
               <th>
+                К подбору
+              </th>
+
+              <th>
                 Статус
               </th>
 
@@ -17962,7 +19269,7 @@ function comparisonView() {
             <tr>
 
               <td
-                colspan="7"
+                colspan="8"
                 class="empty"
               >
                 Загрузите заявку
@@ -17977,6 +19284,204 @@ function comparisonView() {
 
         </table>
 
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         СРАВНЕНИЕ ДВУХ ФАЙЛОВ
+         ===================================================== -->
+
+    <div
+      class="sp-card"
+      style="margin-top:16px;"
+    >
+
+      <h3>
+        2. Сравнить два файла между собой
+      </h3>
+
+      <p
+        class="sp-muted"
+        style="margin-top:4px;"
+      >
+        Каждый файл — Excel
+        (штрихкод + количество)
+        или строки, вставленные вручную.
+        Штрихкоды сравниваются
+        независимо от заявки выше.
+      </p>
+
+      <div
+        style="
+          display:grid;
+          grid-template-columns:1fr 1fr;
+          gap:12px;
+          margin-top:14px;
+        "
+      >
+
+        <div>
+
+          <div
+            style="
+              font-weight:700;
+              font-size:13px;
+              margin-bottom:6px;
+            "
+          >
+            Файл 1
+          </div>
+
+          <button
+            class="sp-btn secondary"
+            type="button"
+            onclick="
+              document
+                .getElementById(
+                  'diffFile1Input'
+                )
+                .click()
+            "
+            style="width:100%;margin-bottom:8px;"
+          >
+            📥 Загрузить Excel
+          </button>
+
+          <input
+            id="diffFile1Input"
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            style="display:none"
+            onchange="importDiffExcel(event, 1)"
+          >
+
+          <textarea
+            id="diffFile1Text"
+            placeholder="Или вставьте строки сюда..."
+            style="
+              width:100%;
+              min-height:110px;
+              box-sizing:border-box;
+              resize:vertical;
+              border:1px solid #ddd;
+              border-radius:10px;
+              padding:10px;
+              font-family:monospace;
+              font-size:13px;
+              outline:none;
+            "
+          ></textarea>
+
+          <div
+            id="diffFile1Status"
+            class="sp-muted"
+            style="font-size:11px;margin-top:4px;"
+          >
+            Файл не загружен
+          </div>
+
+        </div>
+
+
+        <div>
+
+          <div
+            style="
+              font-weight:700;
+              font-size:13px;
+              margin-bottom:6px;
+            "
+          >
+            Файл 2
+          </div>
+
+          <button
+            class="sp-btn secondary"
+            type="button"
+            onclick="
+              document
+                .getElementById(
+                  'diffFile2Input'
+                )
+                .click()
+            "
+            style="width:100%;margin-bottom:8px;"
+          >
+            📥 Загрузить Excel
+          </button>
+
+          <input
+            id="diffFile2Input"
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            style="display:none"
+            onchange="importDiffExcel(event, 2)"
+          >
+
+          <textarea
+            id="diffFile2Text"
+            placeholder="Или вставьте строки сюда..."
+            style="
+              width:100%;
+              min-height:110px;
+              box-sizing:border-box;
+              resize:vertical;
+              border:1px solid #ddd;
+              border-radius:10px;
+              padding:10px;
+              font-family:monospace;
+              font-size:13px;
+              outline:none;
+            "
+          ></textarea>
+
+          <div
+            id="diffFile2Status"
+            class="sp-muted"
+            style="font-size:11px;margin-top:4px;"
+          >
+            Файл не загружен
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div
+        style="
+          display:flex;
+          gap:10px;
+          margin-top:14px;
+          flex-wrap:wrap;
+        "
+      >
+
+        <button
+          class="sp-btn"
+          type="button"
+          id="runDiffBtn"
+        >
+          ⇄ СРАВНИТЬ
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          id="clearDiffBtn"
+        >
+          Очистить
+        </button>
+
+      </div>
+
+
+      <div
+        id="diffResult"
+        style="margin-top:16px;"
+      >
       </div>
 
     </div>
@@ -18473,6 +19978,85 @@ async function addSplitResultToBase() {
 }
 
 
+/**
+ * Копирует текст в буфер обмена.
+ * Сначала пробует Clipboard API,
+ * при неудаче — fallback через
+ * скрытый textarea + execCommand.
+ */
+async function copyTextToClipboard(
+  text
+) {
+
+  if (!text) {
+    return false;
+  }
+
+  try {
+
+    if (
+      navigator.clipboard &&
+      window.isSecureContext
+    ) {
+
+      await navigator.clipboard.writeText(
+        text
+      );
+
+      return true;
+
+    }
+
+  } catch (error) {
+
+    /*
+      Падаем в fallback ниже.
+    */
+
+  }
+
+  try {
+
+    const textarea =
+      document.createElement(
+        'textarea'
+      );
+
+    textarea.value = text;
+
+    textarea.style.position =
+      'fixed';
+
+    textarea.style.opacity =
+      '0';
+
+    document.body.appendChild(
+      textarea
+    );
+
+    textarea.focus();
+    textarea.select();
+
+    const success =
+      document.execCommand(
+        'copy'
+      );
+
+    document.body.removeChild(
+      textarea
+    );
+
+    return success;
+
+  } catch (error) {
+
+    return false;
+
+  }
+
+}
+
+
 function setupSplit() {
 
   $('#runSplitBtn')
@@ -18545,10 +20129,12 @@ function setupSplit() {
       }
     );
 
+
+
   $('#copySplitBtn')
     ?.addEventListener(
       'click',
-      () => {
+      async () => {
 
         const outputEl =
           $('#splitOutput');
@@ -18557,9 +20143,16 @@ function setupSplit() {
           return;
         }
 
-        navigator.clipboard
-          ?.writeText(outputEl.value)
-          .catch(() => {});
+        const success =
+          await copyTextToClipboard(
+            outputEl.value
+          );
+
+        toast(
+          success
+            ? 'Скопировано'
+            : 'Не удалось скопировать'
+        );
 
       }
     );
@@ -18925,7 +20518,7 @@ function setupSum() {
   $('#copySumBtn')
     ?.addEventListener(
       'click',
-      () => {
+      async () => {
 
         const outputEl =
           $('#sumOutput');
@@ -18934,9 +20527,421 @@ function setupSum() {
           return;
         }
 
-        navigator.clipboard
-          ?.writeText(outputEl.value)
-          .catch(() => {});
+        const success =
+          await copyTextToClipboard(
+            outputEl.value
+          );
+
+        toast(
+          success
+            ? 'Скопировано'
+            : 'Не удалось скопировать'
+        );
+
+      }
+    );
+
+  setupToolsSubNav();
+
+}
+
+
+/* =========================================================
+   ЗАЯВКА → КОРОБКИ
+   Конвертация количества штук в
+   количество физических коробок.
+   ========================================================= */
+
+function convertView() {
+
+  return `
+
+    ${toolsSubNav('convert')}
+
+    <div
+      class="sp-card"
+      style="margin-bottom:16px;"
+    >
+
+      <h3>
+        📦 Заявка → Коробки
+      </h3>
+
+      <p
+        class="sp-muted"
+        style="margin-top:4px;"
+      >
+        Переводит заявку из количества
+        штук в количество физических
+        коробок. Каждая строка:
+        <b>штрихкод</b>,
+        <b>кол-во штук</b>,
+        <b>штук в упаковке</b>.
+        Округление всегда в бОльшую
+        сторону — до целой коробки.
+        Не заменяет основную логику
+        склада (1 штрихкод = 1 коробка) —
+        это только помощник для
+        подготовки заявки перед
+        «Сформировать подбор».
+      </p>
+
+      <div
+        style="
+          display:flex;
+          gap:10px;
+          flex-wrap:wrap;
+          margin:14px 0;
+        "
+      >
+
+        <button
+          class="sp-btn"
+          type="button"
+          id="runConvertBtn"
+        >
+          📦 Рассчитать коробки
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          id="clearConvertBtn"
+        >
+          Очистить
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          id="downloadConvertBtn"
+        >
+          ⬇ Скачать .txt
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          type="button"
+          id="copyConvertBtn"
+        >
+          📋 Скопировать результат
+        </button>
+
+      </div>
+
+      <textarea
+        id="convertInput"
+        placeholder="Например:
+
+123456	100	10
+123457	37	12
+123458	55	20
+
+или через дефис:
+123456 - 100 - 10"
+        style="
+          width:100%;
+          min-height:130px;
+          box-sizing:border-box;
+          resize:vertical;
+          border:1px solid #ddd;
+          border-radius:12px;
+          padding:14px;
+          font-family:monospace;
+          font-size:14px;
+          line-height:1.6;
+          outline:none;
+        "
+      ></textarea>
+
+      <div
+        id="convertLiveHint"
+        class="sp-muted"
+        style="
+          margin-top:8px;
+          font-size:12px;
+        "
+      ></div>
+
+    </div>
+
+
+    <div class="sp-card">
+
+      <h3>
+        Результат
+      </h3>
+
+      <div
+        id="convertSummary"
+        class="sp-muted"
+        style="
+          margin:4px 0 12px;
+          font-size:12px;
+        "
+      >
+        Пока пусто.
+      </div>
+
+      <textarea
+        id="convertOutput"
+        readonly
+        style="
+          width:100%;
+          min-height:200px;
+          box-sizing:border-box;
+          resize:vertical;
+          border:1px solid #ddd;
+          border-radius:12px;
+          padding:14px;
+          font-family:monospace;
+          font-size:14px;
+          line-height:1.6;
+          outline:none;
+          background:#fafafa;
+        "
+      ></textarea>
+
+    </div>
+
+  `;
+
+}
+
+
+function validateConvertInputLive() {
+
+  const input =
+    $('#convertInput');
+
+  const hintEl =
+    $('#convertLiveHint');
+
+  if (!input || !hintEl) {
+    return;
+  }
+
+  const lines =
+    input.value
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line !== '');
+
+  if (lines.length === 0) {
+    hintEl.textContent = '';
+    return;
+  }
+
+  let invalid = 0;
+
+  lines.forEach(line => {
+
+    const parts =
+      parseToolDataLine(line);
+
+    const barcode =
+      normalizeBarcode(parts[0]);
+
+    const qty =
+      parsePositiveNumber(parts[1]);
+
+    const perBox =
+      parsePositiveNumber(parts[2]);
+
+    if (
+      !barcode ||
+      qty === null ||
+      perBox === null
+    ) {
+      invalid++;
+    }
+
+  });
+
+  hintEl.textContent =
+    invalid > 0
+      ? `⚠ Некорректных строк: ${invalid} из ${lines.length}`
+      : `✓ Все строки (${lines.length}) выглядят корректно`;
+
+  hintEl.style.color =
+    invalid > 0
+      ? '#b42318'
+      : '#18794e';
+
+}
+
+
+function runConvert() {
+
+  const input =
+    $('#convertInput');
+
+  const summaryEl =
+    $('#convertSummary');
+
+  const outputEl =
+    $('#convertOutput');
+
+  if (
+    !input ||
+    !summaryEl ||
+    !outputEl
+  ) {
+    return;
+  }
+
+  const lines =
+    input.value
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line !== '');
+
+  const output = [];
+
+  let processedRows = 0;
+  let skippedRows = 0;
+  let totalBoxes = 0;
+
+  lines.forEach(line => {
+
+    const parts =
+      parseToolDataLine(line);
+
+    const barcode =
+      normalizeBarcode(parts[0]);
+
+    const qty =
+      parsePositiveNumber(parts[1]);
+
+    const perBox =
+      parsePositiveNumber(parts[2]);
+
+    if (
+      !barcode ||
+      qty === null ||
+      perBox === null
+    ) {
+      skippedRows++;
+      return;
+    }
+
+    const boxes =
+      Math.ceil(qty / perBox);
+
+    output.push(
+      `${barcode}\t${boxes}`
+    );
+
+    totalBoxes += boxes;
+    processedRows++;
+
+  });
+
+  outputEl.value =
+    output.join('\n');
+
+  summaryEl.textContent =
+    lines.length === 0
+      ? 'Пока пусто.'
+      : `Обработано строк: ${processedRows}` +
+        ` · Коробок нужно: ${totalBoxes}` +
+        (
+          skippedRows > 0
+            ? ` · Пропущено некорректных строк: ${skippedRows}`
+            : ''
+        );
+
+}
+
+
+function setupConvert() {
+
+  $('#runConvertBtn')
+    ?.addEventListener(
+      'click',
+      runConvert
+    );
+
+  $('#convertInput')
+    ?.addEventListener(
+      'input',
+      validateConvertInputLive
+    );
+
+  $('#downloadConvertBtn')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        const outputEl =
+          $('#convertOutput');
+
+        if (!outputEl || !outputEl.value) {
+          return;
+        }
+
+        downloadTextFile(
+          'convert-result.txt',
+          outputEl.value
+        );
+
+      }
+    );
+
+  $('#copyConvertBtn')
+    ?.addEventListener(
+      'click',
+      async () => {
+
+        const outputEl =
+          $('#convertOutput');
+
+        if (!outputEl || !outputEl.value) {
+          return;
+        }
+
+        const success =
+          await copyTextToClipboard(
+            outputEl.value
+          );
+
+        toast(
+          success
+            ? 'Скопировано'
+            : 'Не удалось скопировать'
+        );
+
+      }
+    );
+
+  $('#clearConvertBtn')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        const input =
+          $('#convertInput');
+
+        const outputEl =
+          $('#convertOutput');
+
+        const summaryEl =
+          $('#convertSummary');
+
+        const hintEl =
+          $('#convertLiveHint');
+
+        if (input) input.value = '';
+        if (outputEl) outputEl.value = '';
+
+        if (summaryEl) {
+          summaryEl.textContent =
+            'Пока пусто.';
+        }
+
+        if (hintEl) {
+          hintEl.textContent = '';
+        }
 
       }
     );
@@ -18982,6 +20987,18 @@ function setupToolsSubNav() {
 function setupComparison() {
 
    setupToolsSubNav();
+
+  $('#runDiffBtn')
+    ?.addEventListener(
+      'click',
+      runDiffComparison
+    );
+
+  $('#clearDiffBtn')
+    ?.addEventListener(
+      'click',
+      clearDiffComparison
+    );
 
   const input =
     $('#comparisonRequest');
@@ -22523,6 +24540,1041 @@ function exportInventoryResult() {
 
 }
 
+/* =========================================================
+   ВКЛАДКА ДАННЫЕ (СТАТИСТИКА + АККАУНТ)
+   ========================================================= */
+
+/* =========================================================
+   КАРТА СКЛАДА (СОХ / НС)
+   ========================================================= */
+
+function copyLocationCode(code) {
+
+  copyTextToClipboard(code)
+    .then(success => {
+
+      toast(
+        success
+          ? `Скопировано: ${code}`
+          : code
+      );
+
+    });
+
+}
+
+
+function mapSohHtml() {
+
+  const entries =
+    WAREHOUSE_MAP_DATA.soh_entries ||
+    [];
+
+  const landmarks =
+    WAREHOUSE_MAP_DATA.soh_landmarks ||
+    [];
+
+  return `
+
+    <div
+      class="sp-card"
+      style="margin-bottom:14px;"
+    >
+
+      <div
+        class="sp-muted"
+        style="font-size:12px;"
+      >
+        Ориентиры на плане:
+        ${landmarks
+          .map(l => escapeHtml(l))
+          .join(' · ')}
+      </div>
+
+    </div>
+
+    ${entries
+      .map((entry, index) => {
+
+        const key =
+          `soh-${index}`;
+
+        const expanded =
+          state.mapExpandedKeys.has(
+            key
+          );
+
+        return `
+
+          <div
+            style="
+              margin-bottom:8px;
+              border:1px solid #eee;
+              border-radius:12px;
+              overflow:hidden;
+            "
+          >
+
+            <button
+              type="button"
+              class="map-toggle"
+              data-key="${key}"
+              style="
+                width:100%;
+                text-align:left;
+                padding:11px 14px;
+                background:#fafafa;
+                border:none;
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                cursor:pointer;
+                font-size:14px;
+              "
+            >
+
+              <span style="font-weight:700;">
+                📍 Ряд ${entry.ryad}
+              </span>
+
+              <span class="sp-muted" style="font-size:12px;">
+                ${entry.places.length} мест
+                ${expanded ? '▲' : '▼'}
+              </span>
+
+            </button>
+
+            ${
+              expanded
+                ? `
+                  <div
+                    style="
+                      padding:12px;
+                      display:flex;
+                      flex-wrap:wrap;
+                      gap:8px;
+                    "
+                  >
+                    ${entry.places.map(place => `
+                      <button
+                        type="button"
+                        class="map-place-btn"
+                        data-code="Ряд ${entry.ryad} · место ${place}"
+                        style="
+                          min-width:52px;
+                          padding:10px 6px;
+                          border:1px solid #ddd;
+                          border-radius:8px;
+                          background:#fff;
+                          font-size:13px;
+                          font-weight:700;
+                          cursor:pointer;
+                        "
+                      >
+                        ${place}
+                      </button>
+                    `).join('')}
+                  </div>
+                `
+                : ''
+            }
+
+          </div>
+
+        `;
+
+      })
+      .join('')}
+
+  `;
+
+}
+
+
+function mapNsHtml() {
+
+  const zones =
+    WAREHOUSE_MAP_DATA.ns_zones ||
+    {};
+
+  const zoneKeys =
+    Object.keys(zones).sort();
+
+  return zoneKeys
+    .map(zone => {
+
+      const codes =
+        zones[zone];
+
+      const key =
+        `ns-${zone}`;
+
+      const expanded =
+        state.mapExpandedKeys.has(
+          key
+        );
+
+      return `
+
+        <div
+          style="
+            margin-bottom:8px;
+            border:1px solid #eee;
+            border-radius:12px;
+            overflow:hidden;
+          "
+        >
+
+          <button
+            type="button"
+            class="map-toggle"
+            data-key="${key}"
+            style="
+              width:100%;
+              text-align:left;
+              padding:11px 14px;
+              background:#fafafa;
+              border:none;
+              display:flex;
+              justify-content:space-between;
+              align-items:center;
+              cursor:pointer;
+              font-size:14px;
+            "
+          >
+
+            <span style="font-weight:700;">
+              📦 Зона ${escapeHtml(zone)}
+            </span>
+
+            <span class="sp-muted" style="font-size:12px;">
+              ${codes.length} мест
+              ${expanded ? '▲' : '▼'}
+            </span>
+
+          </button>
+
+          ${
+            expanded
+              ? `
+                <div
+                  style="
+                    padding:12px;
+                    display:flex;
+                    flex-wrap:wrap;
+                    gap:8px;
+                    max-height:400px;
+                    overflow:auto;
+                  "
+                >
+                  ${codes.map(code => `
+                    <button
+                      type="button"
+                      class="map-place-btn"
+                      data-code="${escapeHtml(code)}"
+                      style="
+                        min-width:64px;
+                        padding:10px 6px;
+                        border:1px solid #ddd;
+                        border-radius:8px;
+                        background:#fff;
+                        font-size:12px;
+                        font-weight:700;
+                        cursor:pointer;
+                        font-family:monospace;
+                      "
+                    >
+                      ${escapeHtml(code)}
+                    </button>
+                  `).join('')}
+                </div>
+              `
+              : ''
+          }
+
+        </div>
+
+      `;
+
+    })
+    .join('');
+
+}
+
+
+function mapView() {
+
+  return `
+
+    <div
+      class="sp-card"
+      style="
+        margin-bottom:16px;
+        display:flex;
+        gap:8px;
+      "
+    >
+
+      <button
+        class="sp-btn ${state.mapType === 'soh' ? '' : 'secondary'}"
+        type="button"
+        data-map-type="soh"
+      >
+        СОХ
+      </button>
+
+      <button
+        class="sp-btn ${state.mapType === 'ns' ? '' : 'secondary'}"
+        type="button"
+        data-map-type="ns"
+      >
+        НС
+      </button>
+
+    </div>
+
+    <p class="sp-muted" style="margin-bottom:14px;">
+      Нажмите на ряд/зону, чтобы увидеть места.
+      Нажмите на место, чтобы скопировать его код.
+    </p>
+
+    ${
+      state.mapType === 'ns'
+        ? mapNsHtml()
+        : mapSohHtml()
+    }
+
+  `;
+
+}
+
+
+function setupMap() {
+
+  $all('[data-map-type]')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          state.mapType =
+            button.dataset.mapType;
+
+          render();
+
+        }
+      );
+
+    });
+
+  $all('.map-toggle')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          const key =
+            button.dataset.key;
+
+          if (
+            state.mapExpandedKeys.has(
+              key
+            )
+          ) {
+
+            state.mapExpandedKeys.delete(
+              key
+            );
+
+          } else {
+
+            state.mapExpandedKeys.add(
+              key
+            );
+
+          }
+
+          render();
+
+        }
+      );
+
+    });
+
+  $all('.map-place-btn')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          copyLocationCode(
+            button.dataset.code
+          );
+
+        }
+      );
+
+    });
+
+}
+
+
+function dataView() {
+
+  const boxes =
+    state.boxes || [];
+
+  const countByStatus =
+    status =>
+      boxes.filter(
+        row => row.status === status
+      ).length;
+
+  return `
+
+    <!-- ================= СТАТИСТИКА ================= -->
+
+    <div
+      class="sp-card"
+      style="margin-bottom:16px;"
+    >
+
+      <h3>
+        📊 Статистика базы
+      </h3>
+
+      <div
+        class="sp-grid"
+        style="margin-top:12px;"
+      >
+
+        <div class="sp-card" style="margin:0;">
+          <div class="sp-card-label">Всего коробок</div>
+          <div style="font-size:26px;font-weight:750;">
+            ${boxes.length}
+          </div>
+        </div>
+
+        <div class="sp-card" style="margin:0;">
+          <div class="sp-card-label">На складе</div>
+          <div style="font-size:26px;font-weight:750;">
+            ${countByStatus(STATUSES.STOCK)}
+          </div>
+        </div>
+
+        <div class="sp-card" style="margin:0;">
+          <div class="sp-card-label">Зарезервировано</div>
+          <div style="font-size:26px;font-weight:750;">
+            ${countByStatus(STATUSES.RESERVED)}
+          </div>
+        </div>
+
+        <div class="sp-card" style="margin:0;">
+          <div class="sp-card-label">К подбору</div>
+          <div style="font-size:26px;font-weight:750;">
+            ${countByStatus(STATUSES.PICK)}
+          </div>
+        </div>
+
+        <div class="sp-card" style="margin:0;">
+          <div class="sp-card-label">Собрано</div>
+          <div style="font-size:26px;font-weight:750;">
+            ${countByStatus(STATUSES.COLLECTED)}
+          </div>
+        </div>
+
+        <div class="sp-card" style="margin:0;">
+          <div class="sp-card-label">Отгружено</div>
+          <div style="font-size:26px;font-weight:750;">
+            ${countByStatus(STATUSES.SHIPPED)}
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+
+    <!-- ================= ПОСЛЕДНИЕ ИЗМЕНЕНИЯ ================= -->
+
+    <div
+      class="sp-card"
+      style="margin-bottom:16px;"
+    >
+
+      <h3>
+        🕓 Последние изменения
+      </h3>
+
+      <p class="sp-muted" style="margin-top:4px;">
+        Данные из журнала инвентаризаций
+        (таблица <code>inventory_history</code>
+        в Supabase).
+      </p>
+
+      <div id="dataActivityList" style="margin-top:10px;">
+        <div class="sp-muted">Загрузка...</div>
+      </div>
+
+    </div>
+
+
+    <!-- ================= ОНЛАЙН ================= -->
+
+    <div
+      class="sp-card"
+      style="margin-bottom:16px;"
+    >
+
+      <h3>
+        🟢 Сейчас онлайн
+      </h3>
+
+      <div id="dataOnlineList" style="margin-top:10px;">
+        <div class="sp-muted">Подключение...</div>
+      </div>
+
+    </div>
+
+
+    <!-- ================= АККАУНТ ================= -->
+
+    <div
+      class="sp-card"
+      style="margin-bottom:16px;"
+    >
+
+      <h3>
+        👤 Аккаунт
+      </h3>
+
+      <div
+        style="
+          display:flex;
+          align-items:center;
+          gap:14px;
+          margin:12px 0;
+        "
+      >
+
+        <img
+          id="dataAvatarPreview"
+          src="${escapeHtml(
+            state.user?.user_metadata?.avatar_url || ''
+          )}"
+          style="
+            width:56px;
+            height:56px;
+            border-radius:50%;
+            object-fit:cover;
+            background:#eee;
+            display:${
+              state.user?.user_metadata?.avatar_url
+                ? 'block'
+                : 'none'
+            };
+          "
+        >
+
+        <div>
+
+          <div style="font-weight:700;">
+            ${escapeHtml(state.user?.email || '')}
+          </div>
+
+          <button
+            class="ghost"
+            type="button"
+            id="dataUploadAvatarBtn"
+            style="margin-top:6px;font-size:12px;"
+          >
+            Загрузить аватар
+          </button>
+
+          <input
+            id="dataAvatarInput"
+            type="file"
+            accept="image/*"
+            style="display:none"
+          >
+
+        </div>
+
+      </div>
+
+      <button
+        class="sp-btn danger"
+        type="button"
+        id="logoutBtn"
+      >
+        Выйти из аккаунта
+      </button>
+
+    </div>
+
+
+    <!-- ================= СМЕНА ПАРОЛЯ ================= -->
+
+    <div class="sp-card">
+
+      <h3>
+        🔒 Сменить пароль
+      </h3>
+
+      <div
+        style="
+          display:flex;
+          flex-direction:column;
+          gap:10px;
+          margin-top:12px;
+          max-width:320px;
+        "
+      >
+
+        <input
+          id="newPasswordInput"
+          type="password"
+          placeholder="Новый пароль (мин. 6 символов)"
+          style="
+            border:1px solid #ddd;
+            border-radius:10px;
+            padding:9px 12px;
+            font-size:14px;
+            outline:none;
+          "
+        >
+
+        <input
+          id="newPasswordConfirmInput"
+          type="password"
+          placeholder="Повторите новый пароль"
+          style="
+            border:1px solid #ddd;
+            border-radius:10px;
+            padding:9px 12px;
+            font-size:14px;
+            outline:none;
+          "
+        >
+
+        <button
+          class="sp-btn"
+          type="button"
+          id="changePasswordBtn"
+        >
+          Сменить пароль
+        </button>
+
+        <div
+          id="changePasswordStatus"
+          class="sp-muted"
+          style="font-size:12px;"
+        ></div>
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+
+/**
+ * Загружает последние записи
+ * из журнала инвентаризаций.
+ */
+async function loadRecentActivity() {
+
+  const container =
+    $('#dataActivityList');
+
+  if (!container) {
+    return;
+  }
+
+  try {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from('inventory_history')
+        .select('*')
+        .order(
+          'applied_at',
+          { ascending: false }
+        )
+        .limit(10);
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data || !data.length) {
+
+      container.innerHTML =
+        `<div class="sp-muted">Изменений пока нет.</div>`;
+
+      return;
+
+    }
+
+    container.innerHTML =
+      data.map(row => `
+
+        <div
+          style="
+            padding:8px 0;
+            border-bottom:1px solid #f0f0f0;
+            font-size:13px;
+          "
+        >
+
+          <b>${escapeHtml(row.user_email || 'Неизвестно')}</b>
+          — инвентаризация
+          ${row.warehouse ? `(${escapeHtml(row.warehouse)}${row.zone ? ', ' + escapeHtml(row.zone) : ''})` : ''}
+
+          <div class="sp-muted" style="margin-top:2px;">
+            ${
+              row.applied_at
+                ? new Date(row.applied_at).toLocaleString('ru-RU')
+                : ''
+            }
+            · найдено ${row.scanned_count ?? '—'}
+            · не хватает ${row.missing_count ?? '—'}
+          </div>
+
+        </div>
+
+      `).join('');
+
+  } catch (error) {
+
+    container.innerHTML =
+      `<div class="sp-muted">Не удалось загрузить историю (${escapeHtml(error.message || 'ошибка')}).</div>`;
+
+  }
+
+}
+
+
+/**
+ * Best-effort Supabase Realtime
+ * Presence — если Realtime не
+ * включён в проекте, страница
+ * просто покажет только себя,
+ * без падения приложения.
+ */
+let dataPresenceChannel = null;
+
+async function setupOnlinePresence() {
+
+  const container =
+    $('#dataOnlineList');
+
+  if (!container) {
+    return;
+  }
+
+  try {
+
+    if (dataPresenceChannel) {
+
+      await supabaseClient.removeChannel(
+        dataPresenceChannel
+      );
+
+      dataPresenceChannel = null;
+
+    }
+
+    const channel =
+      supabaseClient.channel(
+        'sklad-online-users',
+        {
+          config: {
+            presence: {
+              key:
+                state.user?.id ||
+                'anon'
+            }
+          }
+        }
+      );
+
+    channel.on(
+      'presence',
+      { event: 'sync' },
+      () => {
+
+        const presenceState =
+          channel.presenceState();
+
+        const emails =
+          Object.values(
+            presenceState
+          )
+            .flat()
+            .map(
+              entry =>
+                entry.email ||
+                'Неизвестно'
+            );
+
+        const unique =
+          [...new Set(emails)];
+
+        container.innerHTML =
+          unique.length
+            ? unique.map(email => `
+                <div style="padding:4px 0;font-size:13px;">
+                  🟢 ${escapeHtml(email)}
+                </div>
+              `).join('')
+            : `<div class="sp-muted">Нет данных.</div>`;
+
+      }
+    );
+
+    await channel.subscribe(
+      async status => {
+
+        if (status === 'SUBSCRIBED') {
+
+          await channel.track({
+            email:
+              state.user?.email ||
+              'Неизвестно',
+            online_at:
+              new Date().toISOString()
+          });
+
+        }
+
+      }
+    );
+
+    dataPresenceChannel = channel;
+
+  } catch (error) {
+
+    container.innerHTML =
+      `<div class="sp-muted">Онлайн-статус недоступен (Realtime не настроен).</div>`;
+
+  }
+
+}
+
+
+async function changeUserPassword() {
+
+  const statusEl =
+    $('#changePasswordStatus');
+
+  const newPassword =
+    $('#newPasswordInput')?.value ||
+    '';
+
+  const confirmPassword =
+    $('#newPasswordConfirmInput')?.value ||
+    '';
+
+  if (newPassword.length < 6) {
+
+    if (statusEl) {
+      statusEl.textContent =
+        'Пароль должен быть не короче 6 символов';
+      statusEl.style.color = '#b42318';
+    }
+
+    return;
+
+  }
+
+  if (newPassword !== confirmPassword) {
+
+    if (statusEl) {
+      statusEl.textContent =
+        'Пароли не совпадают';
+      statusEl.style.color = '#b42318';
+    }
+
+    return;
+
+  }
+
+  try {
+
+    const { error } =
+      await supabaseClient.auth.updateUser({
+        password: newPassword
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    if (statusEl) {
+      statusEl.textContent =
+        '✓ Пароль изменён';
+      statusEl.style.color = '#18794e';
+    }
+
+    $('#newPasswordInput').value = '';
+    $('#newPasswordConfirmInput').value = '';
+
+    toast('Пароль изменён');
+
+  } catch (error) {
+
+    if (statusEl) {
+      statusEl.textContent =
+        error.message ||
+        'Не удалось изменить пароль';
+      statusEl.style.color = '#b42318';
+    }
+
+  }
+
+}
+
+
+/**
+ * Загружает аватар в Supabase Storage
+ * (бакет 'avatars') и сохраняет
+ * ссылку в user_metadata.
+ *
+ * ВАЖНО: предполагается, что бакет
+ * 'avatars' создан в Supabase Storage
+ * и настроен как публичный (или с
+ * политикой чтения). Если бакета нет —
+ * покажет понятную ошибку, ничего
+ * не сломает.
+ */
+async function uploadAvatar(file) {
+
+  if (!file || !state.user) {
+    return;
+  }
+
+  try {
+
+    const ext =
+      file.name.split('.').pop() ||
+      'jpg';
+
+    const path =
+      `${state.user.id}/avatar.${ext}`;
+
+    const { error: uploadError } =
+      await supabaseClient
+        .storage
+        .from('avatars')
+        .upload(
+          path,
+          file,
+          { upsert: true }
+        );
+
+    if (uploadError) {
+      throw uploadError;
+    }
+
+    const { data: publicUrlData } =
+      supabaseClient
+        .storage
+        .from('avatars')
+        .getPublicUrl(path);
+
+    const avatarUrl =
+      publicUrlData?.publicUrl;
+
+    const { error: updateError } =
+      await supabaseClient.auth.updateUser({
+        data: { avatar_url: avatarUrl }
+      });
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    if (state.user.user_metadata) {
+      state.user.user_metadata.avatar_url =
+        avatarUrl;
+    }
+
+    const preview =
+      $('#dataAvatarPreview');
+
+    if (preview) {
+      preview.src = avatarUrl;
+      preview.style.display = 'block';
+    }
+
+    toast('Аватар обновлён');
+
+  } catch (error) {
+
+    toast(
+      error.message ||
+        'Не удалось загрузить аватар (проверьте, что в Supabase Storage создан бакет "avatars")',
+      'error'
+    );
+
+  }
+
+}
+
+
+function setupData() {
+
+  $('#logoutBtn')
+    ?.addEventListener(
+      'click',
+      logout
+    );
+
+  $('#changePasswordBtn')
+    ?.addEventListener(
+      'click',
+      changeUserPassword
+    );
+
+  $('#dataUploadAvatarBtn')
+    ?.addEventListener(
+      'click',
+      () => {
+        $('#dataAvatarInput')?.click();
+      }
+    );
+
+  $('#dataAvatarInput')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        const file =
+          event.target.files?.[0];
+
+        if (file) {
+          uploadAvatar(file);
+        }
+
+      }
+    );
+
+  loadRecentActivity();
+
+  setupOnlinePresence();
+
+}
+
+
 function toolsView() {
 
   if (state.activeTool === 'help') {
@@ -22542,32 +25594,6 @@ function toolsView() {
     <div class="sp-grid">
 
       <div class="sp-card">
-
-        <h3>
-          Импорт Excel
-        </h3>
-
-        <p class="sp-muted">
-
-          Добавить коробки из XLS/XLSX.
-          Каждая строка Excel считается
-          отдельной физической коробкой.
-
-        </p>
-
-
-        <button
-          class="sp-btn"
-          id="openExcelBtn"
-        >
-          📥 Импорт Excel
-        </button>
-
-      </div>
-
-
-      <div class="sp-card">
-
         <h3>
           Экспорт
         </h3>
@@ -22607,28 +25633,6 @@ function toolsView() {
 
       </div>
 
-
-      <div class="sp-card">
-
-        <h3>
-          Аккаунт
-        </h3>
-
-        <p class="sp-muted">
-          ${escapeHtml(
-            state.user?.email || ''
-          )}
-        </p>
-
-
-        <button
-          class="sp-btn danger"
-          id="logoutBtn"
-        >
-          Выйти
-        </button>
-
-      </div>
 
       <div class="sp-card">
 
@@ -23014,12 +26018,6 @@ function setupTools() {
       updateQuickCalculator
     );
 
-  $('#openExcelBtn')
-    ?.addEventListener(
-      'click',
-      openExcelImport
-    );
-
 
   $('#exportJsonBtn')
     ?.addEventListener(
@@ -23032,13 +26030,6 @@ function setupTools() {
     ?.addEventListener(
       'click',
       backupDatabase
-    );
-
-
-  $('#logoutBtn')
-    ?.addEventListener(
-      'click',
-      logout
     );
 
 }
@@ -23327,6 +26318,221 @@ function convertExcelRow(
   };
 
 }
+
+/* =========================================================
+   ВКЛАДКА EXCEL
+   Импорт + Экспорт (база / к подбору)
+   ========================================================= */
+
+function excelView() {
+
+  return `
+
+    <div class="sp-grid">
+
+      <div class="sp-card">
+
+        <h3>
+          📥 Импорт Excel
+        </h3>
+
+        <p class="sp-muted">
+          Добавить коробки из XLS/XLSX.
+          Каждая строка Excel считается
+          отдельной физической коробкой.
+        </p>
+
+        <button
+          class="sp-btn"
+          id="importBoxesExcelBtn"
+          type="button"
+        >
+          📥 Импорт Excel
+        </button>
+
+      </div>
+
+
+      <div class="sp-card">
+
+        <h3>
+          📤 Экспорт Excel
+        </h3>
+
+        <p class="sp-muted">
+          Выберите, что экспортировать.
+          Файл формируется из текущих
+          данных приложения.
+        </p>
+
+        <div
+          style="
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+            margin-top:10px;
+          "
+        >
+
+          <button
+            class="sp-btn secondary"
+            id="exportBaseExcelBtn"
+            type="button"
+          >
+            📦 Экспорт базы
+          </button>
+
+          <button
+            class="sp-btn secondary"
+            id="exportPickingExcelBtn"
+            type="button"
+          >
+            🧾 Экспорт «К подбору»
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+
+function setupExcel() {
+
+  $('#importBoxesExcelBtn')
+    ?.addEventListener(
+      'click',
+      openExcelImport
+    );
+
+  $('#exportBaseExcelBtn')
+    ?.addEventListener(
+      'click',
+      exportBaseToExcel
+    );
+
+  $('#exportPickingExcelBtn')
+    ?.addEventListener(
+      'click',
+      exportPickingToExcel
+    );
+
+}
+
+
+/**
+ * Общая функция экспорта массива
+ * коробок в Excel-файл.
+ */
+function exportBoxesToExcel(
+  rows,
+  filename
+) {
+
+  const data =
+    rows.map(row => ({
+
+      'Штрихкод':
+        row.barcode || '',
+
+      'Артикул':
+        row.article || '',
+
+      'Кол-во в коробке':
+        row.quantity_in_box || '',
+
+      'Склад':
+        row.warehouse || '',
+
+      'Зона/ряд':
+        row.zone_row || '',
+
+      'Поддон':
+        row.pallet || '',
+
+      'Статус':
+        row.status || ''
+
+    }));
+
+  const worksheet =
+    XLSX.utils.json_to_sheet(
+      data
+    );
+
+  const workbook =
+    XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    'Данные'
+  );
+
+  XLSX.writeFile(
+    workbook,
+    filename
+  );
+
+}
+
+
+function exportBaseToExcel() {
+
+  if (!state.boxes.length) {
+
+    toast(
+      'Нет данных для экспорта',
+      'error'
+    );
+
+    return;
+
+  }
+
+  exportBoxesToExcel(
+    state.boxes,
+    `sklad-baza-${todayFileDate()}.xlsx`
+  );
+
+  toast(
+    'База экспортирована'
+  );
+
+}
+
+
+function exportPickingToExcel() {
+
+  const rows =
+    getPickingBoxes();
+
+  if (!rows.length) {
+
+    toast(
+      'Нет коробок к подбору',
+      'error'
+    );
+
+    return;
+
+  }
+
+  exportBoxesToExcel(
+    rows,
+    `sklad-k-podboru-${todayFileDate()}.xlsx`
+  );
+
+  toast(
+    'К подбору экспортировано'
+  );
+
+}
+
 
 function openExcelImport() {
 
@@ -25127,6 +28333,33 @@ received: {
 
     heading:
       'Планировщик задач'
+  },
+
+
+  excel: {
+    title:
+      'Excel',
+
+    heading:
+      'Импорт и экспорт Excel'
+  },
+
+
+  data: {
+    title:
+      'Данные',
+
+    heading:
+      'Данные и аккаунт'
+  },
+
+
+  map: {
+    title:
+      'Карта',
+
+    heading:
+      'Карта склада'
   }
 
 };
@@ -25135,6 +28368,28 @@ received: {
 function goToPage(
   page
 ) {
+
+  /*
+    Гарантированно закрываем
+    системную клавиатуру телефона
+    при переходе между вкладками —
+    даже если фокус случайно
+    остался на скрытом/невидимом
+    поле ввода.
+  */
+
+  if (
+    document.activeElement &&
+    typeof document.activeElement.blur ===
+      'function' &&
+    document.activeElement !==
+      document.body
+  ) {
+
+    document.activeElement.blur();
+
+  }
+
 
   if (
     !PAGE_META[page]
@@ -25166,7 +28421,8 @@ function goToPage(
       page === 'comparison' &&
       (
         state.activeTool === 'split' ||
-        state.activeTool === 'sum'
+        state.activeTool === 'sum' ||
+        state.activeTool === 'convert'
       )
     )
   ) {
@@ -25265,6 +28521,19 @@ function render() {
 
           heading:
             'Суммирование штрихкодов'
+
+        }
+
+    : state.currentPage === 'comparison' &&
+      state.activeTool === 'convert'
+
+      ? {
+
+          title:
+            'Заявка → Коробки',
+
+          heading:
+            'Конвертация заявки в коробки'
 
         }
 
@@ -25441,6 +28710,8 @@ function render() {
       content.innerHTML =
         shippedView();
 
+      setupShipped();
+
       break;
 
 
@@ -25463,6 +28734,15 @@ function render() {
           sumView();
 
         setupSum();
+
+      } else if (
+        state.activeTool === 'convert'
+      ) {
+
+        content.innerHTML =
+          convertView();
+
+        setupConvert();
 
       } else {
 
@@ -25496,10 +28776,42 @@ function render() {
       break;
 
 
+    case 'excel':
+
+      content.innerHTML =
+        excelView();
+
+      setupExcel();
+
+      break;
+
+
+    case 'data':
+
+      content.innerHTML =
+        dataView();
+
+      setupData();
+
+      break;
+
+
+    case 'map':
+
+      content.innerHTML =
+        mapView();
+
+      setupMap();
+
+      break;
+
+
     default:
 
       content.innerHTML =
         dashboardView();
+
+      setupDashboard();
 
   }
 
@@ -25651,6 +28963,20 @@ function setupNavigation() {
 
             }
 
+            else if (
+              button.dataset.tool ===
+              'convert'
+            ) {
+
+              state.activeTool =
+                'convert';
+
+              goToPage(
+                'comparison'
+              );
+
+            }
+
             /* =================================================
                ОБЫЧНЫЕ РАЗДЕЛЫ
                ================================================= */
@@ -25676,13 +29002,7 @@ function setupNavigation() {
               700
             ) {
 
-              document
-                .querySelector(
-                  '.sidebar'
-                )
-                ?.classList.remove(
-                  'open'
-                );
+              closeMobileSidebar();
 
             }
 
@@ -25697,38 +29017,154 @@ function setupNavigation() {
      MOBILE MENU
      ========================================================= */
 
+  /*
+    Создаём затемнённую подложку
+    один раз (если её ещё нет
+    в разметке) — клик по ней
+    закрывает боковое меню.
+  */
+
+  function getSidebarBackdrop() {
+
+    let backdrop =
+      document.getElementById(
+        'spSidebarBackdrop'
+      );
+
+    if (!backdrop) {
+
+      backdrop =
+        document.createElement(
+          'div'
+        );
+
+      backdrop.id =
+        'spSidebarBackdrop';
+
+      backdrop.style.cssText =
+        'position:fixed;' +
+        'inset:0;' +
+        'background:rgba(0,0,0,0.35);' +
+        'z-index:998;' +
+        'display:none;';
+
+      document.body.appendChild(
+        backdrop
+      );
+
+      backdrop.addEventListener(
+        'click',
+        closeMobileSidebar
+      );
+
+    }
+
+    return backdrop;
+
+  }
+
+
+  function openMobileSidebar() {
+
+    document
+      .querySelector('.sidebar')
+      ?.classList.add('open');
+
+    getSidebarBackdrop().style.display =
+      'block';
+
+    document.body.style.overflow =
+      'hidden';
+
+  }
+
+
+  function closeMobileSidebar() {
+
+    document
+      .querySelector('.sidebar')
+      ?.classList.remove('open');
+
+    const backdrop =
+      document.getElementById(
+        'spSidebarBackdrop'
+      );
+
+    if (backdrop) {
+      backdrop.style.display = 'none';
+    }
+
+    document.body.style.overflow =
+      '';
+
+  }
+
+
+  function toggleMobileSidebar() {
+
+    const isOpen =
+      document
+        .querySelector('.sidebar')
+        ?.classList.contains('open');
+
+    if (isOpen) {
+      closeMobileSidebar();
+    } else {
+      openMobileSidebar();
+    }
+
+  }
+
+
   $('#mobileMenu')
     ?.addEventListener(
       'click',
-      () => {
-
-        document
-          .querySelector(
-            '.sidebar'
-          )
-          ?.classList.toggle(
-            'open'
-          );
-
-      }
+      toggleMobileSidebar
     );
 
 
   $('#mobileMore')
     ?.addEventListener(
       'click',
-      () => {
+      openMobileSidebar
+    );
 
-        document
-          .querySelector(
-            '.sidebar'
-          )
-          ?.classList.add(
-            'open'
-          );
+
+  /*
+    Кнопка закрытия — поддерживаем
+    несколько возможных вариантов
+    разметки, чтобы точно сработало
+    независимо от HTML.
+  */
+
+  $all(
+    '#closeSidebar, .sidebar-close, [data-sidebar-close]'
+  ).forEach(button => {
+
+    button.addEventListener(
+      'click',
+      closeMobileSidebar
+    );
+
+  });
+
+
+  /*
+    Закрытие по Escape (desktop).
+  */
+
+  document.addEventListener(
+    'keydown',
+    event => {
+
+      if (event.key === 'Escape') {
+
+        closeMobileSidebar();
 
       }
-    );
+
+    }
+  );
 
 
   /* =========================================================
