@@ -5534,11 +5534,13 @@ async function startReceiving() {
 
     render();
 
-
-    setTimeout(
-      focusReceivingScanner,
-      100
-    );
+    /*
+      П.4: не фокусируем сканер сразу
+      после открытия поддона — иначе
+      на мобильных всплывает клавиатура.
+      Фокус вернётся автоматически после
+      первого фактического скана.
+    */
 
   } catch (error) {
 
@@ -6438,25 +6440,13 @@ function setupReceived() {
 
 
   /*
-    ENTER / FOCUS
-
-    После открытия приёмки
-    автоматически ставим фокус
-    на сканер.
+    П.4: клавиатура не должна появляться
+    автоматически при открытии/рендере
+    вкладки «Приёмка». Фокус на сканер
+    ставится только после реального
+    скана (см. processReceivingScan)
+    или вручную пользователем.
   */
-
-  if (
-    state.receivingReceiptId &&
-    state.receivingReceiptStatus ===
-      'В процессе'
-  ) {
-
-    setTimeout(
-      focusReceivingScanner,
-      80
-    );
-
-  }
 
 }
 
@@ -11526,10 +11516,17 @@ function setupAssembly() {
       }
     );
 
-  setTimeout(
-    focusScanner,
-    80
-  );
+  /*
+    П.4: НЕ фокусируем сканер автоматически
+    при открытии вкладки «Сборка» — это
+    вызывает нежелательное появление
+    экранной клавиатуры на мобильных.
+    Поле остаётся кликабельным вручную,
+    а после фактического скана фокус
+    возвращается через focusScanner()
+    из processScan() — это нужно для
+    работы Bluetooth-сканера.
+  */
 
 }
 
@@ -24421,15 +24418,12 @@ function setupInventory() {
     }
   );
 
-
-  setTimeout(
-    () => {
-
-      scanner?.focus();
-
-    },
-    50
-  );
+  /*
+    П.4: не фокусируем сканер автоматически
+    при входе в «Инвентаризацию» — иначе
+    сразу открывается экранная клавиатура.
+    Фокус вернётся сам после первого скана.
+  */
 
 }
 
@@ -29395,6 +29389,19 @@ function setupNavigation() {
     document.body.style.overflow =
       'hidden';
 
+    const closeBtn =
+      document.querySelector(
+        '.sidebar-close'
+      );
+
+    if (
+      closeBtn &&
+      window.innerWidth <= 700
+    ) {
+      closeBtn.style.display =
+        'block';
+    }
+
   }
 
 
@@ -29415,6 +29422,16 @@ function setupNavigation() {
 
     document.body.style.overflow =
       '';
+
+    const closeBtn =
+      document.querySelector(
+        '.sidebar-close'
+      );
+
+    if (closeBtn) {
+      closeBtn.style.display =
+        'none';
+    }
 
   }
 
@@ -29445,7 +29462,7 @@ function setupNavigation() {
   $('#mobileMore')
     ?.addEventListener(
       'click',
-      openMobileSidebar
+      toggleMobileSidebar
     );
 
 
