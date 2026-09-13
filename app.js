@@ -24564,6 +24564,37 @@ function copyLocationCode(code) {
 }
 
 
+/**
+ * Переход в Базу с фильтром
+ * по коду места, на который
+ * нажали на карте.
+ *
+ * Используем свободный текстовый
+ * поиск (а не строгий выбор зоны),
+ * потому что формат кода на карте
+ * не всегда 1-в-1 совпадает
+ * с полем "Зона/Ряд" в Базе —
+ * поиск ищет по подстроке
+ * сразу в зоне, поддоне и т.д.
+ */
+function openLocationInBase(code) {
+
+  state.baseSearch = code;
+  state.baseZone = '';
+  state.basePallet = '';
+  state.baseWarehouse = '';
+  state.baseStatus = '';
+  state.baseDirection = '';
+
+  goToPage('base');
+
+  toast(
+    `База: показаны коробки по «${code}»`
+  );
+
+}
+
+
 function mapSohHtml() {
 
   const entries =
@@ -24656,23 +24687,50 @@ function mapSohHtml() {
                     "
                   >
                     ${entry.places.map(place => `
-                      <button
-                        type="button"
-                        class="map-place-btn"
-                        data-code="Ряд ${entry.ryad} · место ${place}"
+                      <div
                         style="
-                          min-width:52px;
-                          padding:10px 6px;
+                          display:flex;
+                          align-items:stretch;
                           border:1px solid #ddd;
                           border-radius:8px;
-                          background:#fff;
-                          font-size:13px;
-                          font-weight:700;
-                          cursor:pointer;
+                          overflow:hidden;
                         "
                       >
-                        ${place}
-                      </button>
+                        <button
+                          type="button"
+                          class="map-place-btn"
+                          data-search="${entry.ryad}"
+                          data-label="Ряд ${entry.ryad} · место ${place}"
+                          style="
+                            min-width:44px;
+                            padding:10px 6px;
+                            border:none;
+                            background:#fff;
+                            font-size:13px;
+                            font-weight:700;
+                            cursor:pointer;
+                          "
+                        >
+                          ${place}
+                        </button>
+
+                        <button
+                          type="button"
+                          class="map-copy-btn"
+                          data-label="Ряд ${entry.ryad} · место ${place}"
+                          title="Скопировать код"
+                          style="
+                            padding:10px 6px;
+                            border:none;
+                            border-left:1px solid #eee;
+                            background:#fafafa;
+                            font-size:11px;
+                            cursor:pointer;
+                          "
+                        >
+                          📋
+                        </button>
+                      </div>
                     `).join('')}
                   </div>
                 `
@@ -24768,24 +24826,51 @@ function mapNsHtml() {
                   "
                 >
                   ${codes.map(code => `
-                    <button
-                      type="button"
-                      class="map-place-btn"
-                      data-code="${escapeHtml(code)}"
+                    <div
                       style="
-                        min-width:64px;
-                        padding:10px 6px;
+                        display:flex;
+                        align-items:stretch;
                         border:1px solid #ddd;
                         border-radius:8px;
-                        background:#fff;
-                        font-size:12px;
-                        font-weight:700;
-                        cursor:pointer;
-                        font-family:monospace;
+                        overflow:hidden;
                       "
                     >
-                      ${escapeHtml(code)}
-                    </button>
+                      <button
+                        type="button"
+                        class="map-place-btn"
+                        data-search="${escapeHtml(code)}"
+                        data-label="${escapeHtml(code)}"
+                        style="
+                          min-width:56px;
+                          padding:10px 6px;
+                          border:none;
+                          background:#fff;
+                          font-size:12px;
+                          font-weight:700;
+                          cursor:pointer;
+                          font-family:monospace;
+                        "
+                      >
+                        ${escapeHtml(code)}
+                      </button>
+
+                      <button
+                        type="button"
+                        class="map-copy-btn"
+                        data-label="${escapeHtml(code)}"
+                        title="Скопировать код"
+                        style="
+                          padding:10px 6px;
+                          border:none;
+                          border-left:1px solid #eee;
+                          background:#fafafa;
+                          font-size:11px;
+                          cursor:pointer;
+                        "
+                      >
+                        📋
+                      </button>
+                    </div>
                   `).join('')}
                 </div>
               `
@@ -24910,8 +24995,26 @@ function setupMap() {
         'click',
         () => {
 
+          openLocationInBase(
+            button.dataset.search
+          );
+
+        }
+      );
+
+    });
+
+  $all('.map-copy-btn')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        event => {
+
+          event.stopPropagation();
+
           copyLocationCode(
-            button.dataset.code
+            button.dataset.label
           );
 
         }
@@ -25999,7 +26102,25 @@ function setupTools() {
     return;
 
   }
-   
+
+  if (
+    state.activeTool ===
+    'help'
+  ) {
+
+    if (
+      typeof setupHelp ===
+      'function'
+    ) {
+
+      setupHelp();
+
+    }
+
+    return;
+
+  }
+
   $('#calcBoxesQty')
     ?.addEventListener(
       'input',
@@ -26390,6 +26511,22 @@ function excelView() {
             🧾 Экспорт «К подбору»
           </button>
 
+          <button
+            class="sp-btn secondary"
+            id="exportCollectedExcelBtn"
+            type="button"
+          >
+            ✅ Экспорт «Собрано»
+          </button>
+
+          <button
+            class="sp-btn secondary"
+            id="exportShippedExcelBtn"
+            type="button"
+          >
+            🚚 Экспорт «Убыло»
+          </button>
+
         </div>
 
       </div>
@@ -26419,6 +26556,18 @@ function setupExcel() {
     ?.addEventListener(
       'click',
       exportPickingToExcel
+    );
+
+  $('#exportCollectedExcelBtn')
+    ?.addEventListener(
+      'click',
+      exportCollectedToExcel
+    );
+
+  $('#exportShippedExcelBtn')
+    ?.addEventListener(
+      'click',
+      exportShippedToExcel
     );
 
 }
@@ -26529,6 +26678,70 @@ function exportPickingToExcel() {
 
   toast(
     'К подбору экспортировано'
+  );
+
+}
+
+
+function exportCollectedToExcel() {
+
+  const rows =
+    state.boxes.filter(
+      row =>
+        row.status ===
+        STATUSES.COLLECTED
+    );
+
+  if (!rows.length) {
+
+    toast(
+      'Нет собранных коробок',
+      'error'
+    );
+
+    return;
+
+  }
+
+  exportBoxesToExcel(
+    rows,
+    `sklad-sobrano-${todayFileDate()}.xlsx`
+  );
+
+  toast(
+    'Собрано экспортировано'
+  );
+
+}
+
+
+function exportShippedToExcel() {
+
+  const rows =
+    state.boxes.filter(
+      row =>
+        row.status ===
+        STATUSES.SHIPPED
+    );
+
+  if (!rows.length) {
+
+    toast(
+      'Нет отгруженных коробок',
+      'error'
+    );
+
+    return;
+
+  }
+
+  exportBoxesToExcel(
+    rows,
+    `sklad-ubylo-${todayFileDate()}.xlsx`
+  );
+
+  toast(
+    'Убыло экспортировано'
   );
 
 }
@@ -28556,15 +28769,28 @@ function render() {
      1. Обычная страница:
         data-page === currentPage
 
-     2. Инструмент:
-        data-tool === activeTool
-
-     3. Деление:
-        currentPage === comparison
-        activeTool === split
+     2. Инструмент — у каждого свой
+        "домашний" currentPage и,
+        для части инструментов,
+        свой activeTool.
+        См. TOOL_NAV_MAP ниже.
 
      Только один пункт получает .active.
      ========================================================= */
+
+  const TOOL_NAV_MAP = {
+    compare: { page: 'comparison', tool: '' },
+    split: { page: 'comparison', tool: 'split' },
+    sum: { page: 'comparison', tool: 'sum' },
+    convert: { page: 'comparison', tool: 'convert' },
+    inventory: { page: 'tools', tool: 'inventory' },
+    help: { page: 'tools', tool: 'help' },
+    excel: { page: 'excel', tool: '' },
+    data: { page: 'data', tool: '' },
+    map: { page: 'map', tool: '' },
+    'map-soh': { page: 'map', tool: '' },
+    'map-ns': { page: 'map', tool: '' }
+  };
 
   $all('.nav')
     .forEach(
@@ -28582,27 +28808,22 @@ function render() {
           button.dataset.tool
         ) {
 
-          isActive =
-            Boolean(
-              state.activeTool
-            ) &&
-            button.dataset.tool ===
-              state.activeTool &&
-            (
+          const rule =
+            TOOL_NAV_MAP[
+              button.dataset.tool
+            ];
+
+          if (rule) {
+
+            isActive =
+              state.currentPage ===
+                rule.page &&
               (
-                state.activeTool ===
-                  'split' &&
-                state.currentPage ===
-                  'comparison'
-              )
-              ||
-              (
-                state.activeTool !==
-                  'split' &&
-                state.currentPage ===
-                  'tools'
-              )
-            );
+                state.activeTool ||
+                ''
+              ) === rule.tool;
+
+          }
 
         }
 
@@ -28973,6 +29194,104 @@ function setupNavigation() {
 
               goToPage(
                 'comparison'
+              );
+
+            }
+
+            /* =================================================
+               СРАВНЕНИЕ
+               ================================================= */
+
+            else if (
+              button.dataset.tool ===
+              'compare'
+            ) {
+
+              state.activeTool =
+                '';
+
+              goToPage(
+                'comparison'
+              );
+
+            }
+
+            /* =================================================
+               EXCEL
+               ================================================= */
+
+            else if (
+              button.dataset.tool ===
+              'excel'
+            ) {
+
+              state.activeTool =
+                '';
+
+              goToPage(
+                'excel'
+              );
+
+            }
+
+            /* =================================================
+               ДАННЫЕ
+               ================================================= */
+
+            else if (
+              button.dataset.tool ===
+              'data'
+            ) {
+
+              state.activeTool =
+                '';
+
+              goToPage(
+                'data'
+              );
+
+            }
+
+            /* =================================================
+               КАРТА
+               (поддерживаем как новый единый
+               data-tool="map", так и старые
+               map-soh/map-ns на случай кэша
+               браузера/старой разметки)
+               ================================================= */
+
+            else if (
+              button.dataset.tool ===
+              'map' ||
+              button.dataset.tool ===
+              'map-soh' ||
+              button.dataset.tool ===
+              'map-ns'
+            ) {
+
+              state.activeTool =
+                '';
+
+              if (
+                button.dataset.tool ===
+                'map-ns'
+              ) {
+
+                state.mapType =
+                  'ns';
+
+              } else if (
+                button.dataset.tool ===
+                'map-soh'
+              ) {
+
+                state.mapType =
+                  'soh';
+
+              }
+
+              goToPage(
+                'map'
               );
 
             }
