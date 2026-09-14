@@ -12278,11 +12278,6 @@ async function processScan(
       }
 
 
-      showScannerResult(
-        `✓ Штрихкод ${barcode} найден и выбран`,
-        'success'
-      );
-
       beep(true);
 
       render();
@@ -12312,9 +12307,34 @@ async function processScan(
       );
 
 
-      setTimeout(
-        focusScanner,
-        50
+      /*
+        П.6: показываем карточку найденной
+        коробки и ждём явного решения
+        оператора, а не продолжаем скан
+        автоматически.
+      */
+
+      showBoxFoundModal(
+        box,
+        {
+
+          onContinue: () => {
+
+            focusScanner();
+
+          },
+
+          onFinish: () => {
+
+            /*
+              Остаёмся на экране,
+              фокус намеренно не
+              возвращаем на сканер.
+            */
+
+          }
+
+        }
       );
 
       return;
@@ -12481,6 +12501,187 @@ async function processScan(
   focusScanner();
 
 }
+
+/* =========================================================
+   ОКНО «КОРОБКА НАЙДЕНА» (единое для всех сканер-воркфлоу)
+   ========================================================= */
+
+function closeBoxFoundModal() {
+
+  const existing =
+    document.getElementById(
+      'spBoxFoundModal'
+    );
+
+  if (existing) {
+    existing.remove();
+  }
+
+}
+
+
+/**
+ * Показывает модальное окно с карточкой
+ * найденной коробки и двумя действиями.
+ *
+ * box — объект коробки (article, barcode,
+ *       zone_row, pallet и т.д.)
+ * options.onContinue() — вызывается после
+ *       закрытия по кнопке «Продолжить»
+ *       (обычно возвращает фокус на сканер)
+ * options.onFinish() — вызывается после
+ *       закрытия по кнопке «Закончить»
+ *       (остаёмся на экране, фокус не трогаем)
+ */
+function showBoxFoundModal(
+  box,
+  options = {}
+) {
+
+  closeBoxFoundModal();
+
+  const overlay =
+    document.createElement('div');
+
+  overlay.id =
+    'spBoxFoundModal';
+
+  overlay.style.cssText = `
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.45);
+    z-index:100000;
+    display:flex;
+    align-items:flex-end;
+    justify-content:center;
+  `;
+
+  const card =
+    document.createElement('div');
+
+  card.style.cssText = `
+    background:#fff;
+    width:100%;
+    max-width:420px;
+    border-radius:18px 18px 0 0;
+    padding:20px;
+    box-shadow:0 -10px 40px rgba(0,0,0,.25);
+    font-size:15px;
+  `;
+
+  const rows = [
+    ['Артикул', box.article || '—'],
+    ['Штрихкод', normalizeBarcode(box.barcode) || '—'],
+    ['Локация', box.zone_row || '—'],
+    ['Поддон', box.pallet || '—']
+  ];
+
+  card.innerHTML = `
+
+    <div style="
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-size:18px;
+      font-weight:700;
+      margin-bottom:14px;
+      color:#18794e;
+    ">
+      ✓ Коробка найдена
+    </div>
+
+    <div style="
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      margin-bottom:18px;
+    ">
+      ${rows.map(([label, value]) => `
+        <div style="
+          display:flex;
+          justify-content:space-between;
+          gap:12px;
+          padding:8px 0;
+          border-bottom:1px solid #eee;
+        ">
+          <span style="color:#666;">${escapeHtml(label)}</span>
+          <span style="font-weight:600;text-align:right;">
+            ${escapeHtml(String(value))}
+          </span>
+        </div>
+      `).join('')}
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;">
+
+      <button
+        type="button"
+        id="spBoxFoundContinueBtn"
+        class="sp-btn"
+        style="width:100%;padding:14px;font-size:16px;"
+      >
+        Продолжить
+      </button>
+
+      <button
+        type="button"
+        id="spBoxFoundFinishBtn"
+        class="sp-btn secondary"
+        style="width:100%;padding:14px;font-size:16px;"
+      >
+        Закончить
+      </button>
+
+    </div>
+
+  `;
+
+  overlay.appendChild(
+    card
+  );
+
+  document.body.appendChild(
+    overlay
+  );
+
+  document.getElementById(
+    'spBoxFoundContinueBtn'
+  )?.addEventListener(
+    'click',
+    () => {
+
+      closeBoxFoundModal();
+
+      if (
+        typeof options.onContinue ===
+        'function'
+      ) {
+        options.onContinue();
+      }
+
+    }
+  );
+
+  document.getElementById(
+    'spBoxFoundFinishBtn'
+  )?.addEventListener(
+    'click',
+    () => {
+
+      closeBoxFoundModal();
+
+      if (
+        typeof options.onFinish ===
+        'function'
+      ) {
+        options.onFinish();
+      }
+
+    }
+  );
+
+}
+
 
 function showScannerResult(
   message,
@@ -28865,6 +29066,42 @@ function render() {
 
 
   /* =========================================================
+     СОХРАНЕНИЕ ФОКУСА ПЕРЕД ПЕРЕРИСОВКОЙ
+     (см. анализ: причина потери фокуса в Базе/сканерах —
+     content.innerHTML полностью пересоздаёт DOM, включая
+     активный input. Здесь не меняем сам механизм рендера,
+     а сохраняем/восстанавливаем состояние поля вокруг него.)
+     ========================================================= */
+
+  const activeEl =
+    document.activeElement;
+
+  const shouldRestoreFocus =
+    activeEl &&
+    content.contains(activeEl) &&
+    (
+      activeEl.tagName === 'INPUT' ||
+      activeEl.tagName === 'TEXTAREA'
+    ) &&
+    activeEl.id;
+
+  const focusSnapshot =
+    shouldRestoreFocus
+      ? {
+          id: activeEl.id,
+          selectionStart:
+            (typeof activeEl.selectionStart === 'number')
+              ? activeEl.selectionStart
+              : null,
+          selectionEnd:
+            (typeof activeEl.selectionEnd === 'number')
+              ? activeEl.selectionEnd
+              : null
+        }
+      : null;
+
+
+  /* =========================================================
      PAGE CONTENT
      ========================================================= */
 
@@ -29036,6 +29273,64 @@ function render() {
      ========================================================= */
 
   updateAssemblyBadges();
+
+
+  /* =========================================================
+     ВОССТАНОВЛЕНИЕ ФОКУСА ПОСЛЕ ПЕРЕРИСОВКИ
+     ========================================================= */
+
+  if (focusSnapshot) {
+
+    const restored =
+      document.getElementById(
+        focusSnapshot.id
+      );
+
+    if (
+      restored &&
+      (
+        restored.tagName === 'INPUT' ||
+        restored.tagName === 'TEXTAREA'
+      )
+    ) {
+
+      restored.focus({
+        preventScroll: true
+      });
+
+      if (
+        focusSnapshot.selectionStart !==
+          null &&
+        focusSnapshot.selectionEnd !==
+          null &&
+        typeof restored.setSelectionRange ===
+          'function'
+      ) {
+
+        try {
+
+          restored.setSelectionRange(
+            focusSnapshot.selectionStart,
+            focusSnapshot.selectionEnd
+          );
+
+        } catch (e) {
+
+          /*
+            Некоторые типы input (например,
+            type="number") не поддерживают
+            setSelectionRange — это не ошибка,
+            просто пропускаем восстановление
+            позиции курсора для них.
+          */
+
+        }
+
+      }
+
+    }
+
+  }
 
 }
 
