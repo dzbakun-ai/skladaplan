@@ -31264,6 +31264,17 @@ received: {
   },
 
 
+  planner: {
+
+    title:
+      'Планировщик',
+
+    heading:
+      'Отгрузки, задачи и планы склада'
+
+  },
+
+
   tools: {
     title:
       'Инструменты',
@@ -31720,6 +31731,16 @@ function render() {
         moveView();
 
       setupMove();
+
+      break;
+
+
+    case 'planner':
+
+      content.innerHTML =
+        window.plannerView();
+
+      window.setupPlanner();
 
       break;
 

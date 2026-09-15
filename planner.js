@@ -3,8 +3,6 @@
    Планировщик отгрузок и задач
    ============================================================ */
 
-console.log('Planner module loaded');
-
 
 /* ============================================================
    STATE
@@ -22,7 +20,17 @@ const plannerState = {
   editingShipmentId: null,
   editingTaskId: null,
 
-  initialized: false
+  initialized: false,
+
+  // Данные теперь хранятся в Supabase (таблицы
+  // planner_shipments / planner_tasks — см.
+  // supabase_migration_planner.sql), а не в
+  // localStorage — чтобы планировщик был общим
+  // для всех, кто заходит в SKLADAPLAN, а не только
+  // для одного браузера/устройства.
+  loading: false,
+  loaded: false,
+  loadError: null
 };
 
 
@@ -113,38 +121,105 @@ function plannerEscape(value) {
 
 
 /* ============================================================
-   LOCAL STORAGE
+   SUPABASE
+
+   Данные планировщика хранятся в Supabase (таблицы
+   planner_shipments / planner_tasks), а не в localStorage —
+   чтобы они были одинаковыми у всех, кто заходит в
+   SKLADAPLAN, а не только в одном браузере на одном
+   устройстве. SQL для создания таблиц — в файле
+   supabase_migration_planner.sql, его нужно один раз
+   выполнить в Supabase (SQL Editor) перед тем как
+   пользоваться планировщиком.
+
+   planner.js подключается ПОСЛЕ app.js (см. index.html) и
+   использует уже созданный там supabaseClient — отдельного
+   клиента здесь не создаём.
    ============================================================ */
 
-const PLANNER_STORAGE_KEY =
-  'skladaplan_planner_v1';
+/*
+  Приводим строку из Supabase (snake_case, "date" — тип date)
+  к тому же плоскому виду, в котором эти объекты всегда жили
+  в plannerState (те же имена полей, что и раньше, дата —
+  строка "YYYY-MM-DD", как отдаёт plannerDateKey).
+*/
+function plannerMapShipmentRow(row) {
+
+  return {
+    id: row.id,
+    date: row.date,
+    time: row.time || '',
+    title: row.title || '',
+    direction: row.direction || '',
+    warehouse: row.warehouse || '',
+    status: row.status || 'Запланирована',
+    responsible: row.responsible || '',
+    comment: row.comment || ''
+  };
+
+}
 
 
-function plannerLoad() {
+function plannerMapTaskRow(row) {
+
+  return {
+    id: row.id,
+    date: row.date,
+    time: row.time || '',
+    title: row.title || '',
+    priority: row.priority || 'Обычный',
+    status: row.status || 'К выполнению',
+    comment: row.comment || ''
+  };
+
+}
+
+
+async function plannerLoadFromSupabase() {
+
+  if (plannerState.loading) {
+    return;
+  }
+
+  plannerState.loading = true;
+  plannerState.loadError = null;
 
   try {
 
-    const raw =
-      localStorage.getItem(
-        PLANNER_STORAGE_KEY
-      );
+    const [
+      shipmentsResult,
+      tasksResult
+    ] = await Promise.all([
 
-    if (!raw) {
-      return;
+      supabaseClient
+        .from('planner_shipments')
+        .select('*')
+        .order('date', { ascending: true }),
+
+      supabaseClient
+        .from('planner_tasks')
+        .select('*')
+        .order('date', { ascending: true })
+
+    ]);
+
+    if (shipmentsResult.error) {
+      throw shipmentsResult.error;
     }
 
-    const data =
-      JSON.parse(raw);
+    if (tasksResult.error) {
+      throw tasksResult.error;
+    }
 
     plannerState.shipments =
-      Array.isArray(data.shipments)
-        ? data.shipments
-        : [];
+      (shipmentsResult.data || [])
+        .map(plannerMapShipmentRow);
 
     plannerState.tasks =
-      Array.isArray(data.tasks)
-        ? data.tasks
-        : [];
+      (tasksResult.data || [])
+        .map(plannerMapTaskRow);
+
+    plannerState.loaded = true;
 
   } catch (error) {
 
@@ -153,126 +228,33 @@ function plannerLoad() {
       error
     );
 
-    plannerState.shipments = [];
-    plannerState.tasks = [];
+    plannerState.loadError =
+      error?.message ||
+      'Не удалось загрузить планировщик';
+
+    if (
+      typeof toast === 'function'
+    ) {
+
+      toast(
+        'Не удалось загрузить планировщик. Проверьте, что выполнена supabase_migration_planner.sql',
+        'error'
+      );
+
+    }
+
+  } finally {
+
+    plannerState.loading = false;
+
   }
-}
-
-
-function plannerSave() {
-
-  try {
-
-    localStorage.setItem(
-      PLANNER_STORAGE_KEY,
-      JSON.stringify({
-        shipments:
-          plannerState.shipments,
-
-        tasks:
-          plannerState.tasks
-      })
-    );
-
-  } catch (error) {
-
-    console.error(
-      'Planner save error:',
-      error
-    );
-  }
-}
-
-
-/* ============================================================
-   DEMO DATA
-   ============================================================ */
-
-function plannerCreateDemoData() {
 
   if (
-    plannerState.shipments.length ||
-    plannerState.tasks.length
+    typeof render === 'function'
   ) {
-    return;
+    render();
   }
 
-  const today =
-    plannerTodayKey();
-
-  const tomorrowDate =
-    new Date();
-
-  tomorrowDate.setDate(
-    tomorrowDate.getDate() + 1
-  );
-
-  const tomorrow =
-    plannerDateKey(
-      tomorrowDate
-    );
-
-  plannerState.shipments = [
-    {
-      id: 'shipment_demo_1',
-
-      date: today,
-
-      time: '14:00',
-
-      title: 'Плановая отгрузка',
-
-      direction: 'Основное направление',
-
-      warehouse: 'Склад СОХ',
-
-      status: 'Запланирована',
-
-      responsible: '',
-
-      comment: ''
-    },
-
-    {
-      id: 'shipment_demo_2',
-
-      date: tomorrow,
-
-      time: '10:30',
-
-      title: 'Отгрузка заказа',
-
-      direction: 'Склад №7',
-
-      warehouse: 'Склад №7',
-
-      status: 'Подготовка',
-
-      responsible: '',
-
-      comment: ''
-    }
-  ];
-
-  plannerState.tasks = [
-    {
-      id: 'task_demo_1',
-
-      date: today,
-
-      time: '11:00',
-
-      title: 'Проверить комплектацию',
-
-      priority: 'Высокий',
-
-      status: 'К выполнению',
-
-      comment: ''
-    }
-  ];
-
-  plannerSave();
 }
 
 
@@ -935,11 +917,56 @@ function plannerStatsView() {
 
 function plannerView() {
 
-  if (!plannerState.initialized) {
-
-    plannerLoad();
+  if (
+    !plannerState.initialized
+  ) {
 
     plannerState.initialized = true;
+
+    // Асинхронно, не блокируем первый рендер —
+    // plannerLoadFromSupabase() сам вызовет render()
+    // повторно, когда данные придут.
+    plannerLoadFromSupabase();
+
+  }
+
+  if (
+    plannerState.loading &&
+    !plannerState.loaded
+  ) {
+
+    return `
+      <div class="planner">
+        <div class="planner-empty">
+          Загрузка планировщика...
+        </div>
+      </div>
+    `;
+
+  }
+
+  if (
+    plannerState.loadError &&
+    !plannerState.loaded
+  ) {
+
+    return `
+      <div class="planner">
+        <div class="planner-empty">
+          Не удалось загрузить планировщик.<br>
+          ${plannerEscape(plannerState.loadError)}
+          <br><br>
+          <button
+            type="button"
+            class="planner-button"
+            id="plannerRetryLoad"
+          >
+            Повторить
+          </button>
+        </div>
+      </div>
+    `;
+
   }
 
   return `
@@ -1025,9 +1052,21 @@ function plannerView() {
 
 function setupPlanner() {
 
-  console.log(
-    'Planner setup loaded'
-  );
+  document
+    .getElementById(
+      'plannerRetryLoad'
+    )
+    ?.addEventListener(
+      'click',
+      () => {
+
+        plannerState.initialized = false;
+        plannerState.loadError = null;
+
+        render();
+
+      }
+    );
 
 
   document
@@ -1341,7 +1380,7 @@ function plannerOpenShipmentModal(
             <input
               type="date"
               name="date"
-              value="${defaultDate}"
+              value="${plannerEscape(defaultDate)}"
               required
             >
           </label>
@@ -1352,7 +1391,7 @@ function plannerOpenShipmentModal(
             <input
               type="time"
               name="time"
-              value="${time}"
+              value="${plannerEscape(time)}"
             >
           </label>
 
@@ -1512,7 +1551,7 @@ function plannerOpenShipmentModal(
    SAVE SHIPMENT
    ============================================================ */
 
-function plannerSaveShipment(
+async function plannerSaveShipment(
   data
 ) {
 
@@ -1523,10 +1562,63 @@ function plannerSaveShipment(
     return;
   }
 
+  const operatorEmail =
+    (
+      typeof state !== 'undefined' &&
+      state.user?.email
+    ) || null;
+
+  const payload = {
+    date: data.date,
+    time: data.time || null,
+    title: data.title,
+    direction: data.direction || null,
+    warehouse: data.warehouse || null,
+    status: data.status || 'Запланирована',
+    responsible: data.responsible || null,
+    comment: data.comment || null,
+    updated_by: operatorEmail
+  };
+
 
   if (
     plannerState.editingShipmentId
   ) {
+
+    const {
+      data: row,
+      error
+    } =
+      await supabaseClient
+        .from('planner_shipments')
+        .update(payload)
+        .eq(
+          'id',
+          plannerState.editingShipmentId
+        )
+        .select('*')
+        .single();
+
+    if (error) {
+
+      console.error(
+        'Planner save shipment error:',
+        error
+      );
+
+      if (typeof toast === 'function') {
+
+        toast(
+          error.message ||
+          'Не удалось сохранить отгрузку',
+          'error'
+        );
+
+      }
+
+      return;
+
+    }
 
     const index =
       plannerState.shipments.findIndex(
@@ -1535,28 +1627,57 @@ function plannerSaveShipment(
           plannerState.editingShipmentId
       );
 
-    if (index !== -1) {
+    const mapped =
+      plannerMapShipmentRow(row);
 
-      plannerState.shipments[index] = {
-        ...plannerState.shipments[index],
-        ...data
-      };
+    if (index !== -1) {
+      plannerState.shipments[index] = mapped;
+    } else {
+      plannerState.shipments.push(mapped);
     }
 
   } else {
 
-    plannerState.shipments.push({
+    const {
+      data: row,
+      error
+    } =
+      await supabaseClient
+        .from('planner_shipments')
+        .insert({
+          ...payload,
+          created_by: operatorEmail
+        })
+        .select('*')
+        .single();
 
-      id:
-        'shipment_' +
-        Date.now(),
+    if (error) {
 
-      ...data
-    });
+      console.error(
+        'Planner create shipment error:',
+        error
+      );
+
+      if (typeof toast === 'function') {
+
+        toast(
+          error.message ||
+          'Не удалось создать отгрузку (проверьте, что выполнена supabase_migration_planner.sql)',
+          'error'
+        );
+
+      }
+
+      return;
+
+    }
+
+    plannerState.shipments.push(
+      plannerMapShipmentRow(row)
+    );
+
   }
 
-
-  plannerSave();
 
   plannerState.selectedDate =
     plannerParseDate(
@@ -1581,7 +1702,7 @@ function plannerSaveShipment(
    DELETE SHIPMENT
    ============================================================ */
 
-function plannerDeleteShipment(
+async function plannerDeleteShipment(
   id
 ) {
 
@@ -1609,13 +1730,41 @@ function plannerDeleteShipment(
   }
 
 
+  const {
+    error
+  } =
+    await supabaseClient
+      .from('planner_shipments')
+      .delete()
+      .eq('id', id);
+
+  if (error) {
+
+    console.error(
+      'Planner delete shipment error:',
+      error
+    );
+
+    if (typeof toast === 'function') {
+
+      toast(
+        error.message ||
+        'Не удалось удалить отгрузку',
+        'error'
+      );
+
+    }
+
+    return;
+
+  }
+
+
   plannerState.shipments =
     plannerState.shipments.filter(
       item =>
         item.id !== id
     );
-
-  plannerSave();
 
   render();
 }
@@ -1720,7 +1869,7 @@ function plannerOpenTaskModal(
             <input
               type="date"
               name="date"
-              value="${defaultDate}"
+              value="${plannerEscape(defaultDate)}"
               required
             >
           </label>
@@ -1731,7 +1880,7 @@ function plannerOpenTaskModal(
             <input
               type="time"
               name="time"
-              value="${time}"
+              value="${plannerEscape(time)}"
             >
           </label>
 
@@ -1883,7 +2032,7 @@ function plannerOpenTaskModal(
    SAVE TASK
    ============================================================ */
 
-function plannerSaveTask(
+async function plannerSaveTask(
   data
 ) {
 
@@ -1894,10 +2043,61 @@ function plannerSaveTask(
     return;
   }
 
+  const operatorEmail =
+    (
+      typeof state !== 'undefined' &&
+      state.user?.email
+    ) || null;
+
+  const payload = {
+    date: data.date,
+    time: data.time || null,
+    title: data.title,
+    priority: data.priority || 'Обычный',
+    status: data.status || 'К выполнению',
+    comment: data.comment || null,
+    updated_by: operatorEmail
+  };
+
 
   if (
     plannerState.editingTaskId
   ) {
+
+    const {
+      data: row,
+      error
+    } =
+      await supabaseClient
+        .from('planner_tasks')
+        .update(payload)
+        .eq(
+          'id',
+          plannerState.editingTaskId
+        )
+        .select('*')
+        .single();
+
+    if (error) {
+
+      console.error(
+        'Planner save task error:',
+        error
+      );
+
+      if (typeof toast === 'function') {
+
+        toast(
+          error.message ||
+          'Не удалось сохранить задачу',
+          'error'
+        );
+
+      }
+
+      return;
+
+    }
 
     const index =
       plannerState.tasks.findIndex(
@@ -1906,28 +2106,57 @@ function plannerSaveTask(
           plannerState.editingTaskId
       );
 
-    if (index !== -1) {
+    const mapped =
+      plannerMapTaskRow(row);
 
-      plannerState.tasks[index] = {
-        ...plannerState.tasks[index],
-        ...data
-      };
+    if (index !== -1) {
+      plannerState.tasks[index] = mapped;
+    } else {
+      plannerState.tasks.push(mapped);
     }
 
   } else {
 
-    plannerState.tasks.push({
+    const {
+      data: row,
+      error
+    } =
+      await supabaseClient
+        .from('planner_tasks')
+        .insert({
+          ...payload,
+          created_by: operatorEmail
+        })
+        .select('*')
+        .single();
 
-      id:
-        'task_' +
-        Date.now(),
+    if (error) {
 
-      ...data
-    });
+      console.error(
+        'Planner create task error:',
+        error
+      );
+
+      if (typeof toast === 'function') {
+
+        toast(
+          error.message ||
+          'Не удалось создать задачу (проверьте, что выполнена supabase_migration_planner.sql)',
+          'error'
+        );
+
+      }
+
+      return;
+
+    }
+
+    plannerState.tasks.push(
+      plannerMapTaskRow(row)
+    );
+
   }
 
-
-  plannerSave();
 
   plannerState.selectedDate =
     plannerParseDate(
@@ -1952,7 +2181,7 @@ function plannerSaveTask(
    DELETE TASK
    ============================================================ */
 
-function plannerDeleteTask(
+async function plannerDeleteTask(
   id
 ) {
 
@@ -1980,13 +2209,41 @@ function plannerDeleteTask(
   }
 
 
+  const {
+    error
+  } =
+    await supabaseClient
+      .from('planner_tasks')
+      .delete()
+      .eq('id', id);
+
+  if (error) {
+
+    console.error(
+      'Planner delete task error:',
+      error
+    );
+
+    if (typeof toast === 'function') {
+
+      toast(
+        error.message ||
+        'Не удалось удалить задачу',
+        'error'
+      );
+
+    }
+
+    return;
+
+  }
+
+
   plannerState.tasks =
     plannerState.tasks.filter(
       item =>
         item.id !== id
     );
-
-  plannerSave();
 
   render();
 }
