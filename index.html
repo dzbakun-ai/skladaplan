@@ -17,23 +17,15 @@
 
   <title>SKLADAPLAN — WMS</title>
 
-  <link
-    rel="stylesheet"
-    href="style.css"
-  >
-
-  <link
-    rel="stylesheet"
-    href="help.css"
-  >
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="help.css">
+  <link rel="stylesheet" href="planner.css">
 
 </head>
-
 
 <body>
 
 <div class="app">
-
 
   <!-- =====================================================
        SIDEBAR
@@ -514,34 +506,23 @@
 
 
 <!-- =====================================================
-     MOBILE NAVIGATION
+     МОБИЛЬНЫЙ НАВИГАТОР
      ===================================================== -->
-
+  
 <nav
   class="mobile-nav"
   id="mobileNav"
   aria-label="Основная навигация"
 >
 
-
   <!-- ГЛАВНАЯ -->
 
-  <button
-    class="mobile-nav-btn"
-    type="button"
-    data-page="dashboard"
-  >
-
-    <span aria-hidden="true">
-      ⌂
-    </span>
-
+  <button  class="mobile-nav-btn"  type="button"  data-page="dashboard">
+    <span aria-hidden="true">⌂</span>
     <small>
       Главная
     </small>
-
   </button>
-
 
   <!-- БАЗА -->
 
@@ -629,40 +610,14 @@
 
 
 <!-- =====================================================
-     SUPABASE
+     ПОДКЛЮЧАЕМ СКРИПТЫ
      ===================================================== -->
 
-<script
-  src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
-></script>
-
-
-<!-- =====================================================
-     XLSX
-     ===================================================== -->
-
-<script
-  src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"
-></script>
-
-
-<!-- =====================================================
-     HELP
-     ===================================================== -->
-
-<script
-  src="help.js"
-></script>
-
-
-<!-- =====================================================
-     SKLADAPLAN
-     ===================================================== -->
-
-<script
-  src="app.js"
-></script>
-
+<script  src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script  src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script  src="help.js"></script>
+<script  src="app.js"></script>
+<script  src="planner.js"></script>
 
 </body>
 
