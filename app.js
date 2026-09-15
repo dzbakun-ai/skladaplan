@@ -60,7 +60,11 @@ const BOX_SELECT =
   'location_id,' +
   'pallet_id,' +
   'created_at,' +
-  'updated_at';
+  'updated_at,' +
+  'collected_at,' +
+  'collected_by,' +
+  'shipped_at,' +
+  'shipped_by';
 
 
 const STATUSES = {
@@ -78,6 +82,47 @@ const STATUSES = {
   EMPTY: 'Пустая'
 
 };
+
+
+/*
+  RPC-функции (sp_collect_boxes, sp_ship_boxes, sp_move_boxes —
+  см. supabase_migration.sql) возвращают "setof boxes", то есть
+  сырые строки с исходными именами колонок (включая кириллицу),
+  а не тот же alias-набор, что даёт BOX_SELECT для обычных
+  select-запросов. Эта функция приводит такую сырую строку
+  к тому же виду, что и везде в приложении, чтобы
+  updateLocalBox() не плодил задвоенные поля.
+*/
+function mapDbBoxRow(row) {
+
+  if (!row) {
+    return row;
+  }
+
+  return {
+    id: row.id,
+    barcode: row['Штрихкод'],
+    article: row['Артикул'],
+    quantity_in_box: row['Кол-во в коробке'],
+    zone_row: row['Зона/ряд'],
+    pallet: row['Поддон'],
+    status: row['Статус'],
+    direction: row['Направление'],
+    date: row['ДатаРазмещения'],
+    warehouse: row['Склад'],
+    worker: row['Изменил'],
+    warehouse_id: row.warehouse_id,
+    location_id: row.location_id,
+    pallet_id: row.pallet_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    collected_at: row.collected_at,
+    collected_by: row.collected_by,
+    shipped_at: row.shipped_at,
+    shipped_by: row.shipped_by
+  };
+
+}
 
 
 /* =========================================================
@@ -785,7 +830,94 @@ inventory: {
 
   tasksSelectedDate: null,
 
-  taskEditingId: null
+  taskEditingId: null,
+
+
+  /* =======================================================
+     СОБРАНО: фильтр по дате комплектации (Задача №2/7)
+     ======================================================= */
+
+  collectedDateFilter: 'all', // 'all' | 'today' | 'yesterday' | 'period'
+  collectedDateFrom: '',
+  collectedDateTo: '',
+
+
+  /* =======================================================
+     СОБРАНО: проверка скомплектованного (Задача №7)
+
+     Похоже по идее на инвентаризацию, но специально
+     отдельно от неё (отдельные таблицы в Supabase,
+     отдельный state) — чтобы не путать проверку
+     конкретной отгрузки/направления с полной
+     инвентаризацией склада.
+     ======================================================= */
+
+  collectedVerification: {
+
+    active: false,
+
+    direction: '',
+    warehouse: '',
+
+    expectedIds: new Set(),
+    scannedIds: new Set(),
+
+    // штрихкоды, отсканированные, но не входящие
+    // в ожидаемый список (лишние коробки)
+    extraScans: [],
+
+    recentScans: [],
+
+    result: null,
+
+    startedAt: null,
+    finishedAt: null
+
+  },
+
+
+  /* =======================================================
+     ПЕРЕМЕЩЕНИЕ (Задача №4)
+     ======================================================= */
+
+  move: {
+
+    // 'pick' — выбор коробок, 'target' — выбор нового места
+    step: 'pick',
+
+    selectedIds: new Set(),
+
+    seededFromBase: false,
+
+    scannerInput: '',
+    recentScans: [],
+
+    targetWarehouse: '',
+    targetZone: '',
+    targetPallet: '',
+
+    lastResult: null
+
+  },
+
+
+  /* =======================================================
+     ОБЪЕДИНЕНИЕ ПАЛЛЕТ (Задача №3)
+     Используется внутри Инвентаризации.
+     ======================================================= */
+
+  palletMerge: {
+
+    active: false,
+
+    // ключи вида "склад||зона||поддон"
+    sourceKeys: new Set(),
+
+    targetKey: '',
+
+    preview: null
+
+  }
 
 };
 
@@ -6854,7 +6986,14 @@ function toggleSelectAllBase() {
 }
 
 
-function baseView() {
+/* =========================================================
+   BASE RESULTS DATA
+   (вынесено из baseView, чтобы этот же расчёт мог
+   использовать updateBaseResults() при частичном
+   обновлении — см. ниже, задача "фокус в поиске").
+   ========================================================= */
+
+function computeBaseResultsData() {
 
   const filtered =
     getFilteredBoxes();
@@ -6885,6 +7024,33 @@ function baseView() {
       start,
       start + PAGE_SIZE
     );
+
+  const allFilteredSelected =
+    filtered.length > 0 &&
+    filtered.every(row =>
+      state.selectedIds.has(
+        String(row.id)
+      )
+    );
+
+  return {
+    filtered,
+    rows,
+    totalPages,
+    allFilteredSelected
+  };
+
+}
+
+
+function baseView() {
+
+  const {
+    filtered,
+    rows,
+    totalPages,
+    allFilteredSelected
+  } = computeBaseResultsData();
 
   const warehouses =
     [
@@ -6982,14 +7148,6 @@ function baseView() {
           .filter(Boolean)
       )
     ].sort();
-
-     const allFilteredSelected =
-    filtered.length > 0 &&
-    filtered.every(row =>
-      state.selectedIds.has(
-        String(row.id)
-      )
-    );
 
   return `
 
@@ -7316,6 +7474,40 @@ function baseView() {
 
     </div>
 
+
+    <!-- =========================================
+         РЕЗУЛЬТАТЫ (статистика + таблица + пагинация)
+
+         Вынесены в отдельный контейнер намеренно:
+         при вводе текста в поиске (#baseSearch)
+         обновляется innerHTML только этого div'а
+         (см. updateBaseResults()), а не всей страницы.
+         Поле поиска благодаря этому не пересоздаётся
+         на каждый символ — фокус и виртуальная
+         клавиатура на телефоне не пропадают.
+         ========================================= -->
+
+    <div id="baseResultsContainer">
+      ${baseResultsHtml(
+        filtered,
+        rows,
+        totalPages,
+        allFilteredSelected
+      )}
+    </div>
+
+  `;
+}
+
+
+function baseResultsHtml(
+  filtered,
+  rows,
+  totalPages,
+  allFilteredSelected
+) {
+
+  return `
 
     <!-- =========================================
          СТАТИСТИКА
@@ -7755,6 +7947,202 @@ async function setDirectionForSelectedBoxes() {
 
 }
 
+/* =========================================================
+   ЧАСТИЧНОЕ ОБНОВЛЕНИЕ РЕЗУЛЬТАТОВ БАЗЫ
+
+   Задача №1 (потеря фокуса в поиске): причина была в том,
+   что каждый ввод символа вызывал полный render(), а он
+   пересобирает весь #content через innerHTML — вместе со
+   всей страницей пересоздавался и сам input #baseSearch,
+   поэтому на телефоне закрывалась виртуальная клавиатура
+   (программный focus() после пересборки её не открывает
+   обратно понадёжно).
+
+   Решение: поле поиска и фильтры (обёртка baseView())
+   рисуются один раз при заходе на вкладку. При вводе текста
+   обновляется innerHTML только #baseResultsContainer —
+   сам #baseSearch не трогается и не пересоздаётся, поэтому
+   фокус и клавиатура остаются на месте.
+
+   Так как #baseResultsContainer пересобирается, элементы
+   внутри него (чекбоксы строк, кнопка "выделить всё",
+   кнопка "Изменить", пагинация) заново теряют обработчики —
+   поэтому setupBaseResultsHandlers() навешивает их заново
+   и вызывается и отсюда, и из setupBase() при первом заходе.
+   ========================================================= */
+
+function updateBaseResults() {
+
+  const container =
+    $('#baseResultsContainer');
+
+  if (!container) {
+    return;
+  }
+
+  const {
+    filtered,
+    rows,
+    totalPages,
+    allFilteredSelected
+  } = computeBaseResultsData();
+
+  container.innerHTML =
+    baseResultsHtml(
+      filtered,
+      rows,
+      totalPages,
+      allFilteredSelected
+    );
+
+  setupBaseResultsHandlers();
+
+}
+
+
+function setupBaseResultsHandlers() {
+
+  $('#basePrev')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        if (
+          state.basePage > 1
+        ) {
+
+          state.basePage--;
+
+          updateBaseResults();
+
+        }
+
+      }
+    );
+
+
+  $('#baseNext')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        const totalPages =
+          Math.max(
+            1,
+            Math.ceil(
+              getFilteredBoxes().length /
+              PAGE_SIZE
+            )
+          );
+
+        if (
+          state.basePage <
+          totalPages
+        ) {
+
+          state.basePage++;
+
+          updateBaseResults();
+
+        }
+
+      }
+    );
+
+
+  $('#selectAllBaseCheck')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        const filtered =
+          getFilteredBoxes();
+
+        if (
+          event.target.checked
+        ) {
+
+          filtered.forEach(
+            row =>
+              state.selectedIds.add(
+                String(row.id)
+              )
+          );
+
+        } else {
+
+          filtered.forEach(
+            row =>
+              state.selectedIds.delete(
+                String(row.id)
+              )
+          );
+
+        }
+
+        render();
+
+      }
+    );
+
+  $all('.base-check')
+    .forEach(
+      check => {
+
+        check.addEventListener(
+          'change',
+          event => {
+
+            const id =
+              String(
+                event.target.dataset.id
+              );
+
+            if (
+              event.target.checked
+            ) {
+
+              state.selectedIds
+                .add(id);
+
+            } else {
+
+              state.selectedIds
+                .delete(id);
+
+            }
+
+            render();
+
+          }
+        );
+
+      }
+    );
+
+
+  $all('.edit-box')
+    .forEach(
+      button => {
+
+        button.addEventListener(
+          'click',
+          () => {
+
+            const id =
+              button.dataset.id;
+
+            openBoxModal(id);
+
+          }
+        );
+
+      }
+    );
+
+}
+
+
 function setupBase() {
 
   setupQuickToolsBar();
@@ -7770,7 +8158,7 @@ function setupBase() {
         state.basePage =
           1;
 
-        render();
+        updateBaseResults();
 
       }
     );
@@ -7889,54 +8277,6 @@ function setupBase() {
     );
 
 
-  $('#basePrev')
-    ?.addEventListener(
-      'click',
-      () => {
-
-        if (
-          state.basePage > 1
-        ) {
-
-          state.basePage--;
-
-          render();
-
-        }
-
-      }
-    );
-
-
-  $('#baseNext')
-    ?.addEventListener(
-      'click',
-      () => {
-
-        const totalPages =
-          Math.max(
-            1,
-            Math.ceil(
-              getFilteredBoxes().length /
-              PAGE_SIZE
-            )
-          );
-
-        if (
-          state.basePage <
-          totalPages
-        ) {
-
-          state.basePage++;
-
-          render();
-
-        }
-
-      }
-    );
-
-
   $('#addBoxBtn')
     ?.addEventListener(
       'click',
@@ -7965,95 +8305,16 @@ function setupBase() {
       deleteSelectedBoxes
     );
 
-  $('#selectAllBaseCheck')
-    ?.addEventListener(
-      'change',
-      event => {
 
-        const filtered =
-          getFilteredBoxes();
-
-        if (
-          event.target.checked
-        ) {
-
-          filtered.forEach(
-            row =>
-              state.selectedIds.add(
-                String(row.id)
-              )
-          );
-
-        } else {
-
-          filtered.forEach(
-            row =>
-              state.selectedIds.delete(
-                String(row.id)
-              )
-          );
-
-        }
-
-        render();
-
-      }
-    );
-   
-  $all('.base-check')
-    .forEach(
-      check => {
-
-        check.addEventListener(
-          'change',
-          event => {
-
-            const id =
-              String(
-                event.target.dataset.id
-              );
-
-            if (
-              event.target.checked
-            ) {
-
-              state.selectedIds
-                .add(id);
-
-            } else {
-
-              state.selectedIds
-                .delete(id);
-
-            }
-
-            render();
-
-          }
-        );
-
-      }
-    );
-
-
-  $all('.edit-box')
-    .forEach(
-      button => {
-
-        button.addEventListener(
-          'click',
-          () => {
-
-            const id =
-              button.dataset.id;
-
-            openBoxModal(id);
-
-          }
-        );
-
-      }
-    );
+  /*
+    Обработчики элементов внутри
+    #baseResultsContainer (пагинация,
+    чекбоксы строк, "Изменить") —
+    общие с updateBaseResults(),
+    см. setupBaseResultsHandlers()
+    выше.
+  */
+  setupBaseResultsHandlers();
 
 }
 
@@ -11962,30 +12223,23 @@ async function completeSelectedAssembly() {
 
   const cleanDirection = normalizeText(direction);
 
-  const updateData = {
-    "Статус": STATUSES.COLLECTED,
-    "Изменил": state.user?.email || null
-  };
-
-  // Если направление указано —
-  // сохраняем его
-  if (cleanDirection) {
-
-    updateData["Направление"] = cleanDirection;
-
-  }
+  const operatorEmail =
+    state.user?.email || null;
 
   // Переводим выбранные физические коробки
-  // из КПодбору в Скомплектовано
+  // из КПодбору в Скомплектовано одной
+  // атомарной операцией на стороне БД
+  // (sp_collect_boxes также проставляет
+  // collected_at/collected_by — см. Задачу №2).
   const {
     data,
     error
   } = await supabaseClient
-    .from('boxes')
-    .update(updateData)
-    .in('id', validIds)
-    .eq('Статус', STATUSES.PICK)
-    .select(BOX_SELECT);
+    .rpc('sp_collect_boxes', {
+      p_box_ids: validIds,
+      p_operator: operatorEmail,
+      p_direction: cleanDirection || null
+    });
 
   // Ошибка Supabase
   if (error) {
@@ -12031,7 +12285,7 @@ async function completeSelectedAssembly() {
 
       updateLocalBox(
         row.id,
-        row
+        mapDbBoxRow(row)
       );
 
     });
@@ -12817,13 +13071,251 @@ function beep(
    COLLECTED
    ========================================================= */
 
+/*
+  Задача №2/7: фильтр "Собрано" по дате комплектации.
+
+  Используем collected_at (проставляется sp_collect_boxes,
+  см. supabase_migration.sql). Для коробок, скомплектованных
+  ДО применения миграции, collected_at будет пустым — для
+  них в качестве запасного варианта берём row.date
+  ("ДатаРазмещения"), чтобы они не выпадали из Базы/отчётов
+  молча. Это explicit fallback, а не подмена логики.
+*/
+
+function getCollectedTimestamp(row) {
+
+  return (
+    row.collected_at ||
+    row.date ||
+    null
+  );
+
+}
+
+
+function getCollectedDateRange() {
+
+  const now =
+    new Date();
+
+  const startOfDay =
+    date => {
+
+      const d =
+        new Date(date);
+
+      d.setHours(0, 0, 0, 0);
+
+      return d;
+
+    };
+
+  const endOfDay =
+    date => {
+
+      const d =
+        new Date(date);
+
+      d.setHours(23, 59, 59, 999);
+
+      return d;
+
+    };
+
+  if (
+    state.collectedDateFilter ===
+    'today'
+  ) {
+
+    return {
+      from: startOfDay(now),
+      to: endOfDay(now)
+    };
+
+  }
+
+  if (
+    state.collectedDateFilter ===
+    'yesterday'
+  ) {
+
+    const yesterday =
+      new Date(now);
+
+    yesterday.setDate(
+      yesterday.getDate() - 1
+    );
+
+    return {
+      from: startOfDay(yesterday),
+      to: endOfDay(yesterday)
+    };
+
+  }
+
+  if (
+    state.collectedDateFilter ===
+    'period'
+  ) {
+
+    const from =
+      state.collectedDateFrom
+        ? startOfDay(
+            state.collectedDateFrom
+          )
+        : null;
+
+    const to =
+      state.collectedDateTo
+        ? endOfDay(
+            state.collectedDateTo
+          )
+        : null;
+
+    return { from, to };
+
+  }
+
+  // 'all'
+  return { from: null, to: null };
+
+}
+
+
+function isBoxInCollectedDateRange(
+  row,
+  range
+) {
+
+  if (!range.from && !range.to) {
+    return true;
+  }
+
+  const raw =
+    getCollectedTimestamp(row);
+
+  if (!raw) {
+
+    // Нет даты вообще —
+    // не скрываем молча,
+    // такие коробки видны
+    // только в "Все даты".
+    return (
+      !range.from &&
+      !range.to
+    );
+
+  }
+
+  const timestamp =
+    new Date(raw);
+
+  if (
+    isNaN(
+      timestamp.getTime()
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    range.from &&
+    timestamp < range.from
+  ) {
+    return false;
+  }
+
+  if (
+    range.to &&
+    timestamp > range.to
+  ) {
+    return false;
+  }
+
+  return true;
+
+}
+
+
+function computeCollectedStats(
+  rows
+) {
+
+  const byDirection =
+    new Map();
+
+  rows.forEach(row => {
+
+    const direction =
+      normalizeText(
+        row.direction
+      ) ||
+      'Без направления';
+
+    byDirection.set(
+      direction,
+      (
+        byDirection.get(
+          direction
+        ) || 0
+      ) + 1
+    );
+
+  });
+
+  const breakdown =
+    [
+      ...byDirection.entries()
+    ]
+      .map(
+        ([
+          direction,
+          count
+        ]) => ({
+          direction,
+          count
+        })
+      )
+      .sort(
+        (a, b) =>
+          b.count - a.count
+      );
+
+  return {
+    total: rows.length,
+    byDirection: breakdown
+  };
+
+}
+
+
 function collectedView() {
 
-  const rows =
+  const allCollected =
     state.boxes.filter(
       row =>
         row.status ===
         STATUSES.COLLECTED
+    );
+
+
+  const dateRange =
+    getCollectedDateRange();
+
+
+  const rows =
+    allCollected.filter(
+      row =>
+        isBoxInCollectedDateRange(
+          row,
+          dateRange
+        )
+    );
+
+
+  const stats =
+    computeCollectedStats(
+      rows
     );
 
 
@@ -12844,6 +13336,96 @@ function collectedView() {
   return `
 
     ${quickToolsBar()}
+
+
+    <!-- =========================================
+         ФИЛЬТР ПО ДАТЕ КОМПЛЕКТАЦИИ (Задача №2/7)
+         ========================================= -->
+
+    <div
+      class="sp-toolbar"
+      style="flex-wrap:wrap;"
+    >
+
+      <select id="collectedDateFilter">
+
+        <option value="all" ${state.collectedDateFilter === 'all' ? 'selected' : ''}>
+          Все даты
+        </option>
+
+        <option value="today" ${state.collectedDateFilter === 'today' ? 'selected' : ''}>
+          Сегодня
+        </option>
+
+        <option value="yesterday" ${state.collectedDateFilter === 'yesterday' ? 'selected' : ''}>
+          Вчера
+        </option>
+
+        <option value="period" ${state.collectedDateFilter === 'period' ? 'selected' : ''}>
+          Период
+        </option>
+
+      </select>
+
+      ${
+        state.collectedDateFilter === 'period'
+          ? `
+            <input
+              type="date"
+              id="collectedDateFrom"
+              value="${escapeHtml(state.collectedDateFrom || '')}"
+            >
+            <span class="sp-muted">—</span>
+            <input
+              type="date"
+              id="collectedDateTo"
+              value="${escapeHtml(state.collectedDateTo || '')}"
+            >
+          `
+          : ''
+      }
+
+      <button
+        class="sp-btn secondary"
+        id="collectedVerifyBtn"
+        ${allCollected.length ? '' : 'disabled'}
+      >
+        🔍 Проверка скомплектованного
+      </button>
+
+    </div>
+
+
+    <!-- =========================================
+         СТАТИСТИКА ПО НАПРАВЛЕНИЯМ (Задача №12)
+         ========================================= -->
+
+    <div class="sp-card" style="margin-bottom:12px;">
+
+      <div style="font-weight:600; margin-bottom:6px;">
+        Скомплектовано${
+          state.collectedDateFilter === 'today' ? ' сегодня' :
+          state.collectedDateFilter === 'yesterday' ? ' вчера' :
+          state.collectedDateFilter === 'period' ? ' за период' : ''
+        }: ${stats.total}
+      </div>
+
+      ${
+        stats.byDirection.length
+          ? `
+            <div class="sp-muted" style="display:flex; flex-wrap:wrap; gap:12px;">
+              ${stats.byDirection.map(item => `
+                <span>
+                  ${escapeHtml(item.direction)} — <b>${item.count}</b>
+                </span>
+              `).join('')}
+            </div>
+          `
+          : `<div class="sp-muted">Нет данных за выбранный период</div>`
+      }
+
+    </div>
+
 
     <div
       class="sp-toolbar"
@@ -13321,6 +13903,51 @@ function setupCollected() {
 
   setupQuickToolsBar();
 
+  $('#collectedDateFilter')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.collectedDateFilter =
+          event.target.value;
+
+        render();
+
+      }
+    );
+
+  $('#collectedDateFrom')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.collectedDateFrom =
+          event.target.value;
+
+        render();
+
+      }
+    );
+
+  $('#collectedDateTo')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        state.collectedDateTo =
+          event.target.value;
+
+        render();
+
+      }
+    );
+
+  $('#collectedVerifyBtn')
+    ?.addEventListener(
+      'click',
+      openCollectedVerification
+    );
+
   $('#shipCollectedBtn')
     ?.addEventListener(
       'click',
@@ -13462,6 +14089,787 @@ $('#setCollectedDirectionBtn')
 }
 
 
+/* =========================================================
+   ПРОВЕРКА СКОМПЛЕКТОВАННОГО (Задача №7)
+
+   Похоже по идее на инвентаризацию, но намеренно отдельно:
+   отдельный state (state.collectedVerification), отдельные
+   таблицы в Supabase (collected_verification_sessions/items,
+   см. supabase_migration.sql), отдельный UI — работает как
+   модальное окно поверх текущей страницы (как
+   showBoxFoundModal), а не встраивается в основной render(),
+   чтобы сканер-инпут внутри не пересоздавался фоновыми
+   перерисовками "Собрано".
+   ========================================================= */
+
+function closeCollectedVerificationModal() {
+
+  const existing =
+    document.getElementById(
+      'spCollectedVerifyModal'
+    );
+
+  if (existing) {
+    existing.remove();
+  }
+
+}
+
+
+function resetCollectedVerificationState() {
+
+  state.collectedVerification = {
+
+    active: false,
+
+    direction: '',
+    warehouse: '',
+
+    expectedIds: new Set(),
+    scannedIds: new Set(),
+
+    extraScans: [],
+
+    recentScans: [],
+
+    result: null,
+
+    startedAt: null,
+    finishedAt: null
+
+  };
+
+}
+
+
+function openCollectedVerification() {
+
+  resetCollectedVerificationState();
+
+  renderCollectedVerificationModal();
+
+}
+
+
+function getCollectedVerificationDirections() {
+
+  const collected =
+    state.boxes.filter(
+      row =>
+        row.status ===
+        STATUSES.COLLECTED
+    );
+
+  return [
+    ...new Set(
+      collected
+        .map(row =>
+          normalizeText(row.direction)
+        )
+        .filter(Boolean)
+    )
+  ].sort();
+
+}
+
+
+function collectedVerificationSetupHtml() {
+
+  const directions =
+    getCollectedVerificationDirections();
+
+  const collected =
+    state.boxes.filter(
+      row =>
+        row.status ===
+        STATUSES.COLLECTED
+    );
+
+  return `
+
+    <div style="
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-size:18px;
+      font-weight:700;
+      margin-bottom:14px;
+    ">
+      🔍 Проверка скомплектованного
+    </div>
+
+    <div class="sp-muted" style="margin-bottom:14px;">
+      Выберите направление, которое нужно проверить.
+      Приложение соберёт ожидаемый список коробок
+      (все скомплектованные по этому направлению)
+      и попросит отсканировать их одну за другой.
+    </div>
+
+    <label style="display:block; margin-bottom:14px;">
+      <div style="margin-bottom:6px; font-weight:600;">
+        Направление
+      </div>
+      <select id="cvDirectionSelect" style="width:100%;">
+        <option value="">
+          Все скомплектованные (${collected.length})
+        </option>
+        ${directions.map(direction => {
+
+          const count =
+            collected.filter(
+              row =>
+                normalizeText(row.direction) === direction
+            ).length;
+
+          return `
+            <option value="${escapeHtml(direction)}">
+              ${escapeHtml(direction)} (${count})
+            </option>
+          `;
+
+        }).join('')}
+      </select>
+    </label>
+
+    <div style="display:flex; flex-direction:column; gap:10px;">
+
+      <button
+        type="button"
+        id="cvStartBtn"
+        class="sp-btn"
+        style="width:100%;padding:14px;font-size:16px;"
+      >
+        Начать проверку
+      </button>
+
+      <button
+        type="button"
+        id="cvCancelBtn"
+        class="sp-btn secondary"
+        style="width:100%;padding:14px;font-size:16px;"
+      >
+        Отмена
+      </button>
+
+    </div>
+
+  `;
+
+}
+
+
+function collectedVerificationScanningHtml() {
+
+  const v =
+    state.collectedVerification;
+
+  const expectedTotal =
+    v.expectedIds.size;
+
+  const scannedCount =
+    v.scannedIds.size;
+
+  const extraCount =
+    v.extraScans.length;
+
+  return `
+
+    <div style="
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:10px;
+    ">
+      <div style="font-size:18px;font-weight:700;">
+        🔍 Проверка${v.direction ? ': ' + escapeHtml(v.direction) : ''}
+      </div>
+      <button
+        type="button"
+        id="cvCloseBtn"
+        class="sp-btn secondary"
+        style="padding:6px 12px;"
+      >
+        ✕
+      </button>
+    </div>
+
+    <div style="
+      display:flex;
+      gap:12px;
+      margin-bottom:12px;
+      font-size:14px;
+    ">
+      <div>Ожидается: <b>${expectedTotal}</b></div>
+      <div>Проверено: <b>${scannedCount}</b></div>
+      <div style="color:${extraCount ? '#b42318' : 'inherit'};">
+        Лишних: <b>${extraCount}</b>
+      </div>
+    </div>
+
+    <input
+      id="cvScannerInput"
+      type="text"
+      inputmode="none"
+      autocomplete="off"
+      autocorrect="off"
+      spellcheck="false"
+      placeholder="Сканируйте штрихкод..."
+      style="
+        width:100%;
+        min-height:54px;
+        border:2px solid #111;
+        border-radius:14px;
+        padding:0 14px;
+        font-size:18px;
+        outline:none;
+        box-sizing:border-box;
+        margin-bottom:12px;
+      "
+    >
+
+    <div
+      id="cvResult"
+      class="notice"
+      style="margin-bottom:12px;"
+    >
+      Готов к сканированию.
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:10px;">
+
+      <button
+        type="button"
+        id="cvFinishBtn"
+        class="sp-btn success"
+        style="width:100%;padding:14px;font-size:16px;"
+      >
+        Завершить проверку
+      </button>
+
+      <button
+        type="button"
+        id="cvCancelBtn"
+        class="sp-btn secondary"
+        style="width:100%;padding:14px;font-size:16px;"
+      >
+        Отменить
+      </button>
+
+    </div>
+
+  `;
+
+}
+
+
+function collectedVerificationResultHtml() {
+
+  const result =
+    state.collectedVerification.result;
+
+  if (!result) {
+    return '';
+  }
+
+  const ok =
+    result.missing.length === 0 &&
+    result.extra.length === 0;
+
+  return `
+
+    <div style="
+      font-size:18px;
+      font-weight:700;
+      margin-bottom:14px;
+      color:${ok ? '#18794e' : '#b42318'};
+    ">
+      ${ok ? '✓ Комплектация подтверждена' : '⚠ Расхождения при проверке'}
+    </div>
+
+    <div style="
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      margin-bottom:18px;
+    ">
+
+      <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee;">
+        <span style="color:#666;">Ожидалось</span>
+        <b>${result.expected}</b>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee;">
+        <span style="color:#666;">Проверено</span>
+        <b>${result.found}</b>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee;">
+        <span style="color:#666;">Отсутствует</span>
+        <b>${result.missing.length}</b>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee;">
+        <span style="color:#666;">Лишних</span>
+        <b>${result.extra.length}</b>
+      </div>
+
+    </div>
+
+    ${
+      result.missing.length
+        ? `
+          <div class="sp-muted" style="margin-bottom:10px;">
+            Отсутствуют (штрихкоды):
+            ${result.missing.map(b => escapeHtml(b)).join(', ')}
+          </div>
+        `
+        : ''
+    }
+
+    ${
+      result.extra.length
+        ? `
+          <div class="sp-muted" style="margin-bottom:10px;">
+            Лишние (штрихкоды):
+            ${result.extra.map(b => escapeHtml(b)).join(', ')}
+          </div>
+        `
+        : ''
+    }
+
+    <button
+      type="button"
+      id="cvCloseResultBtn"
+      class="sp-btn"
+      style="width:100%;padding:14px;font-size:16px;"
+    >
+      Готово
+    </button>
+
+  `;
+
+}
+
+
+function renderCollectedVerificationModal() {
+
+  const v =
+    state.collectedVerification;
+
+  let overlay =
+    document.getElementById(
+      'spCollectedVerifyModal'
+    );
+
+  if (!overlay) {
+
+    overlay =
+      document.createElement('div');
+
+    overlay.id =
+      'spCollectedVerifyModal';
+
+    overlay.style.cssText = `
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.45);
+      z-index:100000;
+      display:flex;
+      align-items:flex-end;
+      justify-content:center;
+    `;
+
+    document.body.appendChild(overlay);
+
+  }
+
+  const html =
+    v.result
+      ? collectedVerificationResultHtml()
+      : v.active
+        ? collectedVerificationScanningHtml()
+        : collectedVerificationSetupHtml();
+
+  overlay.innerHTML = `
+    <div style="
+      background:#fff;
+      width:100%;
+      max-width:420px;
+      border-radius:18px 18px 0 0;
+      padding:20px;
+      box-shadow:0 -10px 40px rgba(0,0,0,.25);
+      font-size:15px;
+      max-height:90vh;
+      overflow-y:auto;
+    ">
+      ${html}
+    </div>
+  `;
+
+  setupCollectedVerificationHandlers();
+
+}
+
+
+function setupCollectedVerificationHandlers() {
+
+  const v =
+    state.collectedVerification;
+
+  $('#cvCancelBtn')
+    ?.addEventListener('click', () => {
+
+      closeCollectedVerificationModal();
+      resetCollectedVerificationState();
+
+    });
+
+  $('#cvCloseBtn')
+    ?.addEventListener('click', () => {
+
+      if (
+        confirm(
+          'Прервать проверку? Прогресс сканирования будет потерян.'
+        )
+      ) {
+
+        closeCollectedVerificationModal();
+        resetCollectedVerificationState();
+
+      }
+
+    });
+
+  $('#cvCloseResultBtn')
+    ?.addEventListener('click', () => {
+
+      closeCollectedVerificationModal();
+      resetCollectedVerificationState();
+      render();
+
+    });
+
+  $('#cvStartBtn')
+    ?.addEventListener('click', () => {
+
+      const select =
+        $('#cvDirectionSelect');
+
+      const direction =
+        select
+          ? normalizeText(select.value)
+          : '';
+
+      const pool =
+        state.boxes.filter(
+          row =>
+            row.status === STATUSES.COLLECTED &&
+            (
+              !direction ||
+              normalizeText(row.direction) === direction
+            )
+        );
+
+      if (!pool.length) {
+
+        toast(
+          'Нет скомплектованных коробок для проверки',
+          'error'
+        );
+
+        return;
+
+      }
+
+      state.collectedVerification.direction = direction;
+      state.collectedVerification.expectedIds =
+        new Set(pool.map(row => String(row.id)));
+      state.collectedVerification.scannedIds = new Set();
+      state.collectedVerification.extraScans = [];
+      state.collectedVerification.recentScans = [];
+      state.collectedVerification.result = null;
+      state.collectedVerification.active = true;
+      state.collectedVerification.startedAt =
+        new Date().toISOString();
+
+      renderCollectedVerificationModal();
+
+      setTimeout(() => {
+        $('#cvScannerInput')?.focus();
+      }, 50);
+
+    });
+
+  $('#cvFinishBtn')
+    ?.addEventListener('click', () => {
+
+      finishCollectedVerification();
+
+    });
+
+  const input =
+    $('#cvScannerInput');
+
+  if (input) {
+
+    input.focus();
+
+    input.addEventListener(
+      'keydown',
+      event => {
+
+        if (event.key !== 'Enter') {
+          return;
+        }
+
+        event.preventDefault();
+
+        const value =
+          input.value;
+
+        input.value = '';
+
+        processCollectedVerificationScan(
+          value
+        );
+
+      }
+    );
+
+  }
+
+}
+
+
+function processCollectedVerificationScan(
+  rawBarcode
+) {
+
+  const barcode =
+    normalizeBarcode(rawBarcode);
+
+  if (!barcode) {
+    return;
+  }
+
+  const v =
+    state.collectedVerification;
+
+  // Ищем среди ОЖИДАЕМЫХ, ещё не отсканированных
+  const match =
+    state.boxes.find(
+      row =>
+        v.expectedIds.has(String(row.id)) &&
+        !v.scannedIds.has(String(row.id)) &&
+        normalizeBarcode(row.barcode) === barcode
+    );
+
+  const resultEl =
+    $('#cvResult');
+
+  if (match) {
+
+    v.scannedIds.add(String(match.id));
+
+    beep(true);
+
+    if (resultEl) {
+
+      resultEl.textContent =
+        `✓ ${match.article || barcode}`;
+
+      resultEl.style.border =
+        '2px solid #18794e';
+
+    }
+
+  } else {
+
+    // либо коробка не из ожидаемого списка,
+    // либо уже была отсканирована
+    const alreadyScanned =
+      state.boxes.find(
+        row =>
+          v.scannedIds.has(String(row.id)) &&
+          normalizeBarcode(row.barcode) === barcode
+      );
+
+    if (alreadyScanned) {
+
+      beep(false);
+
+      if (resultEl) {
+        resultEl.textContent =
+          'Уже отсканирована';
+        resultEl.style.border =
+          '2px solid #b45309';
+      }
+
+    } else {
+
+      v.extraScans.push(barcode);
+
+      beep(false);
+
+      if (resultEl) {
+        resultEl.textContent =
+          `⚠ Лишняя коробка: ${barcode}`;
+        resultEl.style.border =
+          '2px solid #b42318';
+      }
+
+    }
+
+  }
+
+  // Обновляем только счётчики сверху,
+  // не пересоздаём #cvScannerInput —
+  // тот же приём, что и в Базе/Сборке.
+  const counters =
+    document.querySelectorAll(
+      '#spCollectedVerifyModal [style*="gap:12px"] b'
+    );
+
+  if (counters.length >= 3) {
+
+    counters[0].textContent =
+      String(v.expectedIds.size);
+
+    counters[1].textContent =
+      String(v.scannedIds.size);
+
+    counters[2].textContent =
+      String(v.extraScans.length);
+
+  }
+
+}
+
+
+async function finishCollectedVerification() {
+
+  const v =
+    state.collectedVerification;
+
+  const missingBoxes =
+    [...v.expectedIds]
+      .filter(id => !v.scannedIds.has(id))
+      .map(id =>
+        state.boxes.find(
+          row => String(row.id) === id
+        )
+      )
+      .filter(Boolean);
+
+  const result = {
+    expected: v.expectedIds.size,
+    found: v.scannedIds.size,
+    missing: missingBoxes.map(
+      row => normalizeBarcode(row.barcode)
+    ),
+    extra: v.extraScans
+  };
+
+  state.collectedVerification.result = result;
+  state.collectedVerification.finishedAt =
+    new Date().toISOString();
+
+  renderCollectedVerificationModal();
+
+  // Сохраняем сессию в Supabase — не блокируем
+  // показ результата оператору, если запись
+  // не удалась (например, миграция ещё не
+  // выполнена): предупреждаем через toast,
+  // но результат уже показан.
+  try {
+
+    const operatorEmail =
+      state.user?.email || null;
+
+    const { data: session, error: sessionError } =
+      await supabaseClient
+        .from('collected_verification_sessions')
+        .insert({
+          direction: v.direction || null,
+          expected_count: result.expected,
+          scanned_count: result.found,
+          missing_count: result.missing.length,
+          extra_count: result.extra.length,
+          status:
+            (result.missing.length || result.extra.length)
+              ? 'mismatch'
+              : 'ok',
+          operator: operatorEmail,
+          started_at: v.startedAt,
+          finished_at: v.finishedAt
+        })
+        .select('*')
+        .single();
+
+    if (sessionError) {
+      throw sessionError;
+    }
+
+    const items = [
+      ...[...v.scannedIds].map(id => {
+
+        const row =
+          state.boxes.find(
+            box => String(box.id) === id
+          );
+
+        return {
+          session_id: session.id,
+          box_id: id,
+          barcode: row ? normalizeBarcode(row.barcode) : null,
+          result: 'expected_found'
+        };
+
+      }),
+      ...missingBoxes.map(row => ({
+        session_id: session.id,
+        box_id: row.id,
+        barcode: normalizeBarcode(row.barcode),
+        result: 'missing'
+      })),
+      ...v.extraScans.map(barcode => ({
+        session_id: session.id,
+        box_id: null,
+        barcode,
+        result: 'extra'
+      }))
+    ];
+
+    if (items.length) {
+
+      const { error: itemsError } =
+        await supabaseClient
+          .from('collected_verification_items')
+          .insert(items);
+
+      if (itemsError) {
+        throw itemsError;
+      }
+
+    }
+
+  } catch (error) {
+
+    console.error(
+      'Ошибка сохранения результата проверки:',
+      error
+    );
+
+    toast(
+      'Результат проверки показан, но не удалось сохранить его в историю (проверьте, что выполнена supabase_migration.sql)',
+      'error'
+    );
+
+  }
+
+}
+
+
 async function shipSelectedCollected() {
 
   const ids =
@@ -13499,89 +14907,100 @@ async function shipSelectedCollected() {
   }
 
 
-  let shipped =
-    0;
+  const operatorEmail =
+    state.user?.email || null;
 
+  // Одна атомарная операция на стороне БД —
+  // либо отгружаются все выбранные коробки,
+  // либо (при ошибке) ни одна. Раньше здесь
+  // был цикл из N отдельных UPDATE, из-за
+  // которого при сбое сети часть коробок
+  // могла отгрузиться, а часть — нет
+  // (см. Задачу №15 ТЗ). sp_ship_boxes также
+  // проставляет shipped_at/shipped_by
+  // (Задача №2).
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+      .rpc('sp_ship_boxes', {
+        p_box_ids: ids,
+        p_operator: operatorEmail
+      });
 
-  for (
-    const id of ids
-  ) {
+  if (error) {
 
-    const {
-      data,
+    console.error(
+      'Ошибка отгрузки:',
       error
-    } =
-      await supabaseClient
-        .from('boxes')
-        .update({
-
-          "Статус":
-            STATUSES.SHIPPED
-
-        })
-        .eq(
-          'id',
-          id
-        )
-        .eq(
-          'Статус',
-          STATUSES.COLLECTED
-        )
-        .select(
-          BOX_SELECT
-        )
-        .single();
-
-
-    if (error) {
-
-      console.error(
-        'Ошибка отгрузки:',
-        error
-      );
-
-      console.error(
-        'Message:',
-        error?.message
-      );
-
-      console.error(
-        'Details:',
-        error?.details
-      );
-
-      console.error(
-        'Hint:',
-        error?.hint
-      );
-
-      console.error(
-        'Code:',
-        error?.code
-      );
-
-      continue;
-
-    }
-
-
-    updateLocalBox(
-      id,
-      data
     );
 
+    console.error(
+      'Message:',
+      error?.message
+    );
 
-    shipped++;
+    console.error(
+      'Details:',
+      error?.details
+    );
+
+    console.error(
+      'Hint:',
+      error?.hint
+    );
+
+    console.error(
+      'Code:',
+      error?.code
+    );
+
+    toast(
+      error.message ||
+      'Ошибка отгрузки',
+      'error'
+    );
+
+    return;
 
   }
+
+  const rows =
+    Array.isArray(data)
+      ? data
+      : [];
+
+  rows.forEach(row => {
+
+    updateLocalBox(
+      row.id,
+      mapDbBoxRow(row)
+    );
+
+  });
+
+  const shipped =
+    rows.length;
 
 
   render();
 
 
-  toast(
-    `Отгружено: ${shipped}`
-  );
+  if (shipped < ids.length) {
+
+    toast(
+      `Отгружено: ${shipped} из ${ids.length}. Часть коробок уже была не в статусе «Скомплектовано» — проверьте Базу.`,
+      'error'
+    );
+
+  } else {
+
+    toast(
+      `Отгружено: ${shipped}`
+    );
+
+  }
 
 }
 
@@ -14451,6 +15870,657 @@ function setupShipped() {
 }
 
 
+/* =========================================================
+   ПЕРЕМЕЩЕНИЕ (Задача №4)
+
+   Коробки выбираются либо сканированием, либо (если
+   оператор уже выбрал что-то чекбоксами в Базе) —
+   state.selectedIds подхватывается автоматически при
+   входе на вкладку. Паллету целиком можно взять через
+   быстрый выбор ниже.
+
+   Перемещение выполняется одной атомарной RPC
+   (sp_move_boxes, см. supabase_migration.sql) — либо
+   переехали все выбранные коробки, либо ни одна.
+   ========================================================= */
+
+/*
+  Группировка текущих коробок по физическому "адресу"
+  (склад/зона/поддон как текст — см. обоснование в
+  supabase_migration.sql) — используется и для быстрого
+  выбора паллеты целиком в Перемещении, и для объединения
+  паллет в Инвентаризации (Задача №3).
+*/
+function getPalletGroups() {
+
+  const groups =
+    new Map();
+
+  state.boxes.forEach(row => {
+
+    if (
+      row.status === STATUSES.SHIPPED
+    ) {
+      return;
+    }
+
+    const warehouse =
+      normalizeText(row.warehouse);
+
+    const zone =
+      normalizeText(row.zone_row);
+
+    const pallet =
+      normalizeText(row.pallet);
+
+    if (!pallet) {
+      return;
+    }
+
+    const key =
+      `${warehouse}||${zone}||${pallet}`;
+
+    if (!groups.has(key)) {
+
+      groups.set(key, {
+        key,
+        warehouse,
+        zone,
+        pallet,
+        ids: []
+      });
+
+    }
+
+    groups.get(key).ids.push(
+      String(row.id)
+    );
+
+  });
+
+  return [
+    ...groups.values()
+  ].sort(
+    (a, b) =>
+      b.ids.length - a.ids.length
+  );
+
+}
+
+
+function moveSelectedBoxes() {
+
+  return [...state.move.selectedIds]
+    .map(id =>
+      state.boxes.find(
+        row => String(row.id) === id
+      )
+    )
+    .filter(Boolean);
+
+}
+
+
+function moveView() {
+
+  // При первом заходе на вкладку подхватываем
+  // то, что уже выбрано чекбоксами в Базе —
+  // удобно: отметил коробки в Базе → нажал
+  // "Перемещение" → они уже здесь.
+  if (
+    !state.move.seededFromBase &&
+    state.selectedIds.size
+  ) {
+
+    state.selectedIds.forEach(id =>
+      state.move.selectedIds.add(String(id))
+    );
+
+    state.move.seededFromBase = true;
+
+  }
+
+  const selected =
+    moveSelectedBoxes();
+
+  const groups =
+    getPalletGroups();
+
+  const warehouseNames =
+    [
+      ...new Set(
+        state.boxes
+          .map(row => normalizeText(row.warehouse))
+          .filter(Boolean)
+      )
+    ].sort();
+
+  return `
+
+    ${quickToolsBar()}
+
+    <div class="sp-card" style="margin-bottom:12px;">
+
+      <div style="font-weight:600; margin-bottom:10px;">
+        1. Выберите коробки
+      </div>
+
+      <div class="sp-muted" style="margin-bottom:10px; font-size:13px;">
+        Отсканируйте коробки одну за другой, либо выберите
+        паллету целиком ниже. Также сюда попадают коробки,
+        уже отмеченные в Базе.
+      </div>
+
+      <input
+        id="moveScannerInput"
+        type="text"
+        inputmode="none"
+        autocomplete="off"
+        autocorrect="off"
+        spellcheck="false"
+        placeholder="Сканируйте штрихкод..."
+        style="
+          width:100%;
+          min-height:52px;
+          border:2px solid #111;
+          border-radius:14px;
+          padding:0 14px;
+          font-size:17px;
+          outline:none;
+          box-sizing:border-box;
+          margin-bottom:10px;
+        "
+      >
+
+      <div
+        id="moveScanResult"
+        class="notice"
+        style="margin-bottom:12px;"
+      >
+        Готов к сканированию.
+      </div>
+
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+
+        <select id="movePalletQuickSelect" style="flex:1; min-width:220px;">
+          <option value="">
+            — Выбрать паллету целиком —
+          </option>
+          ${groups.map(group => `
+            <option value="${escapeHtml(group.key)}">
+              ${escapeHtml(group.warehouse || '—')} · ${escapeHtml(group.zone || '—')} · ${escapeHtml(group.pallet)} (${group.ids.length})
+            </option>
+          `).join('')}
+        </select>
+
+        <button
+          type="button"
+          class="sp-btn secondary"
+          id="moveAddPalletBtn"
+        >
+          Добавить паллету
+        </button>
+
+      </div>
+
+      <div id="moveSelectedList">
+        ${moveSelectedListHtml(selected)}
+      </div>
+
+    </div>
+
+
+    <div class="sp-card">
+
+      <div style="font-weight:600; margin-bottom:10px;">
+        2. Новое место
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:14px;">
+
+        <label>
+          <div class="sp-muted" style="font-size:12px; margin-bottom:4px;">Склад</div>
+          <input
+            id="moveTargetWarehouse"
+            type="text"
+            list="moveWarehouseList"
+            value="${escapeHtml(state.move.targetWarehouse || '')}"
+            style="width:100%;"
+          >
+          <datalist id="moveWarehouseList">
+            ${warehouseNames.map(name => `<option value="${escapeHtml(name)}">`).join('')}
+          </datalist>
+        </label>
+
+        <label>
+          <div class="sp-muted" style="font-size:12px; margin-bottom:4px;">Зона / ряд</div>
+          <input
+            id="moveTargetZone"
+            type="text"
+            value="${escapeHtml(state.move.targetZone || '')}"
+            style="width:100%;"
+          >
+        </label>
+
+        <label>
+          <div class="sp-muted" style="font-size:12px; margin-bottom:4px;">Поддон</div>
+          <input
+            id="moveTargetPallet"
+            type="text"
+            value="${escapeHtml(state.move.targetPallet || '')}"
+            style="width:100%;"
+          >
+        </label>
+
+      </div>
+
+      <button
+        type="button"
+        class="sp-btn success"
+        id="moveConfirmBtn"
+        style="width:100%; padding:14px; font-size:16px;"
+        ${selected.length ? '' : 'disabled'}
+      >
+        Переместить (${selected.length})
+      </button>
+
+    </div>
+
+  `;
+
+}
+
+
+function moveSelectedListHtml(selected) {
+
+  if (!selected.length) {
+
+    return `
+      <div class="sp-empty">
+        Пока ничего не выбрано
+      </div>
+    `;
+
+  }
+
+  return `
+    <div style="display:flex; flex-direction:column; gap:6px; max-height:260px; overflow-y:auto;">
+
+      ${selected.map(row => `
+
+        <div style="
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:8px;
+          padding:8px 10px;
+          border:1px solid #eee;
+          border-radius:10px;
+          font-size:13px;
+        ">
+
+          <div>
+            <b>${escapeHtml(row.article || row.barcode || '—')}</b>
+            <div class="sp-muted">
+              ${escapeHtml(row.warehouse || '—')} · ${escapeHtml(row.zone_row || '—')} · ${escapeHtml(row.pallet || '—')}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            class="sp-btn secondary move-remove-btn"
+            data-id="${escapeHtml(String(row.id))}"
+            style="padding:4px 10px;"
+          >
+            ✕
+          </button>
+
+        </div>
+
+      `).join('')}
+
+    </div>
+
+    <div class="sp-muted" style="margin-top:8px;">
+      Выбрано: <b>${selected.length}</b>
+    </div>
+  `;
+
+}
+
+
+function updateMoveSelectedList() {
+
+  const container =
+    $('#moveSelectedList');
+
+  if (!container) {
+    return;
+  }
+
+  const selected =
+    moveSelectedBoxes();
+
+  container.innerHTML =
+    moveSelectedListHtml(selected);
+
+  container
+    .querySelectorAll('.move-remove-btn')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          state.move.selectedIds.delete(
+            button.dataset.id
+          );
+
+          updateMoveSelectedList();
+          updateMoveConfirmButton();
+
+        }
+      );
+
+    });
+
+  updateMoveConfirmButton();
+
+}
+
+
+function updateMoveConfirmButton() {
+
+  const button =
+    $('#moveConfirmBtn');
+
+  if (!button) {
+    return;
+  }
+
+  const count =
+    state.move.selectedIds.size;
+
+  button.textContent =
+    `Переместить (${count})`;
+
+  button.disabled =
+    count === 0;
+
+}
+
+
+function processMoveScan(rawBarcode) {
+
+  const barcode =
+    normalizeBarcode(rawBarcode);
+
+  if (!barcode) {
+    return;
+  }
+
+  const resultEl =
+    $('#moveScanResult');
+
+  const match =
+    state.boxes.find(
+      row =>
+        row.status !== STATUSES.SHIPPED &&
+        normalizeBarcode(row.barcode) === barcode &&
+        !state.move.selectedIds.has(String(row.id))
+    );
+
+  if (!match) {
+
+    beep(false);
+
+    if (resultEl) {
+      resultEl.textContent =
+        'Коробка не найдена (или уже выбрана / уже отгружена)';
+      resultEl.style.border =
+        '2px solid #b42318';
+    }
+
+    return;
+
+  }
+
+  state.move.selectedIds.add(
+    String(match.id)
+  );
+
+  beep(true);
+
+  if (resultEl) {
+    resultEl.textContent =
+      `✓ ${match.article || barcode} добавлена`;
+    resultEl.style.border =
+      '2px solid #18794e';
+  }
+
+  updateMoveSelectedList();
+
+}
+
+
+async function confirmMoveBoxes() {
+
+  const selected =
+    moveSelectedBoxes();
+
+  if (!selected.length) {
+
+    toast(
+      'Выберите хотя бы одну коробку',
+      'error'
+    );
+
+    return;
+
+  }
+
+  const targetWarehouse =
+    normalizeText(
+      $('#moveTargetWarehouse')?.value
+    );
+
+  const targetZone =
+    normalizeText(
+      $('#moveTargetZone')?.value
+    );
+
+  const targetPallet =
+    normalizeText(
+      $('#moveTargetPallet')?.value
+    );
+
+  if (
+    !targetWarehouse &&
+    !targetZone &&
+    !targetPallet
+  ) {
+
+    toast(
+      'Укажите новое место (хотя бы одно поле)',
+      'error'
+    );
+
+    return;
+
+  }
+
+  if (
+    !confirm(
+      `Переместить ${selected.length} коробок в: ${targetWarehouse || '—'} / ${targetZone || '—'} / ${targetPallet || '—'}?`
+    )
+  ) {
+
+    return;
+
+  }
+
+  const operatorEmail =
+    state.user?.email || null;
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+      .rpc('sp_move_boxes', {
+        p_box_ids: selected.map(row => row.id),
+        p_target_warehouse: targetWarehouse || null,
+        p_target_zone: targetZone || null,
+        p_target_pallet: targetPallet || null,
+        p_operator: operatorEmail,
+        p_reason: 'move'
+      });
+
+  if (error) {
+
+    console.error(
+      'Ошибка перемещения:',
+      error
+    );
+
+    toast(
+      error.message ||
+      'Ошибка перемещения (проверьте, что выполнена supabase_migration.sql)',
+      'error'
+    );
+
+    return;
+
+  }
+
+  const rows =
+    Array.isArray(data)
+      ? data
+      : [];
+
+  rows.forEach(row => {
+
+    updateLocalBox(
+      row.id,
+      mapDbBoxRow(row)
+    );
+
+  });
+
+  toast(
+    `Перемещено: ${rows.length}`
+  );
+
+  state.move.selectedIds.clear();
+  state.move.seededFromBase = false;
+  state.move.targetWarehouse = '';
+  state.move.targetZone = '';
+  state.move.targetPallet = '';
+  state.selectedIds.clear();
+
+  render();
+
+}
+
+
+function setupMove() {
+
+  setupQuickToolsBar();
+
+  const input =
+    $('#moveScannerInput');
+
+  if (input) {
+
+    input.focus();
+
+    input.addEventListener(
+      'keydown',
+      event => {
+
+        if (event.key !== 'Enter') {
+          return;
+        }
+
+        event.preventDefault();
+
+        const value =
+          input.value;
+
+        input.value = '';
+
+        processMoveScan(value);
+
+      }
+    );
+
+  }
+
+  $('#moveAddPalletBtn')
+    ?.addEventListener('click', () => {
+
+      const select =
+        $('#movePalletQuickSelect');
+
+      const key =
+        select?.value;
+
+      if (!key) {
+
+        toast(
+          'Выберите паллету из списка',
+          'error'
+        );
+
+        return;
+
+      }
+
+      const group =
+        getPalletGroups().find(
+          g => g.key === key
+        );
+
+      if (!group) {
+        return;
+      }
+
+      group.ids.forEach(id =>
+        state.move.selectedIds.add(id)
+      );
+
+      toast(
+        `Добавлено коробок: ${group.ids.length}`
+      );
+
+      updateMoveSelectedList();
+
+    });
+
+  $('#moveTargetWarehouse')
+    ?.addEventListener('input', event => {
+      state.move.targetWarehouse = event.target.value;
+    });
+
+  $('#moveTargetZone')
+    ?.addEventListener('input', event => {
+      state.move.targetZone = event.target.value;
+    });
+
+  $('#moveTargetPallet')
+    ?.addEventListener('input', event => {
+      state.move.targetPallet = event.target.value;
+    });
+
+  $('#moveConfirmBtn')
+    ?.addEventListener(
+      'click',
+      confirmMoveBoxes
+    );
+
+  updateMoveSelectedList();
+
+}
 
 
 /* =========================================================
@@ -23151,6 +25221,34 @@ function inventorySetupView() {
 
     </div>
 
+
+    <div
+      class="sp-card"
+      style="max-width:900px;"
+    >
+
+      <div class="sp-card-label">
+        ОБЪЕДИНЕНИЕ ПАЛЛЕТ
+      </div>
+
+      <p class="sp-muted" style="margin:6px 0 12px;">
+        После инвентаризации могут остаться неполные паллеты
+        на одном и том же месте. Можно физически объединить
+        их содержимое на одной паллете — каждая коробка
+        останется отдельной физической записью, изменится
+        только принадлежность к паллете.
+      </p>
+
+      <button
+        type="button"
+        class="sp-btn secondary"
+        id="openPalletMergeBtn"
+      >
+        Объединить неполные паллеты
+      </button>
+
+    </div>
+
   `;
 
 }
@@ -24548,6 +26646,12 @@ function setupInventory() {
       resetInventory
     );
 
+  $('#openPalletMergeBtn')
+    ?.addEventListener(
+      'click',
+      openPalletMerge
+    );
+
 
   $('#inventoryCancelBtn')
     ?.addEventListener(
@@ -24625,6 +26729,438 @@ function setupInventory() {
     сразу открывается экранная клавиатура.
     Фокус вернётся сам после первого скана.
   */
+
+}
+
+
+/* =========================================================
+   ОБЪЕДИНЕНИЕ НЕПОЛНЫХ ПАЛЛЕТ (Задача №3)
+
+   UX: выбрать несколько исходных паллет → показать
+   содержимое → выбрать целевую паллету → предпросмотр →
+   подтверждение → атомарный перенос коробок (RPC
+   sp_merge_pallets) → исходные паллеты помечаются
+   пустыми/архивными.
+
+   Работает как модальное окно поверх текущей страницы
+   (тот же приём, что showBoxFoundModal и проверка
+   скомплектованного) — не завязано на основной render().
+   ========================================================= */
+
+function closePalletMergeModal() {
+
+  const existing =
+    document.getElementById(
+      'spPalletMergeModal'
+    );
+
+  if (existing) {
+    existing.remove();
+  }
+
+}
+
+
+function resetPalletMergeState() {
+
+  state.palletMerge = {
+    active: false,
+    sourceKeys: new Set(),
+    targetKey: '',
+    preview: null
+  };
+
+}
+
+
+function openPalletMerge() {
+
+  resetPalletMergeState();
+
+  renderPalletMergeModal();
+
+}
+
+
+function palletMergePickHtml() {
+
+  const groups =
+    getPalletGroups();
+
+  if (groups.length < 2) {
+
+    return `
+
+      <div style="font-size:18px;font-weight:700;margin-bottom:12px;">
+        Объединение паллет
+      </div>
+
+      <div class="sp-muted" style="margin-bottom:16px;">
+        Недостаточно паллет с коробками для объединения.
+      </div>
+
+      <button type="button" class="sp-btn" id="pmCloseBtn" style="width:100%;padding:14px;">
+        Закрыть
+      </button>
+
+    `;
+
+  }
+
+  return `
+
+    <div style="font-size:18px;font-weight:700;margin-bottom:10px;">
+      Объединение паллет — шаг 1 из 2
+    </div>
+
+    <div class="sp-muted" style="margin-bottom:12px;">
+      Отметьте паллеты, которые нужно объединить (минимум 2).
+      Последняя отмеченная станет целевой по умолчанию —
+      её можно будет поменять на следующем шаге.
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:6px; max-height:320px; overflow-y:auto; margin-bottom:16px;">
+
+      ${groups.map(group => `
+
+        <label style="
+          display:flex;
+          align-items:center;
+          gap:10px;
+          padding:10px;
+          border:1px solid #eee;
+          border-radius:10px;
+          font-size:13px;
+        ">
+
+          <input
+            type="checkbox"
+            class="pm-source-check"
+            value="${escapeHtml(group.key)}"
+            ${state.palletMerge.sourceKeys.has(group.key) ? 'checked' : ''}
+          >
+
+          <div>
+            <b>${escapeHtml(group.warehouse || '—')} · ${escapeHtml(group.zone || '—')} · ${escapeHtml(group.pallet)}</b>
+            <div class="sp-muted">${group.ids.length} коробок</div>
+          </div>
+
+        </label>
+
+      `).join('')}
+
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:10px;">
+
+      <button type="button" class="sp-btn" id="pmNextBtn" style="width:100%;padding:14px;font-size:16px;">
+        Далее →
+      </button>
+
+      <button type="button" class="sp-btn secondary" id="pmCloseBtn" style="width:100%;padding:14px;font-size:16px;">
+        Отмена
+      </button>
+
+    </div>
+
+  `;
+
+}
+
+
+function palletMergeConfirmHtml() {
+
+  const groups =
+    getPalletGroups();
+
+  const sources =
+    groups.filter(g =>
+      state.palletMerge.sourceKeys.has(g.key)
+    );
+
+  const totalBoxes =
+    sources.reduce(
+      (sum, g) => sum + g.ids.length,
+      0
+    );
+
+  return `
+
+    <div style="font-size:18px;font-weight:700;margin-bottom:10px;">
+      Объединение паллет — шаг 2 из 2
+    </div>
+
+    <div class="sp-muted" style="margin-bottom:12px;">
+      Выбрано паллет: <b>${sources.length}</b>,
+      всего коробок: <b>${totalBoxes}</b>.
+      Выберите целевую паллету — все коробки переедут на неё.
+    </div>
+
+    <select id="pmTargetSelect" style="width:100%; margin-bottom:16px;">
+      ${sources.map(g => `
+        <option value="${escapeHtml(g.key)}" ${state.palletMerge.targetKey === g.key ? 'selected' : ''}>
+          ${escapeHtml(g.warehouse || '—')} · ${escapeHtml(g.zone || '—')} · ${escapeHtml(g.pallet)} (${g.ids.length})
+        </option>
+      `).join('')}
+    </select>
+
+    <div class="sp-muted" style="margin-bottom:16px; font-size:13px;">
+      Остальные паллеты после объединения станут пустыми
+      и будут помечены как архивные.
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:10px;">
+
+      <button type="button" class="sp-btn success" id="pmConfirmBtn" style="width:100%;padding:14px;font-size:16px;">
+        Объединить
+      </button>
+
+      <button type="button" class="sp-btn secondary" id="pmBackBtn" style="width:100%;padding:14px;font-size:16px;">
+        ← Назад
+      </button>
+
+    </div>
+
+  `;
+
+}
+
+
+function renderPalletMergeModal() {
+
+  let overlay =
+    document.getElementById(
+      'spPalletMergeModal'
+    );
+
+  if (!overlay) {
+
+    overlay =
+      document.createElement('div');
+
+    overlay.id =
+      'spPalletMergeModal';
+
+    overlay.style.cssText = `
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.45);
+      z-index:100000;
+      display:flex;
+      align-items:flex-end;
+      justify-content:center;
+    `;
+
+    document.body.appendChild(overlay);
+
+  }
+
+  const html =
+    state.palletMerge.active
+      ? palletMergeConfirmHtml()
+      : palletMergePickHtml();
+
+  overlay.innerHTML = `
+    <div style="
+      background:#fff;
+      width:100%;
+      max-width:420px;
+      border-radius:18px 18px 0 0;
+      padding:20px;
+      box-shadow:0 -10px 40px rgba(0,0,0,.25);
+      font-size:15px;
+      max-height:90vh;
+      overflow-y:auto;
+    ">
+      ${html}
+    </div>
+  `;
+
+  setupPalletMergeHandlers();
+
+}
+
+
+function setupPalletMergeHandlers() {
+
+  $('#pmCloseBtn')
+    ?.addEventListener('click', () => {
+
+      closePalletMergeModal();
+      resetPalletMergeState();
+
+    });
+
+  $all('.pm-source-check')
+    .forEach(checkbox => {
+
+      checkbox.addEventListener('change', event => {
+
+        if (event.target.checked) {
+          state.palletMerge.sourceKeys.add(event.target.value);
+        } else {
+          state.palletMerge.sourceKeys.delete(event.target.value);
+        }
+
+      });
+
+    });
+
+  $('#pmNextBtn')
+    ?.addEventListener('click', () => {
+
+      if (state.palletMerge.sourceKeys.size < 2) {
+
+        toast(
+          'Выберите минимум 2 паллеты',
+          'error'
+        );
+
+        return;
+
+      }
+
+      // По умолчанию целевая — последняя выбранная
+      state.palletMerge.targetKey =
+        [...state.palletMerge.sourceKeys].pop();
+
+      state.palletMerge.active = true;
+
+      renderPalletMergeModal();
+
+    });
+
+  $('#pmBackBtn')
+    ?.addEventListener('click', () => {
+
+      state.palletMerge.active = false;
+
+      renderPalletMergeModal();
+
+    });
+
+  $('#pmTargetSelect')
+    ?.addEventListener('change', event => {
+
+      state.palletMerge.targetKey =
+        event.target.value;
+
+    });
+
+  $('#pmConfirmBtn')
+    ?.addEventListener('click', () => {
+
+      confirmPalletMerge();
+
+    });
+
+}
+
+
+async function confirmPalletMerge() {
+
+  const groups =
+    getPalletGroups();
+
+  const sources =
+    groups.filter(g =>
+      state.palletMerge.sourceKeys.has(g.key)
+    );
+
+  const target =
+    groups.find(
+      g => g.key === state.palletMerge.targetKey
+    );
+
+  if (!target) {
+
+    toast(
+      'Выберите целевую паллету',
+      'error'
+    );
+
+    return;
+
+  }
+
+  const otherSources =
+    sources.filter(g => g.key !== target.key);
+
+  if (!otherSources.length) {
+
+    toast(
+      'Нечего объединять — выберите ещё паллеты',
+      'error'
+    );
+
+    return;
+
+  }
+
+  if (
+    !confirm(
+      `Объединить ${otherSources.length} паллет(ы) в ${target.warehouse || '—'} · ${target.zone || '—'} · ${target.pallet}?`
+    )
+  ) {
+
+    return;
+
+  }
+
+  const operatorEmail =
+    state.user?.email || null;
+
+  const sourcePayload =
+    otherSources.map(g => ({
+      warehouse: g.warehouse,
+      zone: g.zone,
+      pallet: g.pallet
+    }));
+
+  const {
+    data,
+    error
+  } =
+    await supabaseClient
+      .rpc('sp_merge_pallets', {
+        p_source_pallets: sourcePayload,
+        p_target_warehouse: target.warehouse,
+        p_target_zone: target.zone,
+        p_target_pallet: target.pallet,
+        p_operator: operatorEmail
+      });
+
+  if (error) {
+
+    console.error(
+      'Ошибка объединения паллет:',
+      error
+    );
+
+    toast(
+      error.message ||
+      'Ошибка объединения (проверьте, что выполнена supabase_migration.sql)',
+      'error'
+    );
+
+    return;
+
+  }
+
+  toast(
+    `Объединено коробок: ${data ?? '—'}`
+  );
+
+  closePalletMergeModal();
+  resetPalletMergeState();
+
+  // Локальные данные могли устареть сразу для
+  // нескольких паллет — проще перезагрузить
+  // коробки из Supabase, чем аккуратно
+  // патчить каждую запись вручную.
+  await loadBoxesFromSupabase();
+
+  render();
 
 }
 
@@ -28717,6 +31253,17 @@ received: {
   },
 
 
+  move: {
+
+    title:
+      'Перемещение',
+
+    heading:
+      'Перемещение коробок и паллет'
+
+  },
+
+
   tools: {
     title:
       'Инструменты',
@@ -28741,16 +31288,6 @@ received: {
 
     heading:
       'Планировщик задач'
-  },
-
-     planner: {
-
-    title:
-      'Планировщик',
-
-    heading:
-      'Планировщик отгрузок'
-
   },
 
 
@@ -29177,6 +31714,16 @@ function render() {
       break;
 
 
+    case 'move':
+
+      content.innerHTML =
+        moveView();
+
+      setupMove();
+
+      break;
+
+
     case 'comparison':
 
       if (
@@ -29237,15 +31784,7 @@ function render() {
 
       break;
 
-    case 'planner':
 
-      content.innerHTML =
-        plannerView();
-
-      setupPlanner();
-
-      break;
-        
     case 'excel':
 
       content.innerHTML =
