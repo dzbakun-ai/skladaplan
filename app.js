@@ -28743,6 +28743,16 @@ received: {
       'Планировщик задач'
   },
 
+     planner: {
+
+    title:
+      'Планировщик',
+
+    heading:
+      'Планировщик отгрузок'
+
+  },
+
 
   excel: {
     title:
@@ -29227,7 +29237,15 @@ function render() {
 
       break;
 
+    case 'planner':
 
+      content.innerHTML =
+        plannerView();
+
+      setupPlanner();
+
+      break;
+        
     case 'excel':
 
       content.innerHTML =
