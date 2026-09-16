@@ -615,6 +615,26 @@ const state = {
   boxes: [],
 
 
+  /*
+    KPI «Ошибки/расхождения» на Главной (dashboardView).
+
+    Источник — реальные сессии «Проверки скомплектованного»
+    (collected_verification_sessions), а не выдуманное
+    число: сколько несовпадений (missing+extra) нашлось
+    сегодня. Грузится лениво при открытии Главной
+    (см. loadDashboardErrorStats в setupDashboard), не
+    при каждом старте приложения — это статистика для
+    одного виджета, а не критичные для работы данные.
+  */
+  dashboardErrorStats: {
+    loaded: false,
+    loading: false,
+    date: null,
+    sessions: 0,
+    errors: 0
+  },
+
+
   /* =======================================================
      RECEIVING
      ======================================================= */
@@ -19343,7 +19363,122 @@ Excel:
 
             </div>
 
+
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                padding:12px;
+                background:#fff;
+                font-size:13px;
+              "
+              title="Расхождения (недостача + лишнее) по сегодняшним сессиям «Проверки скомплектованного»"
+            >
+
+              <span class="sp-muted">
+                Ошибки сегодня
+              </span>
+
+              <b style="${
+                state.dashboardErrorStats.loaded &&
+                state.dashboardErrorStats.errors > 0
+                  ? 'color:#b42318;'
+                  : ''
+              }">
+                ${
+                  !state.dashboardErrorStats.loaded
+                    ? '—'
+                    : state.dashboardErrorStats.sessions === 0
+                      ? 'нет проверок'
+                      : state.dashboardErrorStats.errors
+                }
+              </b>
+
+            </div>
+
           </div>
+
+
+          <!-- =================================================
+               ЗАГРУЗКА СКЛАДА (реальная занятость по Карте)
+               ================================================= -->
+
+          ${
+            (() => {
+
+              const occ =
+                computeWarehouseOccupancySummary();
+
+              const pct = value =>
+                value.total
+                  ? Math.round(
+                      value.occupied / value.total * 100
+                    )
+                  : 0;
+
+              const bar = (label, value) => `
+                <div style="margin-top:14px;">
+
+                  <div
+                    style="
+                      display:flex;
+                      justify-content:space-between;
+                      font-size:11px;
+                      font-weight:600;
+                      color:#888;
+                      margin-bottom:6px;
+                    "
+                  >
+                    <span>${label}</span>
+                    <span>
+                      ${value.total ? pct(value) + '%' : '—'}
+                      ${
+                        value.total
+                          ? ` · ${value.occupied} из ${value.total}`
+                          : ''
+                      }
+                    </span>
+                  </div>
+
+                  <div
+                    style="
+                      height:6px;
+                      border-radius:3px;
+                      background:#eee;
+                      overflow:hidden;
+                    "
+                  >
+                    <div
+                      style="
+                        width:${pct(value)}%;
+                        height:100%;
+                        background:#111;
+                        border-radius:3px;
+                      "
+                    ></div>
+                  </div>
+
+                </div>
+              `;
+
+              return `
+                <div style="margin-top:16px;">
+
+                  <div
+                    class="sp-card-label"
+                    style="margin-bottom:2px;"
+                  >
+                    Загрузка ячеек по Карте склада
+                  </div>
+
+                  ${bar('СОХ (по рядам)', occ.soh)}
+                  ${bar('НС (по местам)', occ.ns)}
+
+                </div>
+              `;
+
+            })()
+          }
 
         </div>
 
@@ -19487,6 +19622,18 @@ function setupDashboard() {
   */
 
   setupHomeTasksWidget();
+
+
+  /*
+    KPI «Ошибки сегодня» — грузится лениво при открытии
+    Главной (не на старте приложения), сама вызывает
+    render() когда данные придут. loadDashboardErrorStats()
+    сама проверяет, не загружены ли уже данные за
+    сегодня — повторный вход на Главную не долбит
+    Supabase запросами заново.
+  */
+
+  loadDashboardErrorStats();
 
 
   /*
@@ -28306,6 +28453,161 @@ function openLocationInBase(code) {
    Отгруженное («Отгружено») не считаем — те коробки уже
    физически не на складе.
    ========================================================= */
+
+/* =========================================================
+   ГЛАВНАЯ — РЕАЛЬНАЯ ЗАГРУЗКА СКЛАДА И ОШИБКИ ПРОВЕРКИ
+
+   Переиспользуют ту же занятость, что и карта склада
+   (см. computeMapOccupancy ниже), и реальные сессии
+   «Проверки скомплектованного» — вместо того, чтобы
+   рисовать на Главной выдуманные проценты по «секторам»,
+   которых в проекте не существует.
+   ========================================================= */
+
+function computeWarehouseOccupancySummary() {
+
+  const occupancy =
+    computeMapOccupancy();
+
+  const sohRows =
+    WAREHOUSE_MAP_DATA.soh_entries ||
+    [];
+
+  const sohTotal =
+    sohRows.length;
+
+  const sohOccupied =
+    sohRows.filter(
+      entry =>
+        occupancy[
+          mapNormalizeCode(entry.ryad)
+        ]
+    ).length;
+
+
+  const nsZones =
+    WAREHOUSE_MAP_DATA.ns_zones ||
+    {};
+
+  const nsCodes =
+    Object.values(nsZones)
+      .reduce(
+        (acc, codes) =>
+          acc.concat(codes),
+        []
+      );
+
+  const nsTotal =
+    nsCodes.length;
+
+  const nsOccupied =
+    nsCodes.filter(
+      code =>
+        occupancy[
+          mapNormalizeCode(code)
+        ]
+    ).length;
+
+
+  return {
+    soh: { occupied: sohOccupied, total: sohTotal },
+    ns:  { occupied: nsOccupied,  total: nsTotal  },
+    combined: {
+      occupied: sohOccupied + nsOccupied,
+      total: sohTotal + nsTotal
+    }
+  };
+
+}
+
+
+async function loadDashboardErrorStats() {
+
+  const today =
+    todayFileDate();
+
+  if (
+    state.dashboardErrorStats.loading ||
+    (
+      state.dashboardErrorStats.loaded &&
+      state.dashboardErrorStats.date === today
+    )
+  ) {
+    return;
+  }
+
+  state.dashboardErrorStats.loading = true;
+
+  try {
+
+    /*
+      «Сегодня» — по времени завершения проверки.
+      Берём только завершённые сессии (finished_at
+      не пусто), незавершённая проверка ещё не
+      результат, а процесс.
+    */
+
+    const startOfDay =
+      new Date();
+
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from('collected_verification_sessions')
+        .select('missing_count, extra_count, status')
+        .gte('finished_at', startOfDay.toISOString())
+        .not('finished_at', 'is', null);
+
+    if (error) {
+      throw error;
+    }
+
+    const rows =
+      Array.isArray(data) ? data : [];
+
+    const errors =
+      rows.reduce(
+        (sum, row) =>
+          sum +
+          (row.missing_count || 0) +
+          (row.extra_count || 0),
+        0
+      );
+
+    state.dashboardErrorStats = {
+      loaded: true,
+      loading: false,
+      date: today,
+      sessions: rows.length,
+      errors
+    };
+
+  } catch (error) {
+
+    /*
+      Таблицы «Проверки скомплектованного» появились не
+      сразу — если миграция ещё не выполнена, просто не
+      показываем цифру (см. dashboardView: покажет «—»),
+      а не ломаем Главную.
+    */
+
+    console.warn(
+      'Не удалось загрузить статистику проверок:',
+      error
+    );
+
+    state.dashboardErrorStats.loading = false;
+
+  }
+
+  render();
+
+}
+
 
 function mapNormalizeCode(value) {
 
