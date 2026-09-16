@@ -464,6 +464,32 @@ box-shadow: 0 -4px 20px rgba(0, 0, 0, .05);
 z-index: 900;
 }
 
+.nav-indicator {
+position: absolute;
+
+top: 0;
+left: 0;
+
+width: 0;
+height: 0;
+
+border-radius: 12px;
+
+background: #111;
+
+pointer-events: none;
+
+z-index: 1;
+
+opacity: 0;
+
+transition:
+  transform .22s ease,
+  width .22s ease,
+  height .22s ease,
+  opacity .15s ease;
+}
+  
 .mobile-nav-btn {
 position: relative;
 
@@ -545,19 +571,19 @@ color: #555;
 }
 
 .mobile-nav-btn.active {
-background: #f2f2f2;
-color: #111;
+background: transparent;
+color: #fff;
 }
 
 .mobile-nav-btn.active > span,
 .mobile-nav-btn.active > small {
-color: #111;
+color: #fff;
 }
 
 .mobile-nav-btn.active .icon,
 .mobile-nav-btn.active .icon use {
-color: #111;
-stroke: #111;
+color: #fff;
+stroke: #fff;
 stroke-width: 2;
 }
 
