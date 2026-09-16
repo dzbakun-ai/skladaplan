@@ -33629,7 +33629,12 @@ async function startAuthenticatedApp() {
       рисуем приложение.
     */
 
-    render();
+   render();
+
+      requestAnimationFrame(
+        updateNavIndicator
+   );
+
 
   } catch (error) {
 
