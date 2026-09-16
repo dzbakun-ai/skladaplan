@@ -32,11 +32,6 @@
     href="planner.css"
   >
 
-  <link
-    rel="stylesheet"
-    href="tasks.css"
-  >
-
 </head>
 
 
@@ -162,7 +157,7 @@
     </symbol>
 
     <!-- ===================================================
-         ИКОНКИ — TASK MANAGER (tasks.js)
+         ИКОНКИ — ЗАДАЧИ (виджет Главной и Планировщик)
          =================================================== -->
 
     <symbol id="icon-star" viewBox="0 0 24 24">
@@ -190,20 +185,6 @@
     <symbol id="icon-plus" viewBox="0 0 24 24">
       <path d="M12 5v14"/>
       <path d="M5 12h14"/>
-    </symbol>
-
-    <symbol id="icon-x" viewBox="0 0 24 24">
-      <path d="M6 6l12 12"/>
-      <path d="M18 6L6 18"/>
-    </symbol>
-
-    <symbol id="icon-list" viewBox="0 0 24 24">
-      <path d="M9 6h11"/>
-      <path d="M9 12h11"/>
-      <path d="M9 18h11"/>
-      <circle cx="4.5" cy="6" r="1.1" fill="currentColor" stroke="none"/>
-      <circle cx="4.5" cy="12" r="1.1" fill="currentColor" stroke="none"/>
-      <circle cx="4.5" cy="18" r="1.1" fill="currentColor" stroke="none"/>
     </symbol>
 
   </defs>
@@ -295,7 +276,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-home"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Главная
           </span>
 
@@ -312,7 +293,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-grid"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             База
           </span>
 
@@ -329,7 +310,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-inbox-down"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Приёмка
           </span>
 
@@ -346,7 +327,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-package"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Сборка
           </span>
 
@@ -368,7 +349,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-check-circle"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Собрано
           </span>
 
@@ -385,7 +366,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-send"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Убыло
           </span>
 
@@ -402,14 +383,21 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-swap"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Перемещение
           </span>
 
         </button>
 
 
-        <!-- ПЛАНИРОВЩИК -->
+        <!--
+          ЗАДАЧИ
+
+          Пункт называется «Задачи», а открывает
+          полноценный Планировщик (planner.js).
+          Отдельного пункта «Планировщик» нет —
+          это был второй вход в тот же раздел.
+        -->
 
         <button
           class="nav"
@@ -419,8 +407,8 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-calendar"></use></svg></span>
 
-          <span>
-            Планировщик
+          <span class="nav-label">
+            Задачи
           </span>
 
         </button>
@@ -450,7 +438,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-columns"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Сравнение
           </span>
 
@@ -468,7 +456,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-divide"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Деление
           </span>
 
@@ -486,7 +474,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-sigma"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Сумма
           </span>
 
@@ -504,7 +492,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-box-arrow"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Заявка → Коробки
           </span>
 
@@ -522,7 +510,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-clipboard-check"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Инвентаризация
           </span>
 
@@ -540,7 +528,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-table"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Excel
           </span>
 
@@ -558,7 +546,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-database"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Данные
           </span>
 
@@ -589,7 +577,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-map"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Карта
           </span>
 
@@ -607,7 +595,7 @@
 
           <span class="nav-icon"><svg class="icon"><use href="#icon-help"></use></svg></span>
 
-          <span>
+          <span class="nav-label">
             Справка
           </span>
 
@@ -862,15 +850,6 @@
 
 <script
   src="app.js"
-></script>
-
-
-<!-- =====================================================
-     TASKS
-     ===================================================== -->
-
-<script
-  src="tasks.js"
 ></script>
 
 

@@ -813,9 +813,9 @@ inventory: {
 
 
   /* =======================================================
-     TASK MANAGER
-     Состояние задач больше не хранится здесь — см.
-     tasksState в tasks.js.
+     ЗАДАЧИ
+     Состояние задач здесь не хранится — единственный
+     источник задач это planner.js / planner_tasks.
      ======================================================= */
 
 
@@ -1216,14 +1216,13 @@ function parseToolDataLine(line) {
 
 
 /* =========================================================
-   TASK MANAGER
-   Вынесено в отдельный модуль — см. tasks.js / tasks.css.
-   Здесь эта логика больше не живёт: tasksState, CRUD,
-   tasksView()/setupTasks()/homeTasksListHtml() теперь
-   определены в tasks.js (подключается отдельным
-   <script> в index.html после app.js — так же, как
-   planner.js) и используют Supabase (public.tasks),
-   а не localStorage.
+   ЗАДАЧИ
+
+   Отдельного модуля задач больше нет. Единственный
+   задачник проекта — Планировщик (planner.js, таблица
+   planner_tasks). Оттуда же берётся виджет «Задачи»
+   на Главной: window.plannerHomeTasksHtml() и
+   window.setupPlannerHomeTasks().
    ========================================================= */
 
 
@@ -6202,30 +6201,30 @@ function baseView() {
 
         <button
           class="sp-btn secondary"
-          data-page="tasks"
+          data-page="planner"
         >
-          📋 Задачи
+          Задачи
         </button>
 
         <button
           class="sp-btn secondary"
           data-page="excel"
         >
-          📊 Excel
+          Excel
         </button>
 
         <button
           class="sp-btn secondary"
           data-page="data"
         >
-          👤 Данные
+          Данные
         </button>
 
         <button
           class="sp-btn secondary"
           data-page="map"
         >
-          🗺 Карта
+          Карта
         </button>
 
       </div>
@@ -15509,9 +15508,9 @@ function setupMove() {
    ========================================================= */
 
 /*
-  homeTasksListHtml() больше не определяется здесь —
-  см. tasks.js (использует tasksState/Supabase и
-  поддерживает избранное).
+  Список задач на Главной рисует планировщик —
+  window.plannerHomeTasksHtml() в planner.js.
+  Отдельного массива задач у Главной нет.
 */
 
 function dashboardView() {
@@ -15976,7 +15975,7 @@ Excel:
         <button
           class="ghost"
           type="button"
-          data-page="tasks"
+          data-page="planner"
         >
           Все задачи →
         </button>
@@ -16011,7 +16010,7 @@ Excel:
       </div>
 
       <div id="homeTasksList">
-        ${homeTasksListHtml()}
+        ${window.plannerHomeTasksHtml()}
       </div>
 
     </div>
@@ -17166,7 +17165,7 @@ function setupDashboard() {
     с одними и теми же данными в Supabase.
   */
 
-  setupHomeTasksWidget();
+  window.setupPlannerHomeTasks();
 
 
   /*
@@ -29894,13 +29893,22 @@ received: {
   },
 
 
+  /*
+    Единственный маршрут задач.
+
+    В меню пункт называется «Задачи», внутри
+    открывается полноценный Планировщик (planner.js) —
+    отсюда и заголовок. Отдельного маршрута 'tasks'
+    больше нет, см. алиас в goToPage().
+  */
+
   planner: {
 
     title:
-      'Планировщик',
+      'Задачи',
 
     heading:
-      'Отгрузки, задачи и планы склада'
+      'Планировщик задач и отгрузок'
 
   },
 
@@ -29920,15 +29928,6 @@ received: {
 
     heading:
       'Сравнение заявки'
-  },
-
-
-  tasks: {
-    title:
-      'Задачи',
-
-    heading:
-      'Планировщик задач'
   },
 
 
@@ -29983,6 +29982,24 @@ function goToPage(
   ) {
 
     document.activeElement.blur();
+
+  }
+
+
+  /*
+    Совместимость со старой схемой маршрутов.
+
+    Раньше «Задачи» были отдельной страницей
+    (tasks.js + public.tasks). Теперь задачи живут
+    только в Планировщике, поэтому любой оставшийся
+    где-то data-page="tasks" ведёт туда же, а не
+    на несуществующую страницу.
+  */
+
+  if (page === 'tasks') {
+
+    page =
+      'planner';
 
   }
 
@@ -30426,16 +30443,6 @@ function render() {
       break;
 
 
-    case 'tasks':
-
-      content.innerHTML =
-        tasksView();
-
-      setupTasks();
-
-      break;
-
-
     case 'excel':
 
       content.innerHTML =
@@ -30561,20 +30568,21 @@ function updateAssemblyBadges() {
     $('#mobileAssemblyBadge');
 
 
+  /*
+    Только текст. Оформление бейджа (фон, цвет,
+    радиус, поведение в активном пункте) описано
+    в style.css — .nav em / .mobile-nav-btn > em.
+
+    Раньше здесь проставлялся inline-style, из-за
+    которого CSS-правило .nav.active em (белый бейдж
+    на чёрном фоне активного пункта) никогда не
+    срабатывало.
+  */
+
   if (badge) {
 
     badge.textContent =
       count || '';
-
-
-    badge.style.cssText = `
-      margin-left:auto;
-      background:#111;
-      color:#fff;
-      border-radius:999px;
-      padding:2px 7px;
-      font-size:11px;
-    `;
 
   }
 
@@ -30583,16 +30591,6 @@ function updateAssemblyBadges() {
 
     mobileBadge.textContent =
       count || '';
-
-
-    mobileBadge.style.cssText = `
-      margin-left:3px;
-      background:#111;
-      color:#fff;
-      border-radius:999px;
-      padding:1px 5px;
-      font-size:10px;
-    `;
 
   }
 
@@ -31089,14 +31087,18 @@ async function startAuthenticatedApp() {
 
 
     /*
-      Задачи (tasks.js) — тоже из Supabase.
-      Раньше грузились из localStorage в startApp(),
-      до появления сессии; теперь грузим здесь же,
-      где пользователь уже авторизован и RLS
-      пропускает запрос.
+      Планировщик (planner.js) — задачи и отгрузки.
+
+      Грузим здесь, а не при первом открытии страницы
+      «Задачи», потому что блок «Задачи» на Главной
+      показывает те же самые planner_tasks и должен
+      быть заполнен сразу после входа.
+
+      rerender=false: render() ниже вызывается один раз
+      сам, второй перерисовки не нужно.
     */
 
-    await loadTasksFromSupabase();
+    await window.plannerLoadFromSupabase(false);
 
 
     /*

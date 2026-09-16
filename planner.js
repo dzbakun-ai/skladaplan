@@ -169,13 +169,66 @@ function plannerMapTaskRow(row) {
     title: row.title || '',
     priority: row.priority || 'Обычный',
     status: row.status || 'К выполнению',
-    comment: row.comment || ''
+    comment: row.comment || '',
+
+    /*
+      favorite — колонка добавляется миграцией
+      supabase_migration_tasks_unify.sql. Если миграция
+      ещё не выполнена, поле придёт undefined — считаем
+      его false, интерфейс от этого не ломается.
+    */
+    favorite: row.favorite === true
   };
 
 }
 
 
-async function plannerLoadFromSupabase() {
+/* ------------------------------------------------------------
+   СТАТУСЫ ЗАДАЧ
+
+   Единая точка, где решается «задача закрыта или нет».
+   Используется и Планировщиком, и виджетом на Главной,
+   чтобы они не разошлись.
+   ------------------------------------------------------------ */
+
+const PLANNER_TASK_STATUS_OPEN = 'К выполнению';
+const PLANNER_TASK_STATUS_DONE = 'Выполнено';
+
+
+function plannerTaskIsClosed(task) {
+
+  return (
+    task.status === PLANNER_TASK_STATUS_DONE ||
+    task.status === 'Отменено'
+  );
+
+}
+
+
+function plannerTaskIsOverdue(task) {
+
+  if (
+    !task.date ||
+    plannerTaskIsClosed(task)
+  ) {
+    return false;
+  }
+
+  return task.date < plannerTodayKey();
+
+}
+
+
+async function plannerLoadFromSupabase(
+  rerender = true
+) {
+
+  /*
+    rerender=false нужен при старте приложения
+    (startAuthenticatedApp в app.js): там render()
+    вызывается один раз сам, после загрузки всех
+    данных, и повторный render() отсюда не нужен.
+  */
 
   if (plannerState.loading) {
     return;
@@ -249,7 +302,10 @@ async function plannerLoadFromSupabase() {
 
   }
 
+  plannerState.initialized = true;
+
   if (
+    rerender &&
     typeof render === 'function'
   ) {
     render();
@@ -720,7 +776,7 @@ function plannerShipmentCard(
             )}"
             title="Изменить"
           >
-            ✎
+            <svg class="icon"><use href="#icon-edit"></use></svg>
           </button>
 
           <button
@@ -731,7 +787,7 @@ function plannerShipmentCard(
             )}"
             title="Удалить"
           >
-            ×
+            <svg class="icon"><use href="#icon-trash"></use></svg>
           </button>
 
         </div>
@@ -802,11 +858,36 @@ function plannerTaskCard(
         <span class="planner-status">
           ${plannerEscape(
             task.status ||
-            'К выполнению'
+            PLANNER_TASK_STATUS_OPEN
           )}
         </span>
 
+        ${
+          plannerTaskIsOverdue(task)
+            ? '<span class="task-overdue-badge">Просрочено</span>'
+            : ''
+        }
+
         <div class="planner-card-buttons">
+
+          <button
+            type="button"
+            class="planner-icon-button ${
+              task.favorite
+                ? 'is-active'
+                : ''
+            }"
+            data-favorite-task="${plannerEscape(
+              task.id
+            )}"
+            title="Избранное"
+          >
+            <svg class="icon"><use href="#icon-${
+              task.favorite
+                ? 'star-filled'
+                : 'star'
+            }"></use></svg>
+          </button>
 
           <button
             type="button"
@@ -816,7 +897,7 @@ function plannerTaskCard(
             )}"
             title="Изменить"
           >
-            ✎
+            <svg class="icon"><use href="#icon-edit"></use></svg>
           </button>
 
           <button
@@ -827,7 +908,7 @@ function plannerTaskCard(
             )}"
             title="Удалить"
           >
-            ×
+            <svg class="icon"><use href="#icon-trash"></use></svg>
           </button>
 
         </div>
@@ -972,23 +1053,14 @@ function plannerView() {
   return `
     <div class="planner">
 
-      <header class="planner-header">
+      <!--
+        Заголовок страницы не дублируется здесь:
+        его показывает topbar (PAGE_META.planner).
+        В самой странице оставлена только панель
+        управления календарём.
+      -->
 
-        <div>
-
-          <div class="planner-kicker">
-            SKLADAPLAN
-          </div>
-
-          <h1>
-            Планировщик
-          </h1>
-
-          <p>
-            Отгрузки, задачи и планы склада.
-          </p>
-
-        </div>
+      <header class="planner-header planner-header-compact">
 
         <button
           type="button"
@@ -1225,6 +1297,26 @@ function setupPlanner() {
 
             plannerDeleteShipment(
               button.dataset.deleteShipment
+            );
+          }
+        );
+      }
+    );
+
+
+  document
+    .querySelectorAll(
+      '[data-favorite-task]'
+    )
+    .forEach(
+      button => {
+
+        button.addEventListener(
+          'click',
+          () => {
+
+            plannerToggleTaskFavorite(
+              button.dataset.favoriteTask
             );
           }
         );
@@ -1473,6 +1565,19 @@ function plannerOpenShipmentModal(
             rows="4"
             placeholder="Дополнительная информация"
           >${plannerEscape(comment)}</textarea>
+        </label>
+
+
+        <label class="planner-check">
+
+          <input
+            type="checkbox"
+            name="favorite"
+            ${favorite ? 'checked' : ''}
+          >
+
+          <span>Избранная задача</span>
+
         </label>
 
 
@@ -1815,6 +1920,9 @@ function plannerOpenTaskModal(
     task?.comment ||
     '';
 
+  const favorite =
+    task?.favorite === true;
+
 
   plannerShowModal(`
     <div class="planner-modal">
@@ -2021,7 +2129,10 @@ function plannerOpenTaskModal(
             data.get('status'),
 
           comment:
-            data.get('comment')
+            data.get('comment'),
+
+          favorite:
+            data.get('favorite') === 'on'
         });
       }
     );
@@ -2054,8 +2165,9 @@ async function plannerSaveTask(
     time: data.time || null,
     title: data.title,
     priority: data.priority || 'Обычный',
-    status: data.status || 'К выполнению',
+    status: data.status || PLANNER_TASK_STATUS_OPEN,
     comment: data.comment || null,
+    favorite: data.favorite === true,
     updated_by: operatorEmail
   };
 
@@ -2385,6 +2497,491 @@ function plannerExportData() {
 
 
 /* ============================================================
+   ГЛАВНАЯ — ВИДЖЕТ ЗАДАЧ
+
+   Это НЕ второй задачник. Виджет читает и пишет тот же
+   plannerState.tasks / planner_tasks, что и страница
+   «Задачи» (Планировщик): задача, созданная здесь, сразу
+   видна в Планировщике, и наоборот.
+   ============================================================ */
+
+/*
+  Состояние одной-единственной кнопки-звёздочки в строке
+  быстрого добавления. Живёт в plannerState, чтобы не
+  заводить отдельный state-объект под виджет.
+*/
+plannerState.homeQuickFavorite = false;
+
+
+async function plannerToggleTaskStatus(id) {
+
+  const task =
+    plannerState.tasks.find(
+      item =>
+        item.id === id
+    );
+
+  if (!task) {
+    return;
+  }
+
+  const nextStatus =
+    plannerTaskIsClosed(task)
+      ? PLANNER_TASK_STATUS_OPEN
+      : PLANNER_TASK_STATUS_DONE;
+
+  await plannerPatchTask(
+    id,
+    {
+      status: nextStatus
+    }
+  );
+
+}
+
+
+async function plannerToggleTaskFavorite(id) {
+
+  const task =
+    plannerState.tasks.find(
+      item =>
+        item.id === id
+    );
+
+  if (!task) {
+    return;
+  }
+
+  await plannerPatchTask(
+    id,
+    {
+      favorite: !task.favorite
+    }
+  );
+
+}
+
+
+/*
+  Точечное обновление задачи (галочка «сделано»,
+  звёздочка). Отдельная функция, а не plannerSaveTask,
+  потому что здесь не нужно ни трогать выбранную дату,
+  ни закрывать модальное окно.
+*/
+async function plannerPatchTask(
+  id,
+  changes
+) {
+
+  const operatorEmail =
+    (
+      typeof state !== 'undefined' &&
+      state.user?.email
+    ) || null;
+
+  const {
+    data: row,
+    error
+  } =
+    await supabaseClient
+      .from('planner_tasks')
+      .update({
+        ...changes,
+        updated_by: operatorEmail
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+  if (error) {
+
+    console.error(
+      'Planner patch task error:',
+      error
+    );
+
+    if (typeof toast === 'function') {
+
+      toast(
+        error.message ||
+        'Не удалось обновить задачу',
+        'error'
+      );
+
+    }
+
+    return;
+
+  }
+
+  const index =
+    plannerState.tasks.findIndex(
+      item =>
+        item.id === id
+    );
+
+  if (index !== -1) {
+
+    plannerState.tasks[index] =
+      plannerMapTaskRow(row);
+
+  }
+
+  render();
+
+}
+
+
+async function plannerQuickAddTask(
+  title,
+  favorite
+) {
+
+  const clean =
+    String(title || '').trim();
+
+  if (!clean) {
+    return;
+  }
+
+  const operatorEmail =
+    (
+      typeof state !== 'undefined' &&
+      state.user?.email
+    ) || null;
+
+  const {
+    data: row,
+    error
+  } =
+    await supabaseClient
+      .from('planner_tasks')
+      .insert({
+        /*
+          Быстрая задача с Главной попадает на сегодня —
+          в planner_tasks дата обязательна, и «сегодня»
+          это ровно то, что ожидает кладовщик.
+        */
+        date: plannerTodayKey(),
+        time: null,
+        title: clean,
+        priority: 'Обычный',
+        status: PLANNER_TASK_STATUS_OPEN,
+        favorite: favorite === true,
+        created_by: operatorEmail,
+        updated_by: operatorEmail
+      })
+      .select('*')
+      .single();
+
+  if (error) {
+
+    console.error(
+      'Planner quick add task error:',
+      error
+    );
+
+    if (typeof toast === 'function') {
+
+      toast(
+        error.message ||
+        'Не удалось создать задачу (проверьте, что выполнены supabase_migration_planner.sql и supabase_migration_tasks_unify.sql)',
+        'error'
+      );
+
+    }
+
+    return;
+
+  }
+
+  plannerState.tasks.push(
+    plannerMapTaskRow(row)
+  );
+
+  plannerState.homeQuickFavorite = false;
+
+  render();
+
+}
+
+
+function plannerHomeTasksHtml() {
+
+  if (
+    plannerState.loading &&
+    !plannerState.loaded
+  ) {
+
+    return `
+      <div class="sp-muted" style="font-size:13px;">
+        Загружаем задачи...
+      </div>
+    `;
+
+  }
+
+  if (
+    plannerState.loadError &&
+    !plannerState.loaded
+  ) {
+
+    return `
+      <div class="sp-muted" style="font-size:13px;">
+        Не удалось загрузить задачи.
+        ${plannerEscape(plannerState.loadError)}
+      </div>
+    `;
+
+  }
+
+  const open =
+    plannerState.tasks.filter(
+      task =>
+        !plannerTaskIsClosed(task)
+    );
+
+  const favorites =
+    open.filter(
+      task =>
+        task.favorite
+    );
+
+  const source =
+    favorites.length
+      ? favorites
+      : open;
+
+  const tasks =
+    source
+      .slice()
+      .sort(
+        (a, b) =>
+          String(a.date).localeCompare(String(b.date)) ||
+          String(a.time).localeCompare(String(b.time))
+      )
+      .slice(0, 5);
+
+  if (!tasks.length) {
+
+    return `
+      <div class="sp-muted" style="font-size:13px;">
+        Активных задач нет.
+      </div>
+    `;
+
+  }
+
+  return `
+    <div class="home-task-list">
+      ${tasks.map(task => `
+
+        <div class="home-task-row">
+
+          <input
+            type="checkbox"
+            class="home-task-toggle"
+            data-done-task="${plannerEscape(task.id)}"
+          >
+
+          <span class="home-task-title">
+            ${plannerEscape(task.title)}
+          </span>
+
+          <button
+            type="button"
+            class="task-icon-btn home-task-favorite ${
+              task.favorite
+                ? 'is-active'
+                : ''
+            }"
+            data-home-favorite-task="${plannerEscape(task.id)}"
+            title="Избранное"
+          >
+            <svg class="icon"><use href="#icon-${
+              task.favorite
+                ? 'star-filled'
+                : 'star'
+            }"></use></svg>
+          </button>
+
+          ${
+            plannerTaskIsOverdue(task)
+              ? '<span class="task-overdue-badge">Просрочено</span>'
+              : `<span class="sp-muted home-task-date">${
+                  plannerEscape(
+                    plannerFormatShortDate(
+                      plannerParseDate(task.date)
+                    )
+                  )
+                }</span>`
+          }
+
+        </div>
+
+      `).join('')}
+    </div>
+  `;
+
+}
+
+
+function setupPlannerHomeTasks() {
+
+  /*
+    Виджет живёт внутри #content, который render()
+    пересоздаёт целиком, поэтому обработчики
+    навешиваются здесь заново на каждый рендер
+    Главной — это нормально, старых узлов уже нет.
+  */
+
+  const favoriteToggle =
+    document.getElementById(
+      'homeTaskFavoriteToggle'
+    );
+
+  if (favoriteToggle) {
+
+    favoriteToggle.classList.toggle(
+      'is-active',
+      plannerState.homeQuickFavorite
+    );
+
+    favoriteToggle
+      .querySelector('use')
+      ?.setAttribute(
+        'href',
+        plannerState.homeQuickFavorite
+          ? '#icon-star-filled'
+          : '#icon-star'
+      );
+
+    favoriteToggle.addEventListener(
+      'click',
+      () => {
+
+        plannerState.homeQuickFavorite =
+          !plannerState.homeQuickFavorite;
+
+        favoriteToggle.classList.toggle(
+          'is-active',
+          plannerState.homeQuickFavorite
+        );
+
+        favoriteToggle
+          .querySelector('use')
+          ?.setAttribute(
+            'href',
+            plannerState.homeQuickFavorite
+              ? '#icon-star-filled'
+              : '#icon-star'
+          );
+
+      }
+    );
+
+  }
+
+
+  const input =
+    document.getElementById(
+      'homeTaskTitleInput'
+    );
+
+  const submit = () => {
+
+    const value =
+      input?.value || '';
+
+    if (!value.trim()) {
+      return;
+    }
+
+    if (input) {
+      input.value = '';
+    }
+
+    plannerQuickAddTask(
+      value,
+      plannerState.homeQuickFavorite
+    );
+
+  };
+
+
+  document
+    .getElementById(
+      'homeAddTaskBtn'
+    )
+    ?.addEventListener(
+      'click',
+      submit
+    );
+
+
+  input?.addEventListener(
+    'keydown',
+    event => {
+
+      if (event.key === 'Enter') {
+
+        event.preventDefault();
+
+        submit();
+
+      }
+
+    }
+  );
+
+
+  document
+    .querySelectorAll(
+      '[data-done-task]'
+    )
+    .forEach(
+      checkbox => {
+
+        checkbox.addEventListener(
+          'change',
+          () => {
+
+            plannerToggleTaskStatus(
+              checkbox.dataset.doneTask
+            );
+
+          }
+        );
+
+      }
+    );
+
+
+  document
+    .querySelectorAll(
+      '[data-home-favorite-task]'
+    )
+    .forEach(
+      button => {
+
+        button.addEventListener(
+          'click',
+          () => {
+
+            plannerToggleTaskFavorite(
+              button.dataset.homeFavoriteTask
+            );
+
+          }
+        );
+
+      }
+    );
+
+}
+
+
+/* ============================================================
    INITIALIZATION
    ============================================================ */
 
@@ -2407,3 +3004,15 @@ window
 window
   .plannerExportData =
   plannerExportData;
+
+window
+  .plannerLoadFromSupabase =
+  plannerLoadFromSupabase;
+
+window
+  .plannerHomeTasksHtml =
+  plannerHomeTasksHtml;
+
+window
+  .setupPlannerHomeTasks =
+  setupPlannerHomeTasks;

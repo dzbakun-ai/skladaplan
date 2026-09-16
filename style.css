@@ -182,10 +182,70 @@ letter-spacing: .08em;
 }
 
 /* =========================================================
-DESKTOP NAV BUTTON
-========================================================= */
+   НАВИГАЦИЯ — ЕДИНАЯ СИСТЕМА
+   =========================================================
+
+   Одно место, где описано всё меню:
+
+     SIDEBAR
+       → NAV            (кнопка пункта)
+         → NAV ICON     (контейнер иконки, 20×20)
+         → NAV LABEL    (подпись)
+         → NAV BADGE    (счётчик .nav em)
+       → HOVER
+       → ACTIVE
+     MOBILE NAV         (нижняя панель, @media <=700)
+
+   ГЛАВНОЕ ПРАВИЛО ГЕОМЕТРИИ:
+
+   :hover и .active меняют ТОЛЬКО цвет, фон и толщину
+   линии SVG. Ни один селектор ниже не меняет в этих
+   состояниях width / height / flex / padding / margin /
+   border-width / transform — поэтому иконка физически
+   не может «съехать» при выборе пункта.
+   ========================================================= */
+
+
+/* ---------------------------------------------------------
+   1. SVG-ИКОНКА
+   Общая для sidebar и мобильной панели. Размер иконки
+   задаёт её контейнер (.nav-icon / .mobile-nav-btn > span),
+   сама иконка всегда занимает его целиком.
+   --------------------------------------------------------- */
+
+.icon {
+width: 100%;
+height: 100%;
+
+display: block;
+
+fill: none;
+stroke: currentColor;
+
+stroke-width: 1.75;
+stroke-linecap: round;
+stroke-linejoin: round;
+
+/*
+  overflow: visible — чтобы более толстая линия в
+  активном состоянии не обрезалась краем viewport'а.
+  На геометрию контейнера не влияет.
+*/
+overflow: visible;
+
+pointer-events: none;
+}
+
+
+/* ---------------------------------------------------------
+   2. КНОПКА ПУНКТА МЕНЮ
+   --------------------------------------------------------- */
 
 .nav {
+position: relative;
+
+box-sizing: border-box;
+
 width: 100%;
 min-height: 42px;
 
@@ -201,81 +261,88 @@ border: 0;
 border-radius: 10px;
 
 background: transparent;
+color: #111;
 
-color: #555;
+font-family: inherit;
+text-align: left;
 
 cursor: pointer;
 
-text-align: left;
-
+/*
+  transform намеренно НЕ анимируется и нигде не задаётся —
+  см. правило геометрии выше.
+*/
 transition:
 background .15s ease,
-color .15s ease,
-transform .15s ease;
+color .15s ease;
 }
 
-.nav:hover {
-background: #f5f5f5;
-color: #111;
-}
 
-.nav.active {
-background: #111;
-color: #fff;
-}
-
-/* =========================================================
-DESKTOP NAV ICON
-IMPORTANT:
-ICON ITSELF NEVER GETS A CIRCLE/BACKGROUND
-========================================================= */
+/* ---------------------------------------------------------
+   3. КОНТЕЙНЕР ИКОНКИ
+   Фиксированная коробка 20×20 у каждого пункта.
+   --------------------------------------------------------- */
 
 .nav-icon {
-width: 20px;
-min-width: 20px;
+flex: 0 0 20px;
 
+width: 20px;
 height: 20px;
 
 display: grid;
 place-items: center;
 
-background: transparent !important;
-border: 0 !important;
-border-radius: 0 !important;
-
-box-shadow: none !important;
-
-color: inherit;
-
-font-size: 15px;
-line-height: 1;
-
 padding: 0;
 margin: 0;
+
+border: 0;
+border-radius: 0;
+
+background: transparent;
+box-shadow: none;
+
+color: inherit;
+line-height: 1;
 }
 
-.nav-icon::before,
-.nav-icon::after {
-background: transparent !important;
-box-shadow: none !important;
-}
 
+/* ---------------------------------------------------------
+   4. ПОДПИСЬ
+   Забирает всю оставшуюся ширину и сжимается сама
+   (min-width: 0), а не за счёт иконки.
+   --------------------------------------------------------- */
+
+.nav-label,
 .nav > span:not(.nav-icon) {
+flex: 1 1 auto;
+min-width: 0;
+
 font-size: 13px;
 font-weight: 600;
+line-height: 1.25;
+
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
 }
 
-/* =========================================================
-DESKTOP NAV BADGE
-========================================================= */
+
+/* ---------------------------------------------------------
+   5. БЕЙДЖ (счётчик «Сборка»)
+   Текст в него пишет updateAssemblyBadges() в app.js,
+   оформление — только здесь.
+   --------------------------------------------------------- */
 
 .nav em {
-margin-left: auto;
+flex: 0 0 auto;
 
 min-width: 20px;
 height: 20px;
 
-padding: 0 5px;
+padding: 0 6px;
+
+display: grid;
+place-items: center;
 
 border-radius: 999px;
 
@@ -284,15 +351,210 @@ color: #fff;
 
 font-size: 10px;
 font-style: normal;
+font-weight: 700;
 
-display: grid;
-place-items: center;
+line-height: 1;
+}
+
+.nav em:empty {
+display: none;
+}
+
+
+/* ---------------------------------------------------------
+   6. HOVER / ACTIVE
+   Только цвет, фон и толщина линии.
+   --------------------------------------------------------- */
+
+.nav:hover {
+background: #f0f0f0;
+color: #111;
+}
+
+.nav.active {
+background: #111;
+color: #fff;
+}
+
+.nav.active .icon {
+stroke-width: 1.95;
 }
 
 .nav.active em {
 background: #fff;
 color: #111;
 }
+
+
+/* ---------------------------------------------------------
+   7. МОБИЛЬНАЯ НИЖНЯЯ ПАНЕЛЬ
+   Тот же принцип: фиксированный контейнер иконки,
+   active меняет только фон/цвет/толщину линии.
+   --------------------------------------------------------- */
+
+.mobile-nav {
+display: none;
+}
+
+@media (max-width: 700px) {
+
+.mobile-nav {
+position: fixed;
+
+left: 0;
+right: 0;
+bottom: 0;
+
+height: 68px;
+
+display: grid;
+grid-template-columns: repeat(5, minmax(0, 1fr));
+align-items: stretch;
+
+gap: 2px;
+
+padding:
+6px 6px
+calc(6px + env(safe-area-inset-bottom));
+
+background: rgba(255, 255, 255, .96);
+border-top: 1px solid var(--line);
+
+backdrop-filter: blur(14px);
+-webkit-backdrop-filter: blur(14px);
+
+box-shadow: 0 -4px 20px rgba(0, 0, 0, .05);
+
+z-index: 900;
+}
+
+.mobile-nav-btn {
+position: relative;
+
+box-sizing: border-box;
+
+min-width: 0;
+min-height: 54px;
+
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+
+gap: 4px;
+
+padding: 6px 3px;
+
+border: 0;
+border-radius: 12px;
+
+background: transparent;
+color: #888;
+
+font-family: inherit;
+text-align: center;
+
+cursor: pointer;
+outline: none;
+box-shadow: none;
+
+-webkit-tap-highlight-color: transparent;
+
+transition:
+background .15s ease,
+color .15s ease;
+}
+
+.mobile-nav-btn > span {
+flex: 0 0 24px;
+
+width: 24px;
+height: 24px;
+
+display: grid;
+place-items: center;
+
+padding: 0;
+margin: 0;
+
+border: 0;
+border-radius: 0;
+
+background: transparent;
+box-shadow: none;
+
+color: inherit;
+line-height: 1;
+}
+
+.mobile-nav-btn > small {
+display: block;
+
+max-width: 100%;
+
+font-size: 9px;
+font-weight: 600;
+line-height: 1.2;
+
+color: inherit;
+
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+}
+
+.mobile-nav-btn:hover {
+background: #f7f7f7;
+color: #555;
+}
+
+.mobile-nav-btn.active {
+background: #f2f2f2;
+color: #111;
+}
+
+.mobile-nav-btn.active .icon {
+stroke-width: 2;
+}
+
+.mobile-nav-btn > em {
+position: absolute;
+
+top: 4px;
+right: 18%;
+
+min-width: 16px;
+height: 16px;
+
+padding: 0 4px;
+
+display: grid;
+place-items: center;
+
+border-radius: 999px;
+
+background: #111;
+color: #fff;
+
+font-size: 9px;
+font-style: normal;
+font-weight: 700;
+
+line-height: 1;
+}
+
+.mobile-nav-btn > em:empty {
+display: none;
+}
+
+.mobile-nav button:focus,
+.mobile-nav button:active {
+outline: none;
+box-shadow: none;
+}
+
+}
+
 
 /* =========================================================
 SIDEBAR FOOT
@@ -1490,13 +1752,6 @@ padding: 12px 10px;
 
 }
 
-/* =========================================================
-MOBILE NAV
-========================================================= */
-
-.mobile-nav {
-display: none;
-}
 
 /* =========================================================
 MOBILE
@@ -1540,101 +1795,6 @@ overflow-x: hidden;
 
 }
 
-.app {
-display: block;
-
-min-height: 100vh;
-
-}
-
-/* -------------------------------------------------------
-SIDEBAR
-------------------------------------------------------- */
-
-.sidebar {
-position: fixed;
-  
-left: 0;
-top: 0;
-bottom: 0;
-
-width: 280px;
-min-width: 280px;
-
-height: 100vh;
-
-transform: translateX(-105%);
-
-transition:
-  transform .2s ease;
-
-box-shadow:
-  10px 0 40px rgba(0, 0, 0, .15);
-
-z-index: 1000;
-
-}
-
-.sidebar.open {
-transform: translateX(0);
-}
-
-/* -------------------------------------------------------
-MAIN
-------------------------------------------------------- */
-
-main {
-width: 100%;
-
-min-height: 100vh;
-
-}
-
-/* -------------------------------------------------------
-TOPBAR
-------------------------------------------------------- */
-
-.topbar {
-height: 64px;
-
-padding: 9px 12px;
-
-gap: 9px;
-
-position: sticky;
-
-top: 0;
-
-}
-
-.mobile-menu {
-display: grid;
-
-place-items: center;
-
-width: 40px;
-height: 40px;
-
-min-width: 40px;
-
-border: 1px solid var(--line);
-
-border-radius: 11px;
-
-background: #fff;
-
-font-size: 19px;
-
-cursor: pointer;
-
-}
-
-.topbar-title {
-flex: 1;
-
-min-width: 0;
-
-}
 
 .crumb {
 font-size: 9px;
@@ -1805,301 +1965,6 @@ grid-template-columns: 1fr;
 padding: 18px;
 }
 
-/* -------------------------------------------------------
-MOBILE BOTTOM NAV
-------------------------------------------------------- */
-
-.mobile-nav {
-position: fixed;
-
-left: 0;
-right: 0;
-bottom: 0;
-
-height: 74px;
-
-display: grid;
-
-grid-template-columns:
-  repeat(5, minmax(0, 1fr));
-
-align-items: stretch;
-
-background:
-  rgba(255, 255, 255, .96);
-
-border-top:
-  1px solid var(--line);
-
-backdrop-filter:
-  blur(15px);
-
--webkit-backdrop-filter:
-  blur(15px);
-
-z-index: 500;
-
-padding:
-  5px 6px
-  env(safe-area-inset-bottom);
-
-}
-
-/* -------------------------------------------------------
-MOBILE NAV BUTTON
-------------------------------------------------------- */
-
-.mobile-nav-btn {
-position: relative;
-
-width: 100%;
-min-width: 0;
-
-min-height: 58px;
-
-display: flex;
-
-flex-direction: column;
-
-align-items: center;
-
-justify-content: center;
-
-gap: 4px;
-
-padding: 6px 2px;
-
-border: 0;
-
-border-radius: 12px;
-
-background: transparent;
-
-color: #888;
-
-cursor: pointer;
-
-text-align: center;
-
-outline: none;
-
-box-shadow: none;
-
--webkit-tap-highlight-color: transparent;
-
-transition:
-  background .15s ease,
-  color .15s ease;
-
-}
-
-.mobile-nav-btn:hover {
-background: #f7f7f7;
-
-color: #555;
-
-}
-
-/* -------------------------------------------------------
-MOBILE NAV ICON
-
- IMPORTANT:
- NO CIRCLE
- NO BACKGROUND
- NO BORDER
- NO SHADOW
- ------------------------------------------------------- */
-
-.mobile-nav-btn > span,
-.mobile-nav-btn .nav-icon,
-.mobile-nav-btn i {
-position: relative;
-
-width: 26px;
-height: 26px;
-
-min-width: 26px;
-
-display: grid;
-
-place-items: center;
-
-padding: 0;
-margin: 0;
-
-background: transparent !important;
-
-border: 0 !important;
-
-border-radius: 0 !important;
-
-box-shadow: none !important;
-
-outline: none !important;
-
-color: inherit;
-
-font-size: 19px;
-
-line-height: 1;
-
-font-style: normal;
-
-transform: none;
-
-}
-
-.mobile-nav-btn > span::before,
-.mobile-nav-btn > span::after,
-.mobile-nav-btn .nav-icon::before,
-.mobile-nav-btn .nav-icon::after,
-.mobile-nav-btn i::before,
-.mobile-nav-btn i::after {
-background: transparent !important;
-
-border: 0 !important;
-
-box-shadow: none !important;
-
-}
-
-/* -------------------------------------------------------
-MOBILE NAV LABEL
-------------------------------------------------------- */
-
-.mobile-nav-btn small {
-display: block;
-
-max-width: 100%;
-
-font-size: 9px;
-
-line-height: 1;
-
-font-weight: 600;
-
-white-space: nowrap;
-
-overflow: hidden;
-
-text-overflow: ellipsis;
-
-color: inherit;
-
-}
-
-/* -------------------------------------------------------
-ACTIVE MOBILE BUTTON
-
- ACTIVE STATE IS ON THE BUTTON ONLY.
- ICON DOES NOT RECEIVE ANY CIRCLE.
- ------------------------------------------------------- */
-
-.mobile-nav-btn.active {
-background: #f3f3f3 !important;
-
-color: #111 !important;
-
-border: 0 !important;
-
-box-shadow: none !important;
-
-outline: none !important;
-
-}
-
-.mobile-nav-btn.active > span,
-.mobile-nav-btn.active .nav-icon,
-.mobile-nav-btn.active i {
-background: transparent !important;
-
-color: #111 !important;
-
-border: 0 !important;
-
-border-radius: 0 !important;
-
-box-shadow: none !important;
-
-outline: none !important;
-
-transform: none;
-
-}
-
-.mobile-nav-btn.active small {
-color: #111 !important;
-}
-
-/* -------------------------------------------------------
-MORE BUTTON
-------------------------------------------------------- */
-
-.mobile-more-btn {
-color: #666;
-}
-
-.mobile-more-btn > span {
-font-size: 23px;
-
-letter-spacing: 1px;
-
-}
-
-/* -------------------------------------------------------
-BADGE
-------------------------------------------------------- */
-
-.mobile-nav-btn em {
-position: absolute;
-
-top: 4px;
-right: 22%;
-
-min-width: 17px;
-height: 17px;
-
-padding: 0 4px;
-
-border-radius: 999px;
-
-background: #111;
-
-color: #fff;
-
-font-size: 8px;
-
-font-weight: 700;
-
-font-style: normal;
-
-display: grid;
-
-place-items: center;
-
-line-height: 1;
-
-box-shadow: none;
-
-}
-
-/* -------------------------------------------------------
-EXTRA PROTECTION AGAINST GENERIC BUTTON STYLES
-------------------------------------------------------- */
-
-.mobile-nav button,
-.mobile-nav button:hover,
-.mobile-nav button:focus,
-.mobile-nav button:active {
-outline: none;
-
-box-shadow: none;
-
-}
-
-.mobile-nav button:active {
-transform: none;
-}
 }
 
 /* =========================================================
@@ -2117,16 +1982,6 @@ text-overflow: ellipsis;
 
 white-space: nowrap;
 
-}
-
-.mobile-nav {
-height: 72px;
-}
-
-.mobile-nav-btn > span,
-.mobile-nav-btn .nav-icon,
-.mobile-nav-btn i {
-font-size: 17px;
 }
 
 .mobile-nav-btn small {
@@ -2149,264 +2004,6 @@ grid-template-columns: 1fr !important;
 }
 }
 
-/* =========================================================
-   SKLADAPLAN
-   FINAL SAFE UI OVERRIDES
-   Совместимо с текущим app.js
-   ========================================================= */
-
-
-/* =========================================================
-   NAVIGATION ICONS
-   Единый SVG-спрайт (см. index.html) вместо
-   Unicode-символов/emoji — одинаковый визуальный вес,
-   предсказуемый цвет через currentColor.
-   ========================================================= */
-
-.nav-icon,
-.mobile-nav-btn > span {
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  outline: none !important;
-  border-radius: 0 !important;
-}
-
-/*
-   Сама SVG-иконка.
-
-   Размер и толщина линии заданы здесь одним местом —
-   поменять весь набор иконок можно правкой этих
-   переменных, без правки разметки.
-*/
-.icon {
-  width: 100%;
-  height: 100%;
-  display: block;
-
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-
-  overflow: visible;
-}
-
-/*
-   Неактивное состояние — чуть более лёгкая линия,
-   активное/hover наследует полный вес через currentColor
-   и стандартные .nav/.nav.active/.mobile-nav-btn.active
-   правила ниже по файлу (мы их не трогаем).
-*/
-.nav .icon {
-  stroke-width: 1.7;
-}
-
-.mobile-nav-btn > span .icon {
-  stroke-width: 1.9;
-}
-
-
-/* =========================================================
-   DESKTOP NAV
-   ========================================================= */
-
-.nav {
-  position: relative;
-}
-
-.nav-icon {
-  flex: 0 0 20px;
-  width: 20px;
-  min-width: 20px;
-  height: 20px;
-
-  display: inline-grid;
-  place-items: center;
-
-  line-height: 1;
-}
-
-
-/*
-   Активный пункт.
-
-   app.js сам добавляет .active,
-   поэтому здесь только визуальное оформление.
-*/
-
-.nav.active {
-  background: #111 !important;
-  color: #fff !important;
-}
-
-.nav.active .nav-icon {
-  background: transparent !important;
-  color: #fff !important;
-}
-
-
-/*
-   Счётчик "Сборка".
-
-   ВАЖНО:
-   app.js сам задаёт ему inline-style.
-   Поэтому мы НЕ переопределяем его фон,
-   цвет или border-radius.
-*/
-
-.nav em {
-  font-style: normal;
-}
-
-
-/* =========================================================
-   MOBILE NAVIGATION
-   ========================================================= */
-
-.mobile-nav {
-  display: none;
-}
-
-
-/*
-   Базовая кнопка мобильной навигации.
-*/
-
-.mobile-nav-btn {
-  position: relative;
-
-  border: 0;
-  outline: 0;
-
-  background: transparent;
-
-  color: #777;
-
-  -webkit-tap-highlight-color: transparent;
-
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    Roboto,
-    Helvetica,
-    Arial,
-    sans-serif;
-}
-
-
-/*
-   Иконка мобильной навигации.
-
-   Никакого чёрного круга,
-   фона или тени.
-*/
-
-.mobile-nav-btn > span {
-  display: grid;
-  place-items: center;
-
-  width: 24px;
-  height: 24px;
-
-  padding: 0;
-  margin: 0;
-
-  background: transparent !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-
-  color: inherit;
-
-  font-size: 19px;
-  line-height: 1;
-
-  font-variant-emoji: text;
-}
-
-
-/*
-   Подпись.
-*/
-
-.mobile-nav-btn > small {
-  display: block;
-
-  margin-top: 3px;
-
-  color: inherit;
-
-  font-size: 10px;
-  line-height: 1.2;
-
-  font-weight: 500;
-}
-
-
-/*
-   Активная кнопка.
-
-   ВАЖНО:
-   активность остаётся видимой,
-   но сам значок не получает чёрный круг.
-*/
-
-.mobile-nav-btn.active {
-  background: #f3f3f3 !important;
-  color: #111 !important;
-
-  border-radius: 12px;
-}
-
-.mobile-nav-btn.active > span {
-  background: transparent !important;
-  color: #111 !important;
-
-  border: 0 !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
-}
-
-
-/* =========================================================
-   MOBILE ASSEMBLY BADGE
-   ========================================================= */
-
-/*
-   app.js сам управляет:
-   - текстом
-   - цветом
-   - размером
-   - позиционированием
-
-   Поэтому здесь только безопасная база.
-*/
-
-.mobile-nav-btn > em {
-  font-style: normal;
-  line-height: 1;
-}
-
-
-/*
-   Если badge пустой — его не видно.
-*/
-
-.mobile-nav-btn > em:empty {
-  display: none !important;
-}
-
-
-/*
-   Аналогично desktop badge.
-*/
-
-.nav > em:empty {
-  display: none !important;
-}
 
 
 /* =========================================================
@@ -2796,149 +2393,6 @@ grid-template-columns: 1fr !important;
   }
 
 
-  /* -------------------------------------------------------
-     MOBILE NAV
-     ------------------------------------------------------- */
-
-  .mobile-nav {
-    position: fixed;
-
-    display: grid;
-
-    grid-template-columns:
-      repeat(5, minmax(0, 1fr));
-
-    left: 0;
-    right: 0;
-    bottom: 0;
-
-    height: 68px;
-
-    padding:
-      6px
-      6px
-      calc(6px + env(safe-area-inset-bottom));
-
-    background: rgba(255,255,255,.96);
-
-    border-top: 1px solid #e6e6e6;
-
-    backdrop-filter: blur(14px);
-
-    z-index: 900;
-
-    box-shadow:
-      0 -4px 20px rgba(0,0,0,.05);
-  }
-
-
-  .mobile-nav-btn {
-    min-width: 0;
-
-    min-height: 54px;
-
-    display: flex;
-
-    flex-direction: column;
-
-    align-items: center;
-    justify-content: center;
-
-    gap: 0;
-
-    padding:
-      5px
-      3px;
-
-    border-radius: 12px;
-  }
-
-
-  .mobile-nav-btn > span {
-    width: 24px;
-    height: 24px;
-
-    font-size: 18px;
-  }
-
-
-  .mobile-nav-btn > small {
-    max-width: 100%;
-
-    overflow: hidden;
-
-    text-overflow: ellipsis;
-
-    white-space: nowrap;
-
-    font-size: 9px;
-  }
-
-
-  /*
-     Активная кнопка:
-     лёгкий серый фон,
-     но никакого круга вокруг иконки.
-  */
-
-  .mobile-nav-btn.active {
-    background: #f2f2f2 !important;
-
-    color: #111 !important;
-
-    border-radius: 12px;
-  }
-
-
-  .mobile-nav-btn.active > span {
-    background: transparent !important;
-
-    color: #111 !important;
-
-    border: 0 !important;
-
-    box-shadow: none !important;
-
-    border-radius: 0 !important;
-  }
-
-
-  /* -------------------------------------------------------
-     MOBILE BADGE
-     ------------------------------------------------------- */
-
-  .mobile-nav-btn > em {
-    position: absolute;
-
-    top: 4px;
-    right: 16%;
-
-    min-width: 16px;
-    height: 16px;
-
-    padding:
-      0
-      4px;
-
-    display: grid;
-    place-items: center;
-
-    border-radius: 999px;
-
-    background: #111;
-
-    color: #fff;
-
-    font-size: 9px;
-    font-weight: 700;
-
-    line-height: 1;
-  }
-
-
-  .mobile-nav-btn > em:empty {
-    display: none !important;
-  }
 
 
   /* -------------------------------------------------------
@@ -3148,10 +2602,6 @@ grid-template-columns: 1fr !important;
   }
 
 
-  .mobile-nav-btn > span {
-    font-size: 17px;
-  }
-
 
 }
 
@@ -3227,52 +2677,3 @@ body.viewer-mode .viewer-edit-only {
   cursor: not-allowed !important;
 }
 
-/* =========================================================
-   FIX — SIDEBAR TOOLS
-   Все неактивные пункты меню светлые.
-   Чёрный фон только у реально активного пункта.
-   ========================================================= */
-
-.sidebar .nav {
-  background: transparent;
-  color: #111;
-  border-color: transparent;
-}
-
-.sidebar .nav:hover {
-  background: #f0f0f0;
-  color: #111;
-}
-
-.sidebar .nav.active {
-  background: #111;
-  color: #fff;
-}
-
-/* Инструменты и вложенные пункты */
-.sidebar .nav-section .nav {
-  background: transparent;
-  color: #111;
-}
-
-.sidebar .nav-section .nav:hover {
-  background: #f0f0f0;
-  color: #111;
-}
-
-.sidebar .nav-section .nav.active {
-  background: #111;
-  color: #fff;
-}
-
-/* Иконки внутри пунктов */
-.sidebar .nav svg,
-.sidebar .nav i {
-  color: currentColor;
-}
-
-/* Убираем возможный чёрный фон у контейнера инструментов */
-.sidebar .nav-section {
-  background: transparent;
-  color: #111;
-}
