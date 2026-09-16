@@ -32368,7 +32368,58 @@ function goToPage(
       : 1;
 
 
-  render();
+render();
+
+requestAnimationFrame(
+  updateNavIndicator
+);
+
+}
+
+function updateNavIndicator() {
+
+  const mobileNav =
+    document.querySelector(
+      '.mobile-nav'
+    );
+
+  const indicator =
+    mobileNav?.querySelector(
+      '.nav-indicator'
+    );
+
+  const activeNav =
+    mobileNav?.querySelector(
+      '.mobile-nav-btn.active'
+    );
+
+  if (
+    !mobileNav ||
+    !indicator ||
+    !activeNav
+  ) {
+
+    return;
+
+  }
+
+  const navRect =
+    mobileNav.getBoundingClientRect();
+
+  const activeRect =
+    activeNav.getBoundingClientRect();
+
+  indicator.style.width =
+    `${activeRect.width}px`;
+
+  indicator.style.height =
+    `${activeRect.height}px`;
+
+  indicator.style.transform =
+    `translate(
+      ${activeRect.left - navRect.left}px,
+      ${activeRect.top - navRect.top}px
+    )`;
 
 }
 
