@@ -28276,6 +28276,163 @@ function openLocationInBase(code) {
 }
 
 
+/* =========================================================
+   КАРТА СКЛАДА — ЗАНЯТОСТЬ ПО РЕАЛЬНЫМ ДАННЫМ
+
+   «Зона/ряд» у коробки (boxes."Зона/ряд") — это СВОБОДНЫЙ
+   текст: кладовщик вводит его вручную через prompt() при
+   создании ячейки в Приёмке (createReceivingLocation),
+   без проверки на соответствие кодам карты. Из-за этого
+   точное совпадение гарантировано не всегда — опечатка,
+   лишний пробел или другой регистр в тексте оставят место
+   помеченным как свободное, даже если оно занято.
+
+   Поэтому:
+     — сравнение — без учёта регистра и лишних пробелов
+       (см. mapNormalizeCode);
+     — для склада СОХ, где карта хранит только номер ряда
+       без индивидуального кода на каждое место (places —
+       это позиции из Excel-схемы, а не отдельные коды),
+       подсчёт ведётся на уровне РЯДА целиком, а не
+       отдельного места — искусственно придумывать код на
+       место мы не стали бы, т.к. в реальных данных его
+       попросту нет;
+     — «частично занято» и «проблема» не показываются:
+       для них потребовалось бы знать вместимость ячейки
+       (сколько коробок в неё помещается), а такого поля
+       в проекте нет — показывать состояние, для которого
+       нет реальных данных, значит показывать выдумку.
+
+   Отгруженное («Отгружено») не считаем — те коробки уже
+   физически не на складе.
+   ========================================================= */
+
+function mapNormalizeCode(value) {
+
+  return normalizeText(value)
+    .toLowerCase();
+
+}
+
+
+function computeMapOccupancy() {
+
+  const map = {};
+
+  state.boxes.forEach(row => {
+
+    if (
+      row.status === STATUSES.SHIPPED ||
+      !row.zone_row
+    ) {
+      return;
+    }
+
+    const key =
+      mapNormalizeCode(row.zone_row);
+
+    if (!key) {
+      return;
+    }
+
+    if (!map[key]) {
+
+      map[key] = {
+        count: 0,
+        reserved: 0,
+        articles: new Set(),
+        pallets: new Set()
+      };
+
+    }
+
+    map[key].count += 1;
+
+    if (row.status === STATUSES.RESERVED) {
+      map[key].reserved += 1;
+    }
+
+    if (row.article) {
+      map[key].articles.add(row.article);
+    }
+
+    if (row.pallet) {
+      map[key].pallets.add(row.pallet);
+    }
+
+  });
+
+  return map;
+
+}
+
+
+function mapOccupancyBadgeHtml(entry) {
+
+  if (!entry || !entry.count) {
+
+    return `
+      <span class="map-occ-badge map-occ-free">
+        свободно
+      </span>
+    `;
+
+  }
+
+  const isReserved =
+    entry.reserved === entry.count;
+
+  const isMixed =
+    entry.reserved > 0 &&
+    entry.reserved < entry.count;
+
+  const cls =
+    isReserved
+      ? 'map-occ-reserved'
+      : 'map-occ-busy';
+
+  return `
+    <span class="map-occ-badge ${cls}">
+      ${entry.count} кор.
+      ${
+        isMixed
+          ? ` · резерв ${entry.reserved}`
+          : ''
+      }
+    </span>
+  `;
+
+}
+
+
+function mapLegendHtml() {
+
+  return `
+
+    <div class="map-legend">
+
+      <span class="map-legend-item">
+        <span class="map-legend-dot map-occ-free"></span>
+        Свободно
+      </span>
+
+      <span class="map-legend-item">
+        <span class="map-legend-dot map-occ-busy"></span>
+        Занято
+      </span>
+
+      <span class="map-legend-item">
+        <span class="map-legend-dot map-occ-reserved"></span>
+        Зарезервировано
+      </span>
+
+    </div>
+
+  `;
+
+}
+
+
 function mapSohHtml() {
 
   const entries =
@@ -28285,6 +28442,9 @@ function mapSohHtml() {
   const landmarks =
     WAREHOUSE_MAP_DATA.soh_landmarks ||
     [];
+
+  const occupancy =
+    computeMapOccupancy();
 
   return `
 
@@ -28349,9 +28509,19 @@ function mapSohHtml() {
                 📍 Ряд ${entry.ryad}
               </span>
 
-              <span class="sp-muted" style="font-size:12px;">
-                ${entry.places.length} мест
-                ${expanded ? '▲' : '▼'}
+              <span style="display:flex; align-items:center; gap:8px;">
+
+                ${mapOccupancyBadgeHtml(
+                  occupancy[
+                    mapNormalizeCode(entry.ryad)
+                  ]
+                )}
+
+                <span class="sp-muted" style="font-size:12px;">
+                  ${entry.places.length} мест
+                  ${expanded ? '▲' : '▼'}
+                </span>
+
               </span>
 
             </button>
@@ -28439,6 +28609,9 @@ function mapNsHtml() {
   const zoneKeys =
     Object.keys(zones).sort();
 
+  const occupancy =
+    computeMapOccupancy();
+
   return zoneKeys
     .map(zone => {
 
@@ -28486,9 +28659,25 @@ function mapNsHtml() {
               📦 Зона ${escapeHtml(zone)}
             </span>
 
-            <span class="sp-muted" style="font-size:12px;">
-              ${codes.length} мест
-              ${expanded ? '▲' : '▼'}
+            <span style="display:flex; align-items:center; gap:8px;">
+
+              <span class="map-occ-badge map-occ-summary">
+                занято:
+                ${
+                  codes.filter(
+                    code =>
+                      occupancy[
+                        mapNormalizeCode(code)
+                      ]
+                  ).length
+                }
+                / ${codes.length}
+              </span>
+
+              <span class="sp-muted" style="font-size:12px;">
+                ${expanded ? '▲' : '▼'}
+              </span>
+
             </span>
 
           </button>
@@ -28518,9 +28707,23 @@ function mapNsHtml() {
                     >
                       <button
                         type="button"
-                        class="map-place-btn"
+                        class="map-place-btn ${
+                          occupancy[mapNormalizeCode(code)]
+                            ? (
+                                occupancy[mapNormalizeCode(code)].reserved ===
+                                occupancy[mapNormalizeCode(code)].count
+                                  ? 'map-place-reserved'
+                                  : 'map-place-busy'
+                              )
+                            : 'map-place-free'
+                        }"
                         data-search="${escapeHtml(code)}"
                         data-label="${escapeHtml(code)}"
+                        title="${
+                          occupancy[mapNormalizeCode(code)]
+                            ? occupancy[mapNormalizeCode(code)].count + ' кор.'
+                            : 'свободно'
+                        }"
                         style="
                           min-width:56px;
                           padding:10px 6px;
@@ -28599,10 +28802,25 @@ function mapView() {
 
     </div>
 
-    <p class="sp-muted" style="margin-bottom:14px;">
+    <p class="sp-muted" style="margin-bottom:10px;">
       Нажмите на ряд/зону, чтобы увидеть места.
-      Нажмите на место, чтобы скопировать его код.
+      Нажмите на место, чтобы открыть его в Базе,
+      или на 📋, чтобы скопировать код.
     </p>
+
+    ${mapLegendHtml()}
+
+    ${
+      state.mapType === 'soh'
+        ? `
+          <p class="sp-muted" style="font-size:12px; margin-bottom:14px;">
+            На складе СОХ учёт в базе ведётся по номеру ряда
+            целиком (не по отдельному месту), поэтому
+            занятость показана на уровне ряда.
+          </p>
+        `
+        : ''
+    }
 
     ${
       state.mapType === 'ns'
@@ -32368,58 +32586,7 @@ function goToPage(
       : 1;
 
 
-render();
-
-requestAnimationFrame(
-  updateNavIndicator
-);
-
-}
-
-function updateNavIndicator() {
-
-  const mobileNav =
-    document.querySelector(
-      '.mobile-nav'
-    );
-
-  const indicator =
-    mobileNav?.querySelector(
-      '.nav-indicator'
-    );
-
-  const activeNav =
-    mobileNav?.querySelector(
-      '.mobile-nav-btn.active'
-    );
-
-  if (
-    !mobileNav ||
-    !indicator ||
-    !activeNav
-  ) {
-
-    return;
-
-  }
-
-  const navRect =
-    mobileNav.getBoundingClientRect();
-
-  const activeRect =
-    activeNav.getBoundingClientRect();
-
-  indicator.style.width =
-    `${activeRect.width}px`;
-
-  indicator.style.height =
-    `${activeRect.height}px`;
-
-  indicator.style.transform =
-    `translate(
-      ${activeRect.left - navRect.left}px,
-      ${activeRect.top - navRect.top}px
-    )`;
+  render();
 
 }
 
@@ -33629,12 +33796,7 @@ async function startAuthenticatedApp() {
       рисуем приложение.
     */
 
-   render();
-
-      requestAnimationFrame(
-        updateNavIndicator
-   );
-
+    render();
 
   } catch (error) {
 
