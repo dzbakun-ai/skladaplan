@@ -32,10 +32,182 @@
     href="planner.css"
   >
 
+  <link
+    rel="stylesheet"
+    href="tasks.css"
+  >
+
 </head>
 
 
 <body>
+
+<!-- =====================================================
+     ИКОНКИ — единый спрайт для навигации
+     Минималистичные line-иконки, viewBox 24×24,
+     цвет наследуется через currentColor —
+     работают в активном/неактивном/hover состояниях
+     без дополнительного JS.
+     ===================================================== -->
+
+<svg
+  aria-hidden="true"
+  style="position:absolute;width:0;height:0;overflow:hidden;"
+>
+  <defs>
+
+    <symbol id="icon-home" viewBox="0 0 24 24">
+      <path d="M4 11.5 12 4l8 7.5"/>
+      <path d="M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9"/>
+    </symbol>
+
+    <symbol id="icon-grid" viewBox="0 0 24 24">
+      <rect x="4" y="4" width="7" height="7" rx="1.4"/>
+      <rect x="13" y="4" width="7" height="7" rx="1.4"/>
+      <rect x="4" y="13" width="7" height="7" rx="1.4"/>
+      <rect x="13" y="13" width="7" height="7" rx="1.4"/>
+    </symbol>
+
+    <symbol id="icon-inbox-down" viewBox="0 0 24 24">
+      <path d="M12 3v10"/>
+      <path d="M8 9l4 4 4-4"/>
+      <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+    </symbol>
+
+    <symbol id="icon-package" viewBox="0 0 24 24">
+      <path d="M3 8 12 3l9 5-9 5-9-5Z"/>
+      <path d="M3 8v8l9 5 9-5V8"/>
+      <path d="M12 13v8"/>
+    </symbol>
+
+    <symbol id="icon-check-circle" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8.3"/>
+      <path d="M8.4 12.3l2.4 2.4 4.6-5.2"/>
+    </symbol>
+
+    <symbol id="icon-send" viewBox="0 0 24 24">
+      <path d="M7 17 17 7"/>
+      <path d="M9 7h8v8"/>
+    </symbol>
+
+    <symbol id="icon-swap" viewBox="0 0 24 24">
+      <path d="M3 7h14"/>
+      <path d="M13 3l4 4-4 4"/>
+      <path d="M21 17H7"/>
+      <path d="M11 13l-4 4 4 4"/>
+    </symbol>
+
+    <symbol id="icon-calendar" viewBox="0 0 24 24">
+      <rect x="3.5" y="5" width="17" height="15" rx="2"/>
+      <path d="M3.5 9.5h17"/>
+      <path d="M8 3v4"/>
+      <path d="M16 3v4"/>
+    </symbol>
+
+    <symbol id="icon-columns" viewBox="0 0 24 24">
+      <rect x="4" y="4" width="7" height="16" rx="1.4"/>
+      <rect x="13" y="4" width="7" height="16" rx="1.4"/>
+    </symbol>
+
+    <symbol id="icon-divide" viewBox="0 0 24 24">
+      <line x1="4" y1="12" x2="20" y2="12"/>
+      <circle cx="12" cy="6.3" r="1.3" fill="currentColor" stroke="none"/>
+      <circle cx="12" cy="17.7" r="1.3" fill="currentColor" stroke="none"/>
+    </symbol>
+
+    <symbol id="icon-sigma" viewBox="0 0 24 24">
+      <path d="M17 5H7l5 7-5 7h10"/>
+    </symbol>
+
+    <symbol id="icon-box-arrow" viewBox="0 0 24 24">
+      <rect x="3" y="10" width="9" height="9" rx="1.4"/>
+      <path d="M14 6h6"/>
+      <path d="M17 3l3 3-3 3"/>
+    </symbol>
+
+    <symbol id="icon-clipboard-check" viewBox="0 0 24 24">
+      <rect x="5" y="4" width="14" height="17" rx="2"/>
+      <rect x="9" y="2.3" width="6" height="3" rx="1"/>
+      <path d="M8.5 13l2.3 2.3 4.7-5"/>
+    </symbol>
+
+    <symbol id="icon-table" viewBox="0 0 24 24">
+      <rect x="4" y="5" width="16" height="14" rx="2"/>
+      <path d="M4 10h16"/>
+      <path d="M10 10v9"/>
+    </symbol>
+
+    <symbol id="icon-database" viewBox="0 0 24 24">
+      <ellipse cx="12" cy="6" rx="7" ry="3"/>
+      <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/>
+      <path d="M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>
+    </symbol>
+
+    <symbol id="icon-map" viewBox="0 0 24 24">
+      <path d="M9 4 4 6v14l5-2 6 2 5-2V4l-5 2-6-2Z"/>
+      <path d="M9 4v14"/>
+      <path d="M15 6v14"/>
+    </symbol>
+
+    <symbol id="icon-help" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8.3"/>
+      <path d="M9.5 9.3a2.5 2.5 0 1 1 3.7 2.2c-.9.5-1.2 1-1.2 2"/>
+      <circle cx="12" cy="16.7" r="1" fill="currentColor" stroke="none"/>
+    </symbol>
+
+    <symbol id="icon-more" viewBox="0 0 24 24">
+      <circle cx="6" cy="12" r="1.3" fill="currentColor" stroke="none"/>
+      <circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/>
+      <circle cx="18" cy="12" r="1.3" fill="currentColor" stroke="none"/>
+    </symbol>
+
+    <!-- ===================================================
+         ИКОНКИ — TASK MANAGER (tasks.js)
+         =================================================== -->
+
+    <symbol id="icon-star" viewBox="0 0 24 24">
+      <path d="M12 3.5l2.6 5.6 6 .7-4.4 4.1 1.2 6-5.4-3-5.4 3 1.2-6-4.4-4.1 6-.7Z"/>
+    </symbol>
+
+    <symbol id="icon-star-filled" viewBox="0 0 24 24">
+      <path
+        d="M12 3.5l2.6 5.6 6 .7-4.4 4.1 1.2 6-5.4-3-5.4 3 1.2-6-4.4-4.1 6-.7Z"
+        fill="currentColor"
+      />
+    </symbol>
+
+    <symbol id="icon-edit" viewBox="0 0 24 24">
+      <path d="M4 20l.9-4.2L15.8 5a1.7 1.7 0 0 1 2.4 0l.8.8a1.7 1.7 0 0 1 0 2.4L8.2 19.1 4 20Z"/>
+      <path d="M14 6.5l3.5 3.5"/>
+    </symbol>
+
+    <symbol id="icon-trash" viewBox="0 0 24 24">
+      <path d="M5 7h14"/>
+      <path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+      <path d="M7 7l1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13"/>
+    </symbol>
+
+    <symbol id="icon-plus" viewBox="0 0 24 24">
+      <path d="M12 5v14"/>
+      <path d="M5 12h14"/>
+    </symbol>
+
+    <symbol id="icon-x" viewBox="0 0 24 24">
+      <path d="M6 6l12 12"/>
+      <path d="M18 6L6 18"/>
+    </symbol>
+
+    <symbol id="icon-list" viewBox="0 0 24 24">
+      <path d="M9 6h11"/>
+      <path d="M9 12h11"/>
+      <path d="M9 18h11"/>
+      <circle cx="4.5" cy="6" r="1.1" fill="currentColor" stroke="none"/>
+      <circle cx="4.5" cy="12" r="1.1" fill="currentColor" stroke="none"/>
+      <circle cx="4.5" cy="18" r="1.1" fill="currentColor" stroke="none"/>
+    </symbol>
+
+  </defs>
+</svg>
 
 <div class="app">
 
@@ -121,7 +293,7 @@
           data-page="dashboard"
         >
 
-          <span class="nav-icon">⌂</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-home"></use></svg></span>
 
           <span>
             Главная
@@ -138,7 +310,7 @@
           data-page="base"
         >
 
-          <span class="nav-icon">▤</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-grid"></use></svg></span>
 
           <span>
             База
@@ -155,7 +327,7 @@
           data-page="received"
         >
 
-          <span class="nav-icon">⇩</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-inbox-down"></use></svg></span>
 
           <span>
             Приёмка
@@ -172,7 +344,7 @@
           data-page="assembly"
         >
 
-          <span class="nav-icon">◫</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-package"></use></svg></span>
 
           <span>
             Сборка
@@ -194,7 +366,7 @@
           data-page="collected"
         >
 
-          <span class="nav-icon">✓</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-check-circle"></use></svg></span>
 
           <span>
             Собрано
@@ -211,7 +383,7 @@
           data-page="shipped"
         >
 
-          <span class="nav-icon">⇧</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-send"></use></svg></span>
 
           <span>
             Убыло
@@ -228,7 +400,7 @@
           data-page="move"
         >
 
-          <span class="nav-icon">⇄</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-swap"></use></svg></span>
 
           <span>
             Перемещение
@@ -245,7 +417,7 @@
           data-page="planner"
         >
 
-          <span class="nav-icon">📅</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-calendar"></use></svg></span>
 
           <span>
             Планировщик
@@ -276,7 +448,7 @@
           data-tool="compare"
         >
 
-          <span class="nav-icon">⇄</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-columns"></use></svg></span>
 
           <span>
             Сравнение
@@ -294,7 +466,7 @@
           data-tool="split"
         >
 
-          <span class="nav-icon">÷</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-divide"></use></svg></span>
 
           <span>
             Деление
@@ -312,7 +484,7 @@
           data-tool="sum"
         >
 
-          <span class="nav-icon">Σ</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-sigma"></use></svg></span>
 
           <span>
             Сумма
@@ -330,7 +502,7 @@
           data-tool="convert"
         >
 
-          <span class="nav-icon">▣</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-box-arrow"></use></svg></span>
 
           <span>
             Заявка → Коробки
@@ -348,7 +520,7 @@
           data-tool="inventory"
         >
 
-          <span class="nav-icon">⊙</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-clipboard-check"></use></svg></span>
 
           <span>
             Инвентаризация
@@ -366,7 +538,7 @@
           data-tool="excel"
         >
 
-          <span class="nav-icon">↓</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-table"></use></svg></span>
 
           <span>
             Excel
@@ -384,7 +556,7 @@
           data-tool="data"
         >
 
-          <span class="nav-icon">◫</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-database"></use></svg></span>
 
           <span>
             Данные
@@ -415,7 +587,7 @@
           data-tool="map"
         >
 
-          <span class="nav-icon">◇</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-map"></use></svg></span>
 
           <span>
             Карта
@@ -433,7 +605,7 @@
           data-tool="help"
         >
 
-          <span class="nav-icon">?</span>
+          <span class="nav-icon"><svg class="icon"><use href="#icon-help"></use></svg></span>
 
           <span>
             Справка
@@ -571,9 +743,7 @@
     data-page="dashboard"
   >
 
-    <span aria-hidden="true">
-      ⌂
-    </span>
+    <span aria-hidden="true"><svg class="icon"><use href="#icon-home"></use></svg></span>
 
     <small>
       Главная
@@ -590,9 +760,7 @@
     data-page="base"
   >
 
-    <span aria-hidden="true">
-      ▤
-    </span>
+    <span aria-hidden="true"><svg class="icon"><use href="#icon-grid"></use></svg></span>
 
     <small>
       База
@@ -609,9 +777,7 @@
     data-page="received"
   >
 
-    <span aria-hidden="true">
-      ⇩
-    </span>
+    <span aria-hidden="true"><svg class="icon"><use href="#icon-inbox-down"></use></svg></span>
 
     <small>
       Приёмка
@@ -628,9 +794,7 @@
     data-page="assembly"
   >
 
-    <span aria-hidden="true">
-      ◫
-    </span>
+    <span aria-hidden="true"><svg class="icon"><use href="#icon-package"></use></svg></span>
 
     <small>
       Сборка
@@ -654,9 +818,7 @@
     aria-expanded="false"
   >
 
-    <span aria-hidden="true">
-      ⋯
-    </span>
+    <span aria-hidden="true"><svg class="icon"><use href="#icon-more"></use></svg></span>
 
     <small>
       Ещё
@@ -700,6 +862,15 @@
 
 <script
   src="app.js"
+></script>
+
+
+<!-- =====================================================
+     TASKS
+     ===================================================== -->
+
+<script
+  src="tasks.js"
 ></script>
 
 

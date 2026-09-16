@@ -814,23 +814,9 @@ inventory: {
 
   /* =======================================================
      TASK MANAGER
+     Состояние задач больше не хранится здесь — см.
+     tasksState в tasks.js.
      ======================================================= */
-
-  tasks: [],
-
-  tasksView: 'list',
-
-  tasksCalendarMonth:
-    new Date().getMonth(),
-
-  tasksCalendarYear:
-    new Date().getFullYear(),
-
-  tasksFilter: 'all',
-
-  tasksSelectedDate: null,
-
-  taskEditingId: null,
 
 
   /* =======================================================
@@ -1231,1021 +1217,16 @@ function parseToolDataLine(line) {
 
 /* =========================================================
    TASK MANAGER
+   Вынесено в отдельный модуль — см. tasks.js / tasks.css.
+   Здесь эта логика больше не живёт: tasksState, CRUD,
+   tasksView()/setupTasks()/homeTasksListHtml() теперь
+   определены в tasks.js (подключается отдельным
+   <script> в index.html после app.js — так же, как
+   planner.js) и используют Supabase (public.tasks),
+   а не localStorage.
    ========================================================= */
 
-const TASKS_STORAGE_KEY =
-  'sklad_tasks_v1';
 
-
-function loadTasksFromStorage() {
-
-  try {
-
-    const raw =
-      localStorage.getItem(
-        TASKS_STORAGE_KEY
-      );
-
-    if (!raw) {
-      state.tasks = [];
-      return;
-    }
-
-    const parsed =
-      JSON.parse(raw);
-
-    state.tasks =
-      Array.isArray(parsed)
-        ? parsed
-        : [];
-
-  } catch (error) {
-
-    state.tasks = [];
-
-  }
-
-}
-
-
-function saveTasksToStorage() {
-
-  try {
-
-    localStorage.setItem(
-      TASKS_STORAGE_KEY,
-      JSON.stringify(state.tasks)
-    );
-
-  } catch (error) {
-
-    /*
-      Хранилище недоступно
-      (приватный режим и т.п.) —
-      тихо игнорируем.
-    */
-
-  }
-
-}
-
-
-function generateTaskId() {
-
-  return (
-    'task_' +
-    Date.now().toString(36) +
-    '_' +
-    Math.random()
-      .toString(36)
-      .slice(2, 8)
-  );
-
-}
-
-
-const TASK_PRIORITY_LABELS = {
-  low: 'Низкий',
-  medium: 'Средний',
-  high: 'Высокий'
-};
-
-
-const TASK_PRIORITY_COLORS = {
-  low: '#4a90d9',
-  medium: '#d99a00',
-  high: '#c0392b'
-};
-
-
-function addTask(taskData) {
-
-  const task = {
-
-    id: generateTaskId(),
-
-    title:
-      normalizeText(taskData.title),
-
-    notes:
-      normalizeText(taskData.notes || ''),
-
-    date:
-      taskData.date || '',
-
-    priority:
-      taskData.priority || 'medium',
-
-    done: false,
-
-    createdAt:
-      new Date().toISOString()
-
-  };
-
-  state.tasks.push(task);
-
-  saveTasksToStorage();
-
-  return task;
-
-}
-
-
-function updateTask(id, changes) {
-
-  const task =
-    state.tasks.find(
-      t => t.id === id
-    );
-
-  if (!task) {
-    return;
-  }
-
-  Object.assign(task, changes);
-
-  saveTasksToStorage();
-
-}
-
-
-function deleteTask(id) {
-
-  state.tasks =
-    state.tasks.filter(
-      t => t.id !== id
-    );
-
-  saveTasksToStorage();
-
-}
-
-
-function toggleTaskDone(id) {
-
-  const task =
-    state.tasks.find(
-      t => t.id === id
-    );
-
-  if (!task) {
-    return;
-  }
-
-  task.done = !task.done;
-
-  saveTasksToStorage();
-
-  render();
-
-}
-
-
-/**
- * Возвращает задачи с учётом
- * текущего фильтра
- * (все / активные / выполненные).
- */
-function getFilteredTasks() {
-
-  return state.tasks
-    .filter(task => {
-
-      if (state.tasksFilter === 'active') {
-        return !task.done;
-      }
-
-      if (state.tasksFilter === 'done') {
-        return task.done;
-      }
-
-      return true;
-
-    })
-    .slice()
-    .sort((a, b) => {
-
-      if (a.date && b.date) {
-        return a.date < b.date ? -1 : 1;
-      }
-
-      if (a.date) return -1;
-      if (b.date) return 1;
-
-      return 0;
-
-    });
-
-}
-
-
-function isTaskOverdue(task) {
-
-  if (!task.date || task.done) {
-    return false;
-  }
-
-  const today =
-    new Date();
-
-  today.setHours(0, 0, 0, 0);
-
-  const taskDate =
-    new Date(task.date + 'T00:00:00');
-
-  return taskDate < today;
-
-}
-
-
-/* =========================================================
-   TASKS VIEW — СПИСОК
-   ========================================================= */
-
-function tasksListHtml() {
-
-  const tasks =
-    getFilteredTasks();
-
-  if (!tasks.length) {
-
-    return `
-      <div class="sp-empty">
-        Задач нет.
-        Добавьте первую задачу выше.
-      </div>
-    `;
-
-  }
-
-  return tasks.map(task => `
-
-    <div
-      class="sp-card"
-      style="
-        margin-bottom:10px;
-        padding:14px 16px;
-        display:flex;
-        align-items:flex-start;
-        gap:12px;
-        ${
-          task.done
-            ? 'opacity:0.55;'
-            : ''
-        }
-      "
-    >
-
-      <input
-        type="checkbox"
-        class="task-toggle"
-        data-id="${escapeHtml(task.id)}"
-        ${task.done ? 'checked' : ''}
-        style="
-          margin-top:3px;
-          width:18px;
-          height:18px;
-          cursor:pointer;
-        "
-      >
-
-      <div style="flex:1;min-width:0;">
-
-        <div
-          style="
-            display:flex;
-            align-items:center;
-            gap:8px;
-            flex-wrap:wrap;
-          "
-        >
-
-          <b
-            style="
-              ${
-                task.done
-                  ? 'text-decoration:line-through;'
-                  : ''
-              }
-            "
-          >
-            ${escapeHtml(task.title)}
-          </b>
-
-          <span
-            style="
-              font-size:11px;
-              font-weight:700;
-              padding:2px 8px;
-              border-radius:999px;
-              color:#fff;
-              background:${
-                TASK_PRIORITY_COLORS[task.priority] ||
-                '#888'
-              };
-            "
-          >
-            ${
-              TASK_PRIORITY_LABELS[task.priority] ||
-              task.priority
-            }
-          </span>
-
-          ${
-            isTaskOverdue(task)
-              ? `
-                <span
-                  style="
-                    font-size:11px;
-                    font-weight:700;
-                    padding:2px 8px;
-                    border-radius:999px;
-                    color:#fff;
-                    background:#b42318;
-                  "
-                >
-                  Просрочено
-                </span>
-              `
-              : ''
-          }
-
-        </div>
-
-        ${
-          task.notes
-            ? `
-              <div
-                class="sp-muted"
-                style="margin-top:4px;font-size:13px;"
-              >
-                ${escapeHtml(task.notes)}
-              </div>
-            `
-            : ''
-        }
-
-        ${
-          task.date
-            ? `
-              <div
-                class="sp-muted"
-                style="margin-top:4px;font-size:12px;"
-              >
-                📅 ${escapeHtml(task.date)}
-              </div>
-            `
-            : ''
-        }
-
-      </div>
-
-      <button
-        class="sp-btn danger"
-        type="button"
-        data-delete-task="${escapeHtml(task.id)}"
-        style="padding:6px 10px;font-size:12px;"
-      >
-        Удалить
-      </button>
-
-    </div>
-
-  `).join('');
-
-}
-
-
-/* =========================================================
-   TASKS VIEW — КАЛЕНДАРЬ
-   ========================================================= */
-
-const CALENDAR_MONTH_NAMES = [
-  'Январь', 'Февраль', 'Март', 'Апрель',
-  'Май', 'Июнь', 'Июль', 'Август',
-  'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
-];
-
-const CALENDAR_WEEKDAY_NAMES =
-  ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-
-
-function formatDateISO(date) {
-
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-
-  return `${y}-${m}-${d}`;
-
-}
-
-
-function tasksCalendarHtml() {
-
-  const year =
-    state.tasksCalendarYear;
-
-  const month =
-    state.tasksCalendarMonth;
-
-  const firstOfMonth =
-    new Date(year, month, 1);
-
-  /*
-    Понедельник = 0 ... Воскресенье = 6.
-  */
-  const firstWeekday =
-    (firstOfMonth.getDay() + 6) % 7;
-
-  const daysInMonth =
-    new Date(year, month + 1, 0).getDate();
-
-  const tasksByDate = {};
-
-  state.tasks.forEach(task => {
-
-    if (!task.date) return;
-
-    if (!tasksByDate[task.date]) {
-      tasksByDate[task.date] = [];
-    }
-
-    tasksByDate[task.date].push(task);
-
-  });
-
-  const todayISO =
-    formatDateISO(new Date());
-
-  const cells = [];
-
-  for (let i = 0; i < firstWeekday; i++) {
-    cells.push('<div></div>');
-  }
-
-  for (let day = 1; day <= daysInMonth; day++) {
-
-    const dateISO =
-      formatDateISO(
-        new Date(year, month, day)
-      );
-
-    const dayTasks =
-      tasksByDate[dateISO] || [];
-
-    const isToday =
-      dateISO === todayISO;
-
-    const isSelected =
-      dateISO === state.tasksSelectedDate;
-
-    cells.push(`
-
-      <div
-        class="calendar-day"
-        data-date="${dateISO}"
-        style="
-          min-height:64px;
-          border-radius:10px;
-          padding:6px;
-          cursor:pointer;
-          border:2px solid ${
-            isSelected
-              ? '#111'
-              : isToday
-                ? '#4a90d9'
-                : '#eee'
-          };
-          background:${
-            dayTasks.length
-              ? '#fffaf0'
-              : '#fff'
-          };
-        "
-      >
-
-        <div
-          style="
-            font-size:12px;
-            font-weight:${isToday ? '800' : '500'};
-          "
-        >
-          ${day}
-        </div>
-
-        ${
-          dayTasks.length
-            ? `
-              <div
-                style="
-                  margin-top:4px;
-                  font-size:11px;
-                  font-weight:700;
-                  color:#b8860b;
-                "
-              >
-                ${dayTasks.length} ${
-                  dayTasks.length === 1
-                    ? 'задача'
-                    : 'задач'
-                }
-              </div>
-            `
-            : ''
-        }
-
-      </div>
-
-    `);
-
-  }
-
-  const selectedDayTasks =
-    state.tasksSelectedDate
-      ? (tasksByDate[state.tasksSelectedDate] || [])
-      : [];
-
-  return `
-
-    <div
-      style="
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        margin-bottom:14px;
-      "
-    >
-
-      <button
-        class="sp-btn secondary"
-        type="button"
-        id="calendarPrevMonth"
-      >
-        ←
-      </button>
-
-      <b>
-        ${CALENDAR_MONTH_NAMES[month]} ${year}
-      </b>
-
-      <button
-        class="sp-btn secondary"
-        type="button"
-        id="calendarNextMonth"
-      >
-        →
-      </button>
-
-    </div>
-
-    <div
-      style="
-        display:grid;
-        grid-template-columns:repeat(7,1fr);
-        gap:4px;
-        margin-bottom:6px;
-      "
-    >
-
-      ${CALENDAR_WEEKDAY_NAMES.map(name => `
-        <div
-          class="sp-muted"
-          style="text-align:center;font-size:11px;font-weight:700;"
-        >
-          ${name}
-        </div>
-      `).join('')}
-
-    </div>
-
-    <div
-      style="
-        display:grid;
-        grid-template-columns:repeat(7,1fr);
-        gap:4px;
-      "
-    >
-      ${cells.join('')}
-    </div>
-
-    ${
-      state.tasksSelectedDate
-        ? `
-          <div style="margin-top:20px;">
-
-            <h3 style="margin:0 0 10px;">
-              Задачи на ${escapeHtml(state.tasksSelectedDate)}
-            </h3>
-
-            ${
-              selectedDayTasks.length
-                ? selectedDayTasks.map(task => `
-                  <div
-                    class="sp-card"
-                    style="
-                      margin-bottom:8px;
-                      padding:10px 14px;
-                      display:flex;
-                      align-items:center;
-                      gap:10px;
-                      ${task.done ? 'opacity:0.55;' : ''}
-                    "
-                  >
-
-                    <input
-                      type="checkbox"
-                      class="task-toggle"
-                      data-id="${escapeHtml(task.id)}"
-                      ${task.done ? 'checked' : ''}
-                    >
-
-                    <span
-                      style="
-                        flex:1;
-                        ${
-                          task.done
-                            ? 'text-decoration:line-through;'
-                            : ''
-                        }
-                      "
-                    >
-                      ${escapeHtml(task.title)}
-                    </span>
-
-                    <button
-                      class="sp-btn danger"
-                      type="button"
-                      data-delete-task="${escapeHtml(task.id)}"
-                      style="padding:4px 8px;font-size:11px;"
-                    >
-                      Удалить
-                    </button>
-
-                  </div>
-                `).join('')
-                : `<div class="sp-muted">Задач нет.</div>`
-            }
-
-          </div>
-        `
-        : ''
-    }
-
-  `;
-
-}
-
-
-/* =========================================================
-   TASKS VIEW — ГЛАВНАЯ ФУНКЦИЯ
-   ========================================================= */
-
-function tasksView() {
-
-  return `
-
-    <div
-      class="sp-card"
-      style="margin-bottom:16px;"
-    >
-
-      <h3>
-        + Новая задача
-      </h3>
-
-      <div
-        style="
-          display:grid;
-          grid-template-columns:2fr 1fr 1fr;
-          gap:10px;
-          margin-top:12px;
-        "
-      >
-
-        <input
-          id="taskTitleInput"
-          type="text"
-          placeholder="Что нужно сделать?"
-          style="
-            border:1px solid #ddd;
-            border-radius:10px;
-            padding:10px 12px;
-            font-size:14px;
-            outline:none;
-          "
-        >
-
-        <input
-          id="taskDateInput"
-          type="date"
-          style="
-            border:1px solid #ddd;
-            border-radius:10px;
-            padding:10px 12px;
-            font-size:14px;
-            outline:none;
-          "
-        >
-
-        <select
-          id="taskPriorityInput"
-          style="
-            border:1px solid #ddd;
-            border-radius:10px;
-            padding:10px 12px;
-            font-size:14px;
-            outline:none;
-          "
-        >
-          <option value="low">Низкий приоритет</option>
-          <option value="medium" selected>Средний приоритет</option>
-          <option value="high">Высокий приоритет</option>
-        </select>
-
-      </div>
-
-      <textarea
-        id="taskNotesInput"
-        placeholder="Заметка (необязательно)"
-        style="
-          width:100%;
-          min-height:60px;
-          box-sizing:border-box;
-          resize:vertical;
-          border:1px solid #ddd;
-          border-radius:10px;
-          padding:10px 12px;
-          font-size:14px;
-          margin-top:10px;
-          outline:none;
-        "
-      ></textarea>
-
-      <button
-        class="sp-btn"
-        type="button"
-        id="addTaskBtn"
-        style="margin-top:12px;"
-      >
-        + Добавить задачу
-      </button>
-
-    </div>
-
-
-    <div
-      class="sp-card"
-      style="margin-bottom:16px;"
-    >
-
-      <div
-        style="
-          display:flex;
-          justify-content:space-between;
-          align-items:center;
-          flex-wrap:wrap;
-          gap:10px;
-        "
-      >
-
-        <div style="display:flex;gap:8px;">
-
-          <button
-            class="sp-btn ${state.tasksView === 'list' ? '' : 'secondary'}"
-            type="button"
-            data-tasks-view="list"
-          >
-            📋 Список
-          </button>
-
-          <button
-            class="sp-btn ${state.tasksView === 'calendar' ? '' : 'secondary'}"
-            type="button"
-            data-tasks-view="calendar"
-          >
-            📅 Календарь
-          </button>
-
-        </div>
-
-        ${
-          state.tasksView === 'list'
-            ? `
-              <div style="display:flex;gap:8px;">
-
-                <button
-                  class="sp-btn ${state.tasksFilter === 'all' ? '' : 'secondary'}"
-                  type="button"
-                  data-tasks-filter="all"
-                >
-                  Все
-                </button>
-
-                <button
-                  class="sp-btn ${state.tasksFilter === 'active' ? '' : 'secondary'}"
-                  type="button"
-                  data-tasks-filter="active"
-                >
-                  Активные
-                </button>
-
-                <button
-                  class="sp-btn ${state.tasksFilter === 'done' ? '' : 'secondary'}"
-                  type="button"
-                  data-tasks-filter="done"
-                >
-                  Выполненные
-                </button>
-
-              </div>
-            `
-            : ''
-        }
-
-      </div>
-
-    </div>
-
-
-    <div class="sp-card">
-
-      ${
-        state.tasksView === 'calendar'
-          ? tasksCalendarHtml()
-          : tasksListHtml()
-      }
-
-    </div>
-
-  `;
-
-}
-
-
-function setupTasks() {
-
-  $('#addTaskBtn')
-    ?.addEventListener(
-      'click',
-      () => {
-
-        const title =
-          $('#taskTitleInput')?.value;
-
-        if (!normalizeText(title)) {
-
-          toast(
-            'Введите название задачи',
-            'error'
-          );
-
-          return;
-
-        }
-
-        addTask({
-          title,
-          date: $('#taskDateInput')?.value || '',
-          priority: $('#taskPriorityInput')?.value || 'medium',
-          notes: $('#taskNotesInput')?.value || ''
-        });
-
-        render();
-
-        toast('Задача добавлена');
-
-      }
-    );
-
-  $all('[data-tasks-view]')
-    .forEach(button => {
-
-      button.addEventListener(
-        'click',
-        () => {
-
-          state.tasksView =
-            button.dataset.tasksView;
-
-          render();
-
-        }
-      );
-
-    });
-
-  $all('[data-tasks-filter]')
-    .forEach(button => {
-
-      button.addEventListener(
-        'click',
-        () => {
-
-          state.tasksFilter =
-            button.dataset.tasksFilter;
-
-          render();
-
-        }
-      );
-
-    });
-
-  $all('.task-toggle')
-    .forEach(checkbox => {
-
-      checkbox.addEventListener(
-        'change',
-        event => {
-
-          toggleTaskDone(
-            event.target.dataset.id
-          );
-
-        }
-      );
-
-    });
-
-  $all('[data-delete-task]')
-    .forEach(button => {
-
-      button.addEventListener(
-        'click',
-        () => {
-
-          deleteTask(
-            button.dataset.deleteTask
-          );
-
-          render();
-
-          toast('Задача удалена');
-
-        }
-      );
-
-    });
-
-  $('#calendarPrevMonth')
-    ?.addEventListener(
-      'click',
-      () => {
-
-        state.tasksCalendarMonth--;
-
-        if (state.tasksCalendarMonth < 0) {
-          state.tasksCalendarMonth = 11;
-          state.tasksCalendarYear--;
-        }
-
-        render();
-
-      }
-    );
-
-  $('#calendarNextMonth')
-    ?.addEventListener(
-      'click',
-      () => {
-
-        state.tasksCalendarMonth++;
-
-        if (state.tasksCalendarMonth > 11) {
-          state.tasksCalendarMonth = 0;
-          state.tasksCalendarYear++;
-        }
-
-        render();
-
-      }
-    );
-
-  $all('.calendar-day')
-    .forEach(cell => {
-
-      cell.addEventListener(
-        'click',
-        () => {
-
-          const date =
-            cell.dataset.date;
-
-          state.tasksSelectedDate =
-            state.tasksSelectedDate === date
-              ? null
-              : date;
-
-          render();
-
-        }
-      );
-
-    });
-
-}
 
 
 function normalizeHeader(value) {
@@ -16527,99 +15508,11 @@ function setupMove() {
    DASHBOARD
    ========================================================= */
 
-/**
- * Компактный список задач
- * для главной страницы —
- * до 5 активных задач,
- * ближайшие по дате сверху.
- */
-function homeTasksListHtml() {
-
-  const tasks =
-    state.tasks
-      .filter(task => !task.done)
-      .slice()
-      .sort((a, b) => {
-
-        if (a.date && b.date) {
-          return a.date < b.date ? -1 : 1;
-        }
-
-        if (a.date) return -1;
-        if (b.date) return 1;
-
-        return 0;
-
-      })
-      .slice(0, 5);
-
-  if (!tasks.length) {
-
-    return `
-      <div class="sp-muted" style="font-size:13px;">
-        Активных задач нет.
-      </div>
-    `;
-
-  }
-
-  return tasks.map(task => `
-
-    <div
-      style="
-        display:flex;
-        align-items:center;
-        gap:10px;
-        padding:8px 0;
-        border-bottom:1px solid #f0f0f0;
-      "
-    >
-
-      <input
-        type="checkbox"
-        class="home-task-toggle"
-        data-id="${escapeHtml(task.id)}"
-        style="width:18px;height:18px;cursor:pointer;flex-shrink:0;"
-      >
-
-      <span style="flex:1;font-size:14px;">
-        ${escapeHtml(task.title)}
-      </span>
-
-      ${
-        isTaskOverdue(task)
-          ? `
-            <span
-              style="
-                font-size:10px;
-                font-weight:700;
-                padding:2px 7px;
-                border-radius:999px;
-                color:#fff;
-                background:#b42318;
-                flex-shrink:0;
-              "
-            >
-              Просрочено
-            </span>
-          `
-          : (
-              task.date
-                ? `
-                  <span class="sp-muted" style="font-size:11px;flex-shrink:0;">
-                    ${escapeHtml(task.date)}
-                  </span>
-                `
-                : ''
-            )
-      }
-
-    </div>
-
-  `).join('');
-
-}
-
+/*
+  homeTasksListHtml() больше не определяется здесь —
+  см. tasks.js (использует tasksState/Supabase и
+  поддерживает избранное).
+*/
 
 function dashboardView() {
 
@@ -16691,37 +15584,6 @@ function dashboardView() {
 
 
   return `
-
-    <!-- =====================================================
-         БЫСТРАЯ НАВИГАЦИЯ (ГЛАВНАЯ)
-         ===================================================== -->
-
-    <div
-      class="sp-card"
-      style="margin-bottom:20px;"
-    >
-
-      <div
-        style="
-          display:flex;
-          flex-wrap:wrap;
-          gap:8px;
-        "
-      >
-
-        <button class="sp-btn secondary" data-page="base">База</button>
-        <button class="sp-btn secondary" data-page="received">Приёмка</button>
-        <button class="sp-btn secondary" data-page="assembly">Сборка</button>
-        <button class="sp-btn secondary" data-page="collected">Собрано</button>
-        <button class="sp-btn secondary" data-page="shipped">Убыло</button>
-        <button class="sp-btn secondary" data-page="map">🗺 Карта</button>
-        <button class="sp-btn secondary" data-page="excel">📊 Excel</button>
-        <button class="sp-btn secondary" data-page="data">👤 Данные</button>
-
-      </div>
-
-    </div>
-
 
     <!-- =====================================================
          НОВАЯ ЗАЯВКА
@@ -17054,28 +15916,62 @@ Excel:
 
 
     <!-- =====================================================
+         РАБОЧИЕ ПРОЦЕССЫ (главная)
+         ===================================================== -->
+
+    <div
+      class="sp-card sp-dashboard-block"
+      style="margin-bottom:20px;"
+    >
+
+      <div class="sp-dashboard-block-head">
+        <h2>Рабочие процессы</h2>
+      </div>
+
+      <div class="sp-quick-strip">
+
+        <button type="button" class="sp-quick-item" data-page="received">
+          <span class="sp-quick-icon"><svg class="icon"><use href="#icon-inbox-down"></use></svg></span>
+          Приёмка
+        </button>
+
+        <button type="button" class="sp-quick-item" data-page="assembly">
+          <span class="sp-quick-icon"><svg class="icon"><use href="#icon-package"></use></svg></span>
+          Сборка
+        </button>
+
+        <button type="button" class="sp-quick-item" data-page="collected">
+          <span class="sp-quick-icon"><svg class="icon"><use href="#icon-check-circle"></use></svg></span>
+          Собрано
+        </button>
+
+        <button type="button" class="sp-quick-item" data-page="shipped">
+          <span class="sp-quick-icon"><svg class="icon"><use href="#icon-send"></use></svg></span>
+          Убыло
+        </button>
+
+        <button type="button" class="sp-quick-item" data-page="move">
+          <span class="sp-quick-icon"><svg class="icon"><use href="#icon-swap"></use></svg></span>
+          Перемещение
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <!-- =====================================================
          ЗАДАЧИ (главная)
          ===================================================== -->
 
     <div
-      class="sp-card"
+      class="sp-card sp-dashboard-block"
       style="margin-bottom:20px;"
     >
 
-      <div
-        style="
-          display:flex;
-          justify-content:space-between;
-          align-items:center;
-          gap:12px;
-          flex-wrap:wrap;
-          margin-bottom:12px;
-        "
-      >
+      <div class="sp-dashboard-block-head">
 
-        <h2 style="margin:0;font-size:18px;">
-          📋 Задачи
-        </h2>
+        <h2>Задачи</h2>
 
         <button
           class="ghost"
@@ -17087,34 +15983,29 @@ Excel:
 
       </div>
 
-      <div
-        style="
-          display:flex;
-          gap:8px;
-          margin-bottom:12px;
-        "
-      >
+      <div class="home-task-add-row">
 
         <input
           id="homeTaskTitleInput"
           type="text"
           placeholder="Быстро добавить задачу..."
-          style="
-            flex:1;
-            border:1px solid #ddd;
-            border-radius:10px;
-            padding:9px 12px;
-            font-size:14px;
-            outline:none;
-          "
         >
+
+        <button
+          type="button"
+          class="task-icon-btn"
+          id="homeTaskFavoriteToggle"
+          title="Отметить избранной"
+        >
+          <svg class="icon"><use href="#icon-star"></use></svg>
+        </button>
 
         <button
           class="sp-btn"
           type="button"
           id="homeAddTaskBtn"
         >
-          +
+          <svg class="icon"><use href="#icon-plus"></use></svg>
         </button>
 
       </div>
@@ -17131,52 +16022,39 @@ Excel:
          ===================================================== -->
 
     <div
-      class="sp-card"
+      class="sp-card sp-dashboard-block"
       style="margin-bottom:20px;"
     >
 
-      <h2 style="margin:0 0 12px;font-size:18px;">
-        🛠 Инструменты
-      </h2>
+      <div class="sp-dashboard-block-head">
+        <h2>Инструменты</h2>
+      </div>
 
-      <div
-        style="
-          display:flex;
-          gap:8px;
-          flex-wrap:wrap;
-        "
-      >
+      <div class="sp-quick-strip">
 
-        <button
-          class="sp-btn secondary"
-          type="button"
-          data-home-tool="compare"
-        >
-          ⇄ Сравнение
+        <button type="button" class="sp-quick-item" data-page="tools" data-tool="compare">
+          <span class="sp-quick-icon"><svg class="icon"><use href="#icon-columns"></use></svg></span>
+          Сравнение
         </button>
 
-        <button
-          class="sp-btn secondary"
-          type="button"
-          data-home-tool="split"
-        >
-          ✂ Деление
+        <button type="button" class="sp-quick-item" data-page="comparison" data-tool="split">
+          <span class="sp-quick-icon"><svg class="icon"><use href="#icon-divide"></use></svg></span>
+          Деление
         </button>
 
-        <button
-          class="sp-btn secondary"
-          type="button"
-          data-home-tool="sum"
-        >
-          Σ Сумма
+        <button type="button" class="sp-quick-item" data-page="tools" data-tool="sum">
+          <span class="sp-quick-icon"><svg class="icon"><use href="#icon-sigma"></use></svg></span>
+          Сумма
         </button>
 
-        <button
-          class="sp-btn secondary"
-          type="button"
-          data-home-tool="convert"
-        >
-          📦 Заявка → Коробки
+        <button type="button" class="sp-quick-item" data-page="comparison" data-tool="convert">
+          <span class="sp-quick-icon"><svg class="icon"><use href="#icon-box-arrow"></use></svg></span>
+          Заявка → Коробки
+        </button>
+
+        <button type="button" class="sp-quick-item" data-page="tools" data-tool="inventory">
+          <span class="sp-quick-icon"><svg class="icon"><use href="#icon-clipboard-check"></use></svg></span>
+          Инвентаризация
         </button>
 
       </div>
@@ -18152,178 +17030,16 @@ Excel:
       </div>
 
 
-      <!-- ===================================================
-           БЫСТРЫЕ ДЕЙСТВИЯ
-           =================================================== -->
-
-      <div
-        class="sp-dashboard-actions"
-        style="
-          margin-top:12px;
-          display:grid;
-          grid-template-columns:
-            repeat(4,minmax(0,1fr));
-          gap:10px;
-        "
-      >
-
-
-        <!-- ПРИЁМКА -->
-
-        <button
-          type="button"
-          class="sp-card"
-          onclick="goToPage('received')"
-          style="
-            text-align:left;
-            cursor:pointer;
-            border:1px solid #e5e5e5;
-          "
-        >
-
-          <div
-            style="
-              font-size:20px;
-              margin-bottom:8px;
-            "
-          >
-            ↓
-          </div>
-
-          <b>
-            Приёмка
-          </b>
-
-          <div
-            class="sp-muted"
-            style="
-              font-size:12px;
-              margin-top:3px;
-            "
-          >
-            Принять коробки
-          </div>
-
-        </button>
-
-
-        <!-- СБОРКА -->
-
-        <button
-          type="button"
-          class="sp-card"
-          onclick="goToPage('assembly')"
-          style="
-            text-align:left;
-            cursor:pointer;
-            border:1px solid #e5e5e5;
-          "
-        >
-
-          <div
-            style="
-              font-size:20px;
-              margin-bottom:8px;
-            "
-          >
-            ◫
-          </div>
-
-          <b>
-            Сборка
-          </b>
-
-          <div
-            class="sp-muted"
-            style="
-              font-size:12px;
-              margin-top:3px;
-            "
-          >
-            Комплектовать заявки
-          </div>
-
-        </button>
-
-
-        <!-- СОБРАНО -->
-
-        <button
-          type="button"
-          class="sp-card"
-          onclick="goToPage('collected')"
-          style="
-            text-align:left;
-            cursor:pointer;
-            border:1px solid #e5e5e5;
-          "
-        >
-
-          <div
-            style="
-              font-size:20px;
-              margin-bottom:8px;
-            "
-          >
-            ✓
-          </div>
-
-          <b>
-            Собрано
-          </b>
-
-          <div
-            class="sp-muted"
-            style="
-              font-size:12px;
-              margin-top:3px;
-            "
-          >
-            Проверить готовые
-          </div>
-
-        </button>
-
-
-        <!-- УБЫЛО -->
-
-        <button
-          type="button"
-          class="sp-card"
-          onclick="goToPage('shipped')"
-          style="
-            text-align:left;
-            cursor:pointer;
-            border:1px solid #e5e5e5;
-          "
-        >
-
-          <div
-            style="
-              font-size:20px;
-              margin-bottom:8px;
-            "
-          >
-            ↑
-          </div>
-
-          <b>
-            Убыло
-          </b>
-
-          <div
-            class="sp-muted"
-            style="
-              font-size:12px;
-              margin-top:3px;
-            "
-          >
-            История отгрузок
-          </div>
-
-        </button>
-
-      </div>
+      <!--
+        БЫСТРЫЕ ДЕЙСТВИЯ (Приёмка/Сборка/Собрано/Убыло)
+        сюда раньше дублировались отдельным гридом
+        огромных карточек. Теперь это один и тот же
+        функционал, что и в блоке «Рабочие процессы»
+        в начале Главной (плюс «Перемещение», которого
+        тут не хватало) — держать два разных по виду
+        списка одних и тех же 4 ссылок не было смысла,
+        поэтому дубликат убран.
+      -->
 
     </div>
 
@@ -18444,99 +17160,13 @@ Excel:
 function setupDashboard() {
 
   /*
-    Быстрое добавление задачи.
+    Задачи (виджет на Главной) —
+    вынесены в tasks.js, чтобы Главная
+    и страница «Задачи» всегда работали
+    с одними и теми же данными в Supabase.
   */
 
-  $('#homeAddTaskBtn')
-    ?.addEventListener(
-      'click',
-      () => {
-
-        const input =
-          $('#homeTaskTitleInput');
-
-        const title =
-          input?.value;
-
-        if (!normalizeText(title)) {
-          return;
-        }
-
-        addTask({
-          title,
-          date: '',
-          priority: 'medium',
-          notes: ''
-        });
-
-        if (input) {
-          input.value = '';
-        }
-
-        render();
-
-      }
-    );
-
-  $('#homeTaskTitleInput')
-    ?.addEventListener(
-      'keydown',
-      event => {
-
-        if (event.key === 'Enter') {
-
-          event.preventDefault();
-
-          $('#homeAddTaskBtn')
-            ?.click();
-
-        }
-
-      }
-    );
-
-  $all('.home-task-toggle')
-    .forEach(checkbox => {
-
-      checkbox.addEventListener(
-        'change',
-        event => {
-
-          toggleTaskDone(
-            event.target.dataset.id
-          );
-
-        }
-      );
-
-    });
-
-
-  /*
-    Быстрый переход к инструментам.
-  */
-
-  $all('[data-home-tool]')
-    .forEach(button => {
-
-      button.addEventListener(
-        'click',
-        () => {
-
-          const tool =
-            button.dataset.homeTool;
-
-          state.activeTool =
-            tool === 'compare'
-              ? ''
-              : tool;
-
-          goToPage('comparison');
-
-        }
-      );
-
-    });
+  setupHomeTasksWidget();
 
 
   /*
@@ -31975,13 +30605,36 @@ function updateAssemblyBadges() {
 
 function setupNavigation() {
 
-  $all('[data-page]')
-    .forEach(
-      button => {
+  /*
+    Делегирование на document, а не навешивание
+    слушателя на каждую кнопку по отдельности.
 
-        button.addEventListener(
-          'click',
-          () => {
+    Почему: часть [data-page]-кнопок (например,
+    «Все задачи» на Главной) находится внутри
+    #content, который render() полностью
+    перерисовывает через innerHTML. Слушатель,
+    навешенный один раз при старте на конкретный
+    DOM-узел, после такой перерисовки теряется —
+    именно поэтому кнопка «Все задачи» не работала.
+    Делегирование на document решает это раз и
+    навсегда: сработает для любой [data-page]-кнопки,
+    существующей сейчас или появившейся позже.
+  */
+
+  document.addEventListener(
+    'click',
+    event => {
+
+      const button =
+        event.target.closest(
+          '[data-page]'
+        );
+
+      if (!button) {
+        return;
+      }
+
+      {
 
             /* =================================================
                ИНВЕНТАРИЗАЦИЯ
@@ -32192,11 +30845,10 @@ function setupNavigation() {
 
             }
 
-          }
-        );
-
       }
-    );
+
+    }
+  );
 
 
   /* =========================================================
@@ -32437,6 +31089,17 @@ async function startAuthenticatedApp() {
 
 
     /*
+      Задачи (tasks.js) — тоже из Supabase.
+      Раньше грузились из localStorage в startApp(),
+      до появления сессии; теперь грузим здесь же,
+      где пользователь уже авторизован и RLS
+      пропускает запрос.
+    */
+
+    await loadTasksFromSupabase();
+
+
+    /*
       После авторизации Supabase уже передал
       пользователя в state.user.
 
@@ -32515,8 +31178,6 @@ async function startApp() {
   ensureAppStyles();
 
   setupNavigation();
-
-  loadTasksFromStorage();
 
   /*
     Получаем текущую сессию.

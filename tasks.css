@@ -1,0 +1,505 @@
+/* =========================================================
+   SKLADAPLAN — TASK MANAGER
+   tasks.css
+
+   Стили модуля задач: виджет на Главной + страница
+   «Задачи». Переиспользует переменные и цвета,
+   уже принятые в style.css (sp-card/sp-btn/sp-muted),
+   не дублирует их.
+   ========================================================= */
+
+
+/* =========================================================
+   ФОРМА «НОВАЯ ЗАДАЧА» (страница «Задачи»)
+   ========================================================= */
+
+.task-new-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.task-new-grid input,
+.task-new-grid select {
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  outline: none;
+  min-width: 0;
+}
+
+#taskNotesInput {
+  width: 100%;
+  min-height: 60px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  margin-top: 10px;
+  outline: none;
+  font-family: inherit;
+}
+
+.task-new-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.task-new-actions .sp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-new-actions .sp-btn .icon {
+  width: 15px;
+  height: 15px;
+}
+
+
+/* =========================================================
+   TOOLBAR (вид: список/календарь, фильтры)
+   ========================================================= */
+
+.task-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.task-toolbar-group {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.task-toolbar-group .sp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-toolbar-group .sp-btn .icon {
+  width: 14px;
+  height: 14px;
+}
+
+
+/* =========================================================
+   СПИСОК ЗАДАЧ
+   ========================================================= */
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #ececec;
+  border-radius: 14px;
+  background: #fff;
+  transition: opacity .15s ease, background .15s ease;
+}
+
+.task-card.is-done {
+  opacity: .55;
+}
+
+.task-card > .task-toggle {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+  accent-color: #111;
+}
+
+.task-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.task-card-title {
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.task-card.is-done .task-card-title {
+  text-decoration: line-through;
+}
+
+.task-priority-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.task-overdue-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+  background: #b42318;
+  white-space: nowrap;
+}
+
+.task-card-desc {
+  margin-top: 4px;
+  font-size: 13px;
+}
+
+.task-card-date {
+  margin-top: 4px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.task-card-date .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.task-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.task-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.task-icon-btn .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.task-icon-btn:hover {
+  background: #f2f2f2;
+  color: #111;
+}
+
+.task-icon-btn.is-active {
+  color: #d99a00;
+}
+
+.task-icon-btn.danger:hover {
+  background: #fdecea;
+  color: #b42318;
+}
+
+
+/* =========================================================
+   EMPTY STATE
+   ========================================================= */
+
+.sp-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: #888;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+
+/* =========================================================
+   РЕДАКТИРОВАНИЕ ЗАДАЧИ (инлайн, по клику на «Изменить»)
+   ========================================================= */
+
+.task-card-editing {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  background: #fafafa;
+}
+
+.task-edit-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.task-edit-grid input,
+.task-edit-grid select {
+  border: 1px solid #ddd;
+  border-radius: 9px;
+  padding: 9px 10px;
+  font-size: 13px;
+  min-width: 0;
+  outline: none;
+}
+
+.task-edit-desc {
+  width: 100%;
+  min-height: 50px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid #ddd;
+  border-radius: 9px;
+  padding: 9px 10px;
+  font-size: 13px;
+  outline: none;
+  font-family: inherit;
+}
+
+.task-edit-fav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #555;
+  cursor: pointer;
+  width: fit-content;
+}
+
+.task-edit-fav .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.task-edit-fav input {
+  accent-color: #111;
+}
+
+.task-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+
+/* =========================================================
+   КАЛЕНДАРЬ
+   ========================================================= */
+
+.task-calendar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.task-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.task-calendar-weekdays > div {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #999;
+}
+
+.task-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.task-calendar-day {
+  min-height: 64px;
+  border-radius: 10px;
+  padding: 6px;
+  cursor: pointer;
+  border: 2px solid #eee;
+  background: #fff;
+}
+
+.task-calendar-day.is-today {
+  border-color: #4a90d9;
+}
+
+.task-calendar-day.is-selected {
+  border-color: #111;
+}
+
+.task-calendar-day.has-tasks {
+  background: #fffaf0;
+}
+
+.task-calendar-day-num {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.task-calendar-day.is-today .task-calendar-day-num {
+  font-weight: 800;
+}
+
+.task-calendar-day-count {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #b8860b;
+}
+
+.task-calendar-selected {
+  margin-top: 20px;
+}
+
+.task-calendar-selected h3 {
+  margin: 0 0 10px;
+}
+
+
+/* =========================================================
+   ГЛАВНАЯ — ВИДЖЕТ ЗАДАЧ
+   ========================================================= */
+
+.home-task-add-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.home-task-add-row input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 14px;
+  outline: none;
+}
+
+.home-task-add-row .sp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 9px 12px;
+}
+
+.home-task-add-row .sp-btn .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.home-task-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.home-task-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.home-task-row:last-child {
+  border-bottom: 0;
+}
+
+.home-task-toggle {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+  accent-color: #111;
+}
+
+.home-task-title {
+  flex: 1;
+  font-size: 14px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-task-favorite {
+  width: 26px;
+  height: 26px;
+}
+
+.home-task-date {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+
+/* =========================================================
+   ГЛАВНАЯ — ОБЩИЙ БЛОК-КОНТЕЙНЕР
+   (переиспользуется задачами, рабочими процессами
+   и инструментами на Главной)
+   ========================================================= */
+
+.sp-dashboard-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.sp-dashboard-block-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+
+/* =========================================================
+   МОБИЛЬНАЯ АДАПТАЦИЯ
+   ========================================================= */
+
+@media (max-width: 640px) {
+
+  .task-new-grid,
+  .task-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .task-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .task-calendar-day {
+    min-height: 44px;
+  }
+
+}

@@ -1426,6 +1426,71 @@ box-shadow:
 }
 
 /* =========================================================
+DASHBOARD — КОМПАКТНЫЙ БЫСТРЫЙ ДОСТУП
+(«Рабочие процессы» и «Инструменты» на Главной)
+========================================================= */
+
+.sp-quick-strip {
+display: flex;
+flex-wrap: wrap;
+gap: 8px;
+}
+
+.sp-quick-item {
+display: flex;
+align-items: center;
+gap: 8px;
+padding: 10px 14px;
+border: 1px solid #e8e8e8;
+border-radius: 12px;
+background: #fafafa;
+color: #111;
+font-family: inherit;
+font-size: 13px;
+font-weight: 600;
+cursor: pointer;
+transition:
+background .15s ease,
+border-color .15s ease,
+transform .15s ease;
+}
+
+.sp-quick-item:hover {
+background: #f0f0f0;
+border-color: #d8d8d8;
+transform: translateY(-1px);
+}
+
+.sp-quick-item:active {
+transform: translateY(0);
+}
+
+.sp-quick-icon {
+width: 20px;
+height: 20px;
+display: inline-flex;
+align-items: center;
+justify-content: center;
+color: #555;
+flex-shrink: 0;
+}
+
+.sp-quick-icon .icon {
+width: 100%;
+height: 100%;
+}
+
+@media (max-width: 480px) {
+
+.sp-quick-item {
+flex: 1 1 calc(50% - 8px);
+justify-content: center;
+padding: 12px 10px;
+}
+
+}
+
+/* =========================================================
 MOBILE NAV
 ========================================================= */
 
@@ -2093,7 +2158,9 @@ grid-template-columns: 1fr !important;
 
 /* =========================================================
    NAVIGATION ICONS
-   Не даём символам превращаться в круглые/цветные emoji
+   Единый SVG-спрайт (см. index.html) вместо
+   Unicode-символов/emoji — одинаковый визуальный вес,
+   предсказуемый цвет через currentColor.
    ========================================================= */
 
 .nav-icon,
@@ -2103,15 +2170,41 @@ grid-template-columns: 1fr !important;
   box-shadow: none !important;
   outline: none !important;
   border-radius: 0 !important;
+}
 
-  font-family:
-    "Segoe UI Symbol",
-    "Noto Sans Symbols",
-    "Apple Symbols",
-    "Segoe UI",
-    sans-serif;
+/*
+   Сама SVG-иконка.
 
-  font-variant-emoji: text;
+   Размер и толщина линии заданы здесь одним местом —
+   поменять весь набор иконок можно правкой этих
+   переменных, без правки разметки.
+*/
+.icon {
+  width: 100%;
+  height: 100%;
+  display: block;
+
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+
+  overflow: visible;
+}
+
+/*
+   Неактивное состояние — чуть более лёгкая линия,
+   активное/hover наследует полный вес через currentColor
+   и стандартные .nav/.nav.active/.mobile-nav-btn.active
+   правила ниже по файлу (мы их не трогаем).
+*/
+.nav .icon {
+  stroke-width: 1.7;
+}
+
+.mobile-nav-btn > span .icon {
+  stroke-width: 1.9;
 }
 
 
