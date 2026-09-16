@@ -876,9 +876,31 @@ inventory: {
      groups: [{ label: '1', ids: ['uuid', ...] }]
      ======================================================= */
 
+  /*
+    Заметки по сформированным поддонам (pallet_notes).
+
+    Ключ — palletNoteKey(direction, pallet), значение —
+    текст заметки. Загружается один раз при входе,
+    обновляется точечно при сохранении/удалении заметки —
+    отдельного постоянного polling нет, этого достаточно,
+    т.к. заметки правит тот же человек, что их читает.
+  */
+  palletNotes: {},
+
+
   collectedPalletBuild: {
 
     open: false,
+
+    /*
+      Несохранённый текст заметки по текущему поддону.
+      Хранится отдельно от pallet_notes (которая содержит
+      только СОХРАНЁННЫЕ заметки), чтобы промежуточный
+      re-render() при сканировании не затирал то, что
+      оператор ещё не успел сохранить.
+    */
+    noteDraft: '',
+    noteDraftFor: null,
 
     /* фильтр: сканировать только это направление */
     direction: '',
@@ -12675,9 +12697,48 @@ function collectedRow(row) {
 
 
       <td>
-        ${escapeHtml(
+
+        ${
           row.pallet
-        )}
+
+            ? (() => {
+
+                const note =
+                  getPalletNote(
+                    row.direction,
+                    row.pallet
+                  );
+
+                return `
+                  <span class="pallet-chip">
+
+                    <svg class="icon"><use href="#icon-box-arrow"></use></svg>
+
+                    ${escapeHtml(row.pallet)}
+
+                    ${
+                      note
+                        ? `
+                          <span
+                            class="pallet-note-dot"
+                            title="${escapeHtml(note)}"
+                          ></span>
+                        `
+                        : ''
+                    }
+
+                  </span>
+                `;
+
+              })()
+
+            : `
+              <span class="sp-muted">
+                —
+              </span>
+            `
+        }
+
       </td>
 
 
@@ -12694,17 +12755,8 @@ function collectedRow(row) {
           row.direction
 
             ? `
-              <span
-                style="
-                  display:inline-flex;
-                  padding:4px 9px;
-                  border-radius:999px;
-                  background:#eef2ff;
-                  font-weight:600;
-                  font-size:12px;
-                "
-              >
-                🏷
+              <span class="direction-chip">
+                <svg class="icon"><use href="#icon-truck"></use></svg>
                 ${escapeHtml(
                   row.direction
                 )}
@@ -12765,6 +12817,190 @@ function collectedRow(row) {
    в box_movements пишется сама и правило
    «1 штрихкод = 1 физическая коробка» не нарушается.
    ========================================================= */
+
+
+/* =========================================================
+   ЗАМЕТКИ ПО ПОДДОНАМ (pallet_notes)
+
+   Общие для «Собрано» (формирование поддонов) и для
+   распределения по поддонам внутри «Проверки
+   скомплектованного» — оба места отмечают один и тот же
+   физический поддон, поэтому заметка одна на двоих.
+   ========================================================= */
+
+function palletNoteKey(
+  direction,
+  pallet
+) {
+
+  return (
+    normalizeText(direction) +
+    '||' +
+    normalizeText(pallet)
+  );
+
+}
+
+
+function getPalletNote(
+  direction,
+  pallet
+) {
+
+  return (
+    state.palletNotes[
+      palletNoteKey(direction, pallet)
+    ] || ''
+  );
+
+}
+
+
+async function loadPalletNotes() {
+
+  try {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from('pallet_notes')
+        .select('*');
+
+    if (error) {
+      throw error;
+    }
+
+    const map = {};
+
+    (Array.isArray(data) ? data : [])
+      .forEach(row => {
+
+        map[
+          palletNoteKey(
+            row.direction,
+            row.pallet
+          )
+        ] = row.note || '';
+
+      });
+
+    state.palletNotes = map;
+
+  } catch (error) {
+
+    /*
+      Заметки — вспомогательная функция, а не критичная
+      для работы склада. Если миграция ещё не выполнена
+      или запрос не удался — просто нет заметок, не
+      блокируем остальной интерфейс и не показываем toast
+      при каждом входе.
+    */
+
+    console.warn(
+      'Не удалось загрузить заметки по поддонам:',
+      error
+    );
+
+  }
+
+}
+
+
+async function savePalletNote(
+  direction,
+  pallet,
+  note
+) {
+
+  const cleanPallet =
+    normalizeText(pallet);
+
+  if (!cleanPallet) {
+    return;
+  }
+
+  const cleanDirection =
+    normalizeText(direction);
+
+  const cleanNote =
+    String(note || '').trim();
+
+  const operator =
+    state.user?.email || null;
+
+  try {
+
+    if (!cleanNote) {
+
+      /*
+        Пустую заметку не храним — удаляем строку,
+        если она была.
+      */
+
+      const {
+        error
+      } =
+        await supabaseClient
+          .from('pallet_notes')
+          .delete()
+          .eq('direction', cleanDirection)
+          .eq('pallet', cleanPallet);
+
+      if (error) {
+        throw error;
+      }
+
+      delete state.palletNotes[
+        palletNoteKey(cleanDirection, cleanPallet)
+      ];
+
+      return;
+
+    }
+
+    const {
+      error
+    } =
+      await supabaseClient
+        .from('pallet_notes')
+        .upsert(
+          {
+            direction: cleanDirection,
+            pallet: cleanPallet,
+            note: cleanNote,
+            updated_by: operator
+          },
+          {
+            onConflict: 'direction,pallet'
+          }
+        );
+
+    if (error) {
+      throw error;
+    }
+
+    state.palletNotes[
+      palletNoteKey(cleanDirection, cleanPallet)
+    ] = cleanNote;
+
+  } catch (error) {
+
+    console.error(
+      'savePalletNote:',
+      error
+    );
+
+    toast(
+      error?.message ||
+      'Не удалось сохранить заметку (проверьте, что выполнена supabase_migration_pallet_notes.sql)',
+      'error'
+    );
+
+  }
+
+}
 
 
 function cpbState() {
@@ -12838,6 +13074,55 @@ function cpbBoxById(id) {
     row =>
       String(row.id) === String(id)
   );
+
+}
+
+
+/*
+  Уже существующие поддоны среди скомплектованных коробок —
+  чтобы не вводить номер вслепую, а выбрать «поддон 1» из
+  списка и увидеть, сколько на нём сейчас коробок. Нужно
+  и для довеска (сканирования остатка после частичной
+  отгрузки), и для заметки — привязывается к тому же
+  номеру.
+*/
+function cpbExistingPallets(direction) {
+
+  const clean =
+    normalizeText(direction);
+
+  const counts = {};
+
+  state.boxes.forEach(row => {
+
+    if (
+      row.status !== STATUSES.COLLECTED ||
+      !normalizeText(row.pallet)
+    ) {
+      return;
+    }
+
+    if (
+      clean &&
+      normalizeText(row.direction) !== clean
+    ) {
+      return;
+    }
+
+    const key =
+      normalizeText(row.pallet);
+
+    counts[key] =
+      (counts[key] || 0) + 1;
+
+  });
+
+  return Object.keys(counts)
+    .sort()
+    .map(pallet => ({
+      pallet,
+      count: counts[pallet]
+    }));
 
 }
 
@@ -13321,6 +13606,31 @@ function collectedPalletBuilderHtml(directions) {
   const total =
     cpbAllIds().length;
 
+  /*
+    Если оператор переключился на другой поддон (новый,
+    выбранный из списка существующих, или вручную ввёл
+    другой номер) — подтягиваем в черновик уже сохранённую
+    заметку этого поддона. Пока он остаётся на том же
+    поддоне, черновик не трогаем — иначе стирали бы
+    непосохранённый ввод при каждом render().
+  */
+
+  const currentPalletValue =
+    cpbPalletValue(build.currentLabel || '1');
+
+  if (build.noteDraftFor !== currentPalletValue) {
+
+    build.noteDraft =
+      getPalletNote(
+        build.direction,
+        currentPalletValue
+      );
+
+    build.noteDraftFor =
+      currentPalletValue;
+
+  }
+
   return `
 
     <div class="sp-card cpb">
@@ -13410,6 +13720,46 @@ function collectedPalletBuilderHtml(directions) {
       </div>
 
 
+      ${
+        (() => {
+
+          const existing =
+            cpbExistingPallets(build.direction);
+
+          if (!existing.length) {
+            return '';
+          }
+
+          return `
+            <div class="cpb-existing">
+
+              <span class="cpb-existing-label">
+                Уже сформированы:
+              </span>
+
+              ${existing.map(item => `
+                <button
+                  type="button"
+                  class="cpb-existing-btn ${
+                    normalizeText(build.currentLabel) === item.pallet
+                      ? 'is-current'
+                      : ''
+                  }"
+                  data-cpb-pick-pallet="${escapeHtml(item.pallet)}"
+                  title="Выбрать этот поддон — например, чтобы довесить остаток после частичной отгрузки"
+                >
+                  ${escapeHtml(item.pallet)}
+                  <small>${item.count}</small>
+                </button>
+              `).join('')}
+
+            </div>
+          `;
+
+        })()
+      }
+
+
       <div class="cpb-row">
 
         <label class="cpb-field cpb-field-wide">
@@ -13426,6 +13776,34 @@ function collectedPalletBuilderHtml(directions) {
             autocomplete="off"
             placeholder="Отсканируйте штрихкод и нажмите Enter"
           >
+
+        </label>
+
+      </div>
+
+
+      <div class="cpb-row">
+
+        <label class="cpb-field cpb-field-wide">
+
+          <span>
+            Заметка по поддону
+            ${escapeHtml(currentPalletValue)}
+
+            <button
+              type="button"
+              id="cpbNoteSave"
+              class="cpb-note-save"
+            >
+              Сохранить заметку
+            </button>
+          </span>
+
+          <textarea
+            id="cpbNote"
+            rows="2"
+            placeholder="Например: не влезло 5 коробок, ждём завтра машину"
+          >${escapeHtml(build.noteDraft || '')}</textarea>
 
         </label>
 
@@ -13629,6 +14007,14 @@ function setupCollectedPalletBuilder() {
         build.direction =
           normalizeText(event.target.value);
 
+        /*
+          Список «уже сформированы» зависит от
+          направления — перерисовываем, чтобы он
+          обновился.
+        */
+
+        render();
+
       }
     );
 
@@ -13652,6 +14038,69 @@ function setupCollectedPalletBuilder() {
 
         build.currentLabel =
           event.target.value;
+
+      }
+    );
+
+
+  $all('[data-cpb-pick-pallet]')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          /*
+            Выбираем СУЩЕСТВУЮЩИЙ поддон целиком, как он
+            записан у коробок — без приставки, чтобы не
+            задвоить её при повторном формировании
+            («довесить» остаток после частичной отгрузки).
+          */
+
+          build.prefix = '';
+
+          build.currentLabel =
+            button.dataset.cpbPickPallet;
+
+          render();
+
+        }
+      );
+
+    });
+
+
+  $('#cpbNote')
+    ?.addEventListener(
+      'input',
+      event => {
+
+        build.noteDraft =
+          event.target.value;
+
+      }
+    );
+
+
+  $('#cpbNoteSave')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        const pallet =
+          cpbPalletValue(build.currentLabel || '1');
+
+        savePalletNote(
+          build.direction,
+          pallet,
+          build.noteDraft
+        ).then(() => {
+
+          toast('Заметка сохранена');
+
+          render();
+
+        });
 
       }
     );
@@ -14252,7 +14701,30 @@ function resetCollectedVerificationState() {
     result: null,
 
     startedAt: null,
-    finishedAt: null
+    finishedAt: null,
+
+
+    /* =====================================================
+       РАСПРЕДЕЛЕНИЕ ПРОВЕРЕННЫХ ПО ПОДДОНАМ
+
+       Пока идёт сканирование, коробка, подтверждённая как
+       ожидаемая, ОДНОВРЕМЕННО может попадать в текущий
+       поддон — оператору не нужно сканировать дважды.
+       Запись в базу — по кнопке «Записать поддоны», в
+       любой момент во время проверки, не дожидаясь
+       «Завершить проверку».
+       ===================================================== */
+
+    palletMode: false,
+
+    palletPrefix: '',
+    currentPalletLabel: '1',
+
+    /* [{ label: '1', ids: ['uuid', ...] }] */
+    palletGroups: [],
+
+    noteDraft: '',
+    noteDraftFor: null
 
   };
 
@@ -14286,6 +14758,432 @@ function getCollectedVerificationDirections() {
         .filter(Boolean)
     )
   ].sort();
+
+}
+
+
+/* =========================================================
+   ПРОВЕРКА СКОМПЛЕКТОВАННОГО — РАСПРЕДЕЛЕНИЕ ПО ПОДДОНАМ
+
+   Те же принципы, что и в cpb* (см. «СОБРАНО —
+   ФОРМИРОВАНИЕ ПОДДОНОВ К ОТГРУЗКЕ» ниже), но на состоянии
+   проверки (state.collectedVerification), и без Supabase-
+   записи до явной кнопки «Записать поддоны».
+   ========================================================= */
+
+function cvGroup(label) {
+
+  return state.collectedVerification.palletGroups.find(
+    group =>
+      group.label === label
+  );
+
+}
+
+
+function cvAllPalletIds() {
+
+  return state.collectedVerification.palletGroups.reduce(
+    (acc, group) =>
+      acc.concat(group.ids),
+    []
+  );
+
+}
+
+
+function cvFindGroupByBoxId(id) {
+
+  return state.collectedVerification.palletGroups.find(
+    group =>
+      group.ids.includes(id)
+  );
+
+}
+
+
+function cvPalletValue(label) {
+
+  return normalizeText(
+    (state.collectedVerification.palletPrefix || '') + label
+  );
+
+}
+
+
+function cvNextPalletLabel() {
+
+  const numbers =
+    state.collectedVerification.palletGroups
+      .map(group =>
+        parseInt(group.label, 10)
+      )
+      .filter(value =>
+        Number.isFinite(value)
+      );
+
+  return String(
+    (numbers.length
+      ? Math.max(...numbers)
+      : 0) + 1
+  );
+
+}
+
+
+function cvAddBoxToPallet(box) {
+
+  const v =
+    state.collectedVerification;
+
+  if (!v.palletMode) {
+    return;
+  }
+
+  const id =
+    String(box.id);
+
+  if (cvFindGroupByBoxId(id)) {
+
+    /*
+      Уже на каком-то поддоне в этой сессии — например,
+      повторно попала в expected. Не дублируем.
+    */
+
+    return;
+
+  }
+
+  const label =
+    normalizeText(v.currentPalletLabel) || '1';
+
+  let group =
+    cvGroup(label);
+
+  if (!group) {
+
+    group = {
+      label,
+      ids: []
+    };
+
+    v.palletGroups.push(group);
+
+  }
+
+  group.ids.push(id);
+
+}
+
+
+function cvPalletGroupsListHtml() {
+
+  const v =
+    state.collectedVerification;
+
+  if (!v.palletGroups.length) {
+
+    return `
+      <div class="sp-muted cpb-empty">
+        Пока ничего не отсканировано.
+      </div>
+    `;
+
+  }
+
+  return `
+    <div class="cpb-groups">
+
+      ${v.palletGroups.map(group => `
+
+        <div class="cpb-group">
+
+          <div class="cpb-group-head">
+
+            <b>
+              Поддон ${escapeHtml(cvPalletValue(group.label))}
+            </b>
+
+            <span class="sp-muted">
+              коробок: ${group.ids.length}
+            </span>
+
+            <button
+              class="sp-btn secondary cpb-group-remove"
+              type="button"
+              data-cv-remove-group="${escapeHtml(group.label)}"
+            >
+              Убрать поддон
+            </button>
+
+          </div>
+
+          <div class="cpb-boxes">
+
+            ${group.ids.map(id => {
+
+              const row =
+                cpbBoxById(id);
+
+              return `
+                <span class="cpb-box">
+
+                  ${escapeHtml(
+                    row
+                      ? row.barcode
+                      : id
+                  )}
+
+                  <button
+                    type="button"
+                    class="cpb-box-remove"
+                    data-cv-remove-box="${escapeHtml(id)}"
+                    title="Убрать коробку"
+                  >
+                    <svg class="icon"><use href="#icon-x"></use></svg>
+                  </button>
+
+                </span>
+              `;
+
+            }).join('')}
+
+          </div>
+
+        </div>
+
+      `).join('')}
+
+    </div>
+  `;
+
+}
+
+
+function cvRefreshPalletGroupsPanel() {
+
+  /*
+    Точечное обновление, без переотрисовки всей модалки —
+    чтобы не терять фокус на поле сканирования (тот же
+    приём, что и со счётчиками выше).
+  */
+
+  const container =
+    document.getElementById(
+      'cvPalletGroupsList'
+    );
+
+  if (container) {
+
+    container.innerHTML =
+      cvPalletGroupsListHtml();
+
+    attachCvGroupRemoveHandlers();
+
+  }
+
+  const totalCount =
+    cvAllPalletIds().length;
+
+  const total =
+    document.getElementById(
+      'cvPalletTotal'
+    );
+
+  if (total) {
+
+    total.textContent =
+      String(totalCount);
+
+  }
+
+  const applyBtn =
+    document.getElementById(
+      'cvApplyPallets'
+    );
+
+  if (applyBtn) {
+
+    applyBtn.disabled =
+      !totalCount;
+
+  }
+
+}
+
+
+function attachCvGroupRemoveHandlers() {
+
+  $all('[data-cv-remove-box]')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          const v =
+            state.collectedVerification;
+
+          const id =
+            button.dataset.cvRemoveBox;
+
+          v.palletGroups.forEach(group => {
+
+            group.ids =
+              group.ids.filter(
+                item =>
+                  item !== id
+              );
+
+          });
+
+          v.palletGroups =
+            v.palletGroups.filter(
+              group =>
+                group.ids.length
+            );
+
+          cvRefreshPalletGroupsPanel();
+
+        }
+      );
+
+    });
+
+
+  $all('[data-cv-remove-group]')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          const v =
+            state.collectedVerification;
+
+          const label =
+            button.dataset.cvRemoveGroup;
+
+          v.palletGroups =
+            v.palletGroups.filter(
+              group =>
+                group.label !== label
+            );
+
+          cvRefreshPalletGroupsPanel();
+
+        }
+      );
+
+    });
+
+}
+
+
+async function cvApplyPalletGroups() {
+
+  const v =
+    state.collectedVerification;
+
+  const groups =
+    v.palletGroups.filter(
+      group =>
+        group.ids.length
+    );
+
+  if (!groups.length) {
+
+    toast(
+      'Сначала отсканируйте коробки в режиме распределения по поддонам',
+      'error'
+    );
+
+    return;
+
+  }
+
+  const preview =
+    groups
+      .map(group =>
+        `${cvPalletValue(group.label)} — ${group.ids.length}`
+      )
+      .join('\n');
+
+  if (
+    !confirm(
+      `Записать номера поддонов?\n\n${preview}`
+    )
+  ) {
+    return;
+  }
+
+  const operator =
+    state.user?.email || null;
+
+  let updated = 0;
+
+  try {
+
+    for (const group of groups) {
+
+      const {
+        data,
+        error
+      } =
+        await supabaseClient
+          .rpc('sp_move_boxes', {
+            p_box_ids: group.ids,
+            p_target_warehouse: null,
+            p_target_zone: null,
+            p_target_pallet: cvPalletValue(group.label),
+            p_operator: operator,
+            p_reason: 'pallet_build'
+          });
+
+      if (error) {
+        throw error;
+      }
+
+      (Array.isArray(data) ? data : [])
+        .forEach(row => {
+
+          updateLocalBox(
+            row.id,
+            mapDbBoxRow(row)
+          );
+
+          updated += 1;
+
+        });
+
+    }
+
+    v.palletGroups = [];
+
+    renderCollectedVerificationModal();
+
+    setTimeout(() => {
+      $('#cvScannerInput')?.focus();
+    }, 50);
+
+    toast(
+      `Поддоны записаны. Коробок: ${updated}`
+    );
+
+  } catch (error) {
+
+    console.error(
+      'cvApplyPalletGroups:',
+      error
+    );
+
+    toast(
+      error?.message ||
+      'Ошибка записи поддонов',
+      'error'
+    );
+
+  }
 
 }
 
@@ -14375,6 +15273,164 @@ function collectedVerificationSetupHtml() {
 }
 
 
+function cvPalletPanelHtml() {
+
+  const v =
+    state.collectedVerification;
+
+  if (!v.palletMode) {
+
+    return `
+      <button
+        type="button"
+        id="cvPalletToggle"
+        class="sp-btn secondary"
+        style="width:100%;margin-bottom:12px;"
+      >
+        Распределить проверенные по поддонам
+      </button>
+    `;
+
+  }
+
+
+  const currentPalletValue =
+    cvPalletValue(v.currentPalletLabel || '1');
+
+  if (v.noteDraftFor !== currentPalletValue) {
+
+    v.noteDraft =
+      getPalletNote(
+        v.direction,
+        currentPalletValue
+      );
+
+    v.noteDraftFor =
+      currentPalletValue;
+
+  }
+
+
+  const total =
+    cvAllPalletIds().length;
+
+
+  return `
+
+    <div class="cpb cv-pallet-panel">
+
+      <div class="cpb-head">
+
+        <h3>
+          Распределение по поддонам
+        </h3>
+
+        <button
+          type="button"
+          id="cvPalletToggle"
+          class="sp-btn secondary"
+        >
+          Выключить
+        </button>
+
+      </div>
+
+      <div class="sp-muted" style="margin-bottom:10px;">
+        Каждая подтверждённая при сканировании коробка
+        сразу попадает в поддон ниже — сканировать
+        отдельно для распределения не нужно.
+      </div>
+
+
+      <div class="cpb-row">
+
+        <label class="cpb-field cpb-field-narrow">
+
+          <span>Приставка</span>
+
+          <input
+            id="cvPalletPrefix"
+            type="text"
+            placeholder="напр. ОТГР-"
+            value="${escapeHtml(v.palletPrefix || '')}"
+          >
+
+        </label>
+
+
+        <label class="cpb-field cpb-field-narrow">
+
+          <span>Поддон №</span>
+
+          <input
+            id="cvPalletLabel"
+            type="text"
+            value="${escapeHtml(v.currentPalletLabel || '1')}"
+          >
+
+        </label>
+
+
+        <button
+          class="sp-btn secondary"
+          id="cvNewPallet"
+          type="button"
+        >
+          Новый поддон
+        </button>
+
+      </div>
+
+
+      <div id="cvPalletGroupsList">
+        ${cvPalletGroupsListHtml()}
+      </div>
+
+
+      <div class="cpb-row" style="margin-top:10px;">
+
+        <label class="cpb-field cpb-field-wide">
+
+          <span>
+            Заметка по поддону ${escapeHtml(currentPalletValue)}
+
+            <button
+              type="button"
+              id="cvNoteSave"
+              class="cpb-note-save"
+            >
+              Сохранить заметку
+            </button>
+          </span>
+
+          <textarea
+            id="cvNote"
+            rows="2"
+            placeholder="Например: не влезло 5 коробок, ждём завтра машину"
+          >${escapeHtml(v.noteDraft || '')}</textarea>
+
+        </label>
+
+      </div>
+
+
+      <button
+        type="button"
+        id="cvApplyPallets"
+        class="sp-btn success"
+        style="width:100%;margin-top:10px;"
+        ${total ? '' : 'disabled'}
+      >
+        Записать поддоны (<span id="cvPalletTotal">${total}</span>)
+      </button>
+
+    </div>
+
+  `;
+
+}
+
+
 function collectedVerificationScanningHtml() {
 
   const v =
@@ -14451,6 +15507,10 @@ function collectedVerificationScanningHtml() {
     >
       Готов к сканированию.
     </div>
+
+
+    ${cvPalletPanelHtml()}
+
 
     <div style="display:flex; flex-direction:column; gap:10px;">
 
@@ -14755,6 +15815,120 @@ function setupCollectedVerificationHandlers() {
 
   }
 
+
+  /* =========================================================
+     РАСПРЕДЕЛЕНИЕ ПО ПОДДОНАМ
+     ========================================================= */
+
+  $('#cvPalletToggle')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        v.palletMode =
+          !v.palletMode;
+
+        renderCollectedVerificationModal();
+
+        setTimeout(() => {
+          $('#cvScannerInput')?.focus();
+        }, 50);
+
+      }
+    );
+
+
+  $('#cvPalletPrefix')
+    ?.addEventListener(
+      'input',
+      event => {
+
+        v.palletPrefix =
+          event.target.value;
+
+      }
+    );
+
+
+  $('#cvPalletLabel')
+    ?.addEventListener(
+      'input',
+      event => {
+
+        v.currentPalletLabel =
+          event.target.value;
+
+      }
+    );
+
+
+  $('#cvNewPallet')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        v.currentPalletLabel =
+          cvNextPalletLabel();
+
+        renderCollectedVerificationModal();
+
+        setTimeout(() => {
+          $('#cvScannerInput')?.focus();
+        }, 50);
+
+      }
+    );
+
+
+  $('#cvNote')
+    ?.addEventListener(
+      'input',
+      event => {
+
+        v.noteDraft =
+          event.target.value;
+
+      }
+    );
+
+
+  $('#cvNoteSave')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        const pallet =
+          cvPalletValue(v.currentPalletLabel || '1');
+
+        savePalletNote(
+          v.direction,
+          pallet,
+          v.noteDraft
+        ).then(() => {
+
+          toast('Заметка сохранена');
+
+          renderCollectedVerificationModal();
+
+          setTimeout(() => {
+            $('#cvScannerInput')?.focus();
+          }, 50);
+
+        });
+
+      }
+    );
+
+
+  $('#cvApplyPallets')
+    ?.addEventListener(
+      'click',
+      cvApplyPalletGroups
+    );
+
+
+  attachCvGroupRemoveHandlers();
+
 }
 
 
@@ -14787,6 +15961,16 @@ function processCollectedVerificationScan(
   if (match) {
 
     v.scannedIds.add(String(match.id));
+
+    /*
+      Тот же скан, что подтвердил комплектацию, сразу
+      кладёт коробку в текущий поддон — если режим
+      распределения включён. Сканировать дважды не нужно.
+    */
+
+    cvAddBoxToPallet(match);
+
+    cvRefreshPalletGroupsPanel();
 
     beep(true);
 
@@ -32345,6 +33529,16 @@ async function startAuthenticatedApp() {
     */
 
     await loadTasksFromSupabase();
+
+
+    /*
+      Заметки по поддонам — не блокируют запуск
+      приложения, если не удались (см. loadPalletNotes:
+      сама проглатывает ошибку и пишет в консоль), поэтому
+      не оборачиваем в try отдельно.
+    */
+
+    await loadPalletNotes();
 
 
     /*

@@ -2769,6 +2769,10 @@ flex: 1 1 100%;
 }
 
 .cpb-field > span {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 8px;
 font-size: 11px;
 font-weight: 600;
 color: #777;
@@ -2887,4 +2891,149 @@ flex: 1 1 100%;
 flex: 1 1 100%;
 }
 
+}
+
+/* =========================================================
+СОБРАНО — ЧИПЫ ПОДДОНА / НАПРАВЛЕНИЯ В ТАБЛИЦЕ
+========================================================= */
+
+.pallet-chip {
+display: inline-flex;
+align-items: center;
+gap: 5px;
+padding: 4px 9px;
+border-radius: 999px;
+background: #111;
+color: #fff;
+font-weight: 600;
+font-size: 12px;
+white-space: nowrap;
+}
+
+.pallet-chip .icon {
+width: 12px;
+height: 12px;
+stroke-width: 2.2;
+}
+
+.pallet-note-dot {
+width: 7px;
+height: 7px;
+border-radius: 50%;
+background: #f5a623;
+flex-shrink: 0;
+}
+
+.direction-chip {
+display: inline-flex;
+align-items: center;
+gap: 5px;
+padding: 4px 9px;
+border-radius: 999px;
+background: #eef2ff;
+color: #111;
+font-weight: 600;
+font-size: 12px;
+white-space: nowrap;
+}
+
+.direction-chip .icon {
+width: 12px;
+height: 12px;
+stroke-width: 2.2;
+}
+
+
+/* =========================================================
+СОБРАНО — СПИСОК УЖЕ СФОРМИРОВАННЫХ ПОДДОНОВ
+(collectedPalletBuilderHtml)
+========================================================= */
+
+.cpb-existing {
+display: flex;
+flex-wrap: wrap;
+align-items: center;
+gap: 8px;
+margin-bottom: 12px;
+}
+
+.cpb-existing-label {
+font-size: 12px;
+color: #777;
+font-weight: 600;
+}
+
+.cpb-existing-btn {
+display: inline-flex;
+align-items: center;
+gap: 6px;
+padding: 6px 11px;
+border: 1px solid var(--line);
+border-radius: 999px;
+background: #fff;
+font-size: 12px;
+font-weight: 600;
+cursor: pointer;
+}
+
+.cpb-existing-btn:hover {
+background: #f5f5f5;
+}
+
+.cpb-existing-btn.is-current {
+background: #111;
+border-color: #111;
+color: #fff;
+}
+
+.cpb-existing-btn small {
+font-weight: 700;
+opacity: .7;
+}
+
+
+/* =========================================================
+ЗАМЕТКА ПО ПОДДОНУ
+(используется и в «Собрано», и в «Проверке скомплектованного»)
+========================================================= */
+
+.cpb-field textarea {
+padding: 9px 11px;
+border: 1px solid var(--line);
+border-radius: 10px;
+background: #fff;
+outline: none;
+font: inherit;
+resize: vertical;
+}
+
+.cpb-field textarea:focus {
+border-color: #111;
+}
+
+.cpb-note-save {
+margin-left: 8px;
+border: 0;
+background: transparent;
+color: #111;
+font-size: 11px;
+font-weight: 700;
+text-decoration: underline;
+cursor: pointer;
+padding: 0;
+}
+
+
+/* =========================================================
+ПРОВЕРКА СКОМПЛЕКТОВАННОГО — ПАНЕЛЬ ПОДДОНОВ
+(встроена в модальное окно проверки)
+========================================================= */
+
+.cv-pallet-panel {
+margin: 0 0 12px;
+padding: 14px;
+}
+
+.cv-pallet-panel .cpb-groups {
+margin-bottom: 4px;
 }
