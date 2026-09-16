@@ -31379,6 +31379,34 @@ function render() {
           isActive
         );
 
+
+        /*
+          Иконка красится не только через CSS-класс.
+
+          Причина: иконки — это <use href="#icon-...">
+          на символ из общего спрайта. Цвет им обычно
+          передаётся наследованием currentColor из
+          .nav.active. Формально это должно работать
+          во всех браузерах, но на практике встречается
+          баг WebKit/старых WebView: когда меняется
+          только класс родителя (без изменения самого
+          узла <svg>/<use>), браузер не пересчитывает
+          цвет внутри содержимого, подставленного через
+          <use>, — фон и подпись перекрашиваются, а
+          иконка «зависает» в прежнем цвете.
+
+          Поэтому здесь цвет иконки проставляется явно,
+          инлайн-стилем, на каждый render() — так он
+          гарантированно пересчитывается в любом
+          браузере, независимо от того, срабатывает
+          там наследование через <use> или нет.
+        */
+
+        applyNavIconColor(
+          button,
+          isActive
+        );
+
       }
     );
 
@@ -31391,11 +31419,19 @@ function render() {
     .forEach(
       button => {
 
-        button.classList.toggle(
-          'active',
+        const mobileActive =
           !state.activeTool &&
           button.dataset.page ===
-            state.currentPage
+            state.currentPage;
+
+        button.classList.toggle(
+          'active',
+          mobileActive
+        );
+
+        applyNavIconColor(
+          button,
+          mobileActive
         );
 
       }
@@ -31742,6 +31778,81 @@ function updateAssemblyBadges() {
 /* =========================================================
    GLOBAL EVENTS
    ========================================================= */
+
+/* =========================================================
+   ЦВЕТ ИКОНКИ АКТИВНОГО ПУНКТА МЕНЮ
+
+   См. комментарий в render() — почему это не отдаётся
+   целиком на откуп CSS-наследованию через <use>.
+
+   Красит саму SVG (stroke + color, для точек-заливок
+   внутри некоторых иконок) и, отдельно, сам узел <use> —
+   на случай если конкретный браузер пересчитывает
+   наследуемые свойства для контента внутри <use> только
+   от его непосредственного родителя, а не от более
+   дальних предков.
+   ========================================================= */
+
+function applyNavIconColor(
+  button,
+  isActive
+) {
+
+  const svg =
+    button.querySelector(
+      '.icon'
+    );
+
+  if (!svg) {
+    return;
+  }
+
+  const useEl =
+    svg.querySelector(
+      'use'
+    );
+
+  const color =
+    isActive
+      ? '#fff'
+      : '';
+
+  [svg, useEl].forEach(
+    node => {
+
+      if (!node) {
+        return;
+      }
+
+      if (isActive) {
+
+        node.style.setProperty(
+          'color',
+          color
+        );
+
+        node.style.setProperty(
+          'stroke',
+          color
+        );
+
+      } else {
+
+        node.style.removeProperty(
+          'color'
+        );
+
+        node.style.removeProperty(
+          'stroke'
+        );
+
+      }
+
+    }
+  );
+
+}
+
 
 function setupNavigation() {
 

@@ -398,7 +398,19 @@ color: #fff;
 color: #fff;
 }
 
-.nav.active .icon {
+/*
+  CSS-часть подсветки иконки. Основную работу в браузерах
+  с багом наследования currentColor через <use> (см.
+  applyNavIconColor() в app.js) делает инлайн-стиль —
+  он ставится на каждый render() и имеет наивысший
+  приоритет. Правила ниже остаются как база для
+  браузеров, где наследование работает штатно, и как
+  запасной вариант, если JS почему-то не успел
+  отработать (первая отрисовка до полной загрузки и т.п.).
+*/
+
+.nav.active .icon,
+.nav.active .icon use {
 color: #fff;
 stroke: #fff;
 stroke-width: 1.95;
@@ -542,7 +554,8 @@ color: #111;
 color: #111;
 }
 
-.mobile-nav-btn.active .icon {
+.mobile-nav-btn.active .icon,
+.mobile-nav-btn.active .icon use {
 color: #111;
 stroke: #111;
 stroke-width: 2;
