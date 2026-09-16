@@ -873,155 +873,6 @@
 
 
 /* ============================================================
-   ГЛАВНАЯ — ВИДЖЕТ ЗАДАЧ ПЛАНИРОВЩИКА
-
-   Блок «Задачи» на Главной — это витрина того же
-   planner_tasks, что показывает страница «Задачи»
-   (Планировщик). Поэтому его стили живут здесь, рядом
-   с планировщиком, а не в отдельном файле.
-   ============================================================ */
-
-.sp-dashboard-block-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.sp-dashboard-block-head h2 {
-  margin: 0;
-  font-size: 17px;
-}
-
-
-/* ---- строка быстрого добавления ---- */
-
-.home-task-add-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.home-task-add-row input {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid #ddd;
-  border-radius: 10px;
-  padding: 9px 12px;
-  font-size: 14px;
-  outline: none;
-}
-
-.home-task-add-row input:focus {
-  border-color: #111;
-}
-
-.home-task-add-row .sp-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  padding: 9px 12px;
-}
-
-.home-task-add-row .sp-btn .icon {
-  width: 16px;
-  height: 16px;
-}
-
-
-/* ---- иконочная кнопка (звезда) ---- */
-
-.task-icon-btn {
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: #999;
-  cursor: pointer;
-}
-
-.task-icon-btn .icon {
-  width: 16px;
-  height: 16px;
-}
-
-.task-icon-btn:hover {
-  background: #f2f2f2;
-  color: #111;
-}
-
-.task-icon-btn.is-active {
-  color: #d99a00;
-}
-
-
-/* ---- список задач на Главной ---- */
-
-.home-task-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.home-task-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.home-task-row:last-child {
-  border-bottom: 0;
-}
-
-.home-task-toggle {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  cursor: pointer;
-  accent-color: #111;
-}
-
-.home-task-title {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.home-task-favorite {
-  width: 26px;
-  height: 26px;
-}
-
-.home-task-date {
-  flex-shrink: 0;
-  font-size: 11px;
-}
-
-.task-overdue-badge {
-  flex-shrink: 0;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #b42318;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-
-/* ============================================================
    ПАНЕЛЬ УПРАВЛЕНИЯ КАЛЕНДАРЁМ
 
    Заголовок страницы живёт в topbar, поэтому внутри
@@ -1065,4 +916,61 @@
 
 .planner-icon-button.is-active {
   color: #d99a00;
+}
+
+
+/* ---- маркеры дня в календаре ---- */
+
+.planner-event-dot {
+  gap: 3px;
+}
+
+.planner-event-dot .icon {
+  width: 11px;
+  height: 11px;
+  stroke-width: 2;
+}
+
+
+/* ---- задача из раздела «Задачи» ---- */
+
+.planner-card-external {
+  border-style: dashed;
+}
+
+.planner-card-external .planner-card-time .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.planner-card-title-done {
+  text-decoration: line-through;
+  color: #999;
+}
+
+.planner-list-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.planner-button-small {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+
+/* ---- просроченная задача ---- */
+
+.planner-overdue {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #b42318;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
 }

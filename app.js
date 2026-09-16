@@ -814,8 +814,8 @@ inventory: {
 
   /* =======================================================
      ЗАДАЧИ
-     Состояние задач здесь не хранится — единственный
-     источник задач это planner.js / planner_tasks.
+     Состояние задач здесь не хранится — см. tasksState
+     в tasks.js.
      ======================================================= */
 
 
@@ -865,6 +865,39 @@ inventory: {
   /* =======================================================
      ПЕРЕМЕЩЕНИЕ (Задача №4)
      ======================================================= */
+
+  /* =======================================================
+     СОБРАНО: ФОРМИРОВАНИЕ ПОДДОНОВ К ОТГРУЗКЕ
+
+     Черновик. Пока пользователь сканирует — ничего в
+     Supabase не пишется, всё лежит здесь. Запись
+     происходит только по явной кнопке.
+
+     groups: [{ label: '1', ids: ['uuid', ...] }]
+     ======================================================= */
+
+  collectedPalletBuild: {
+
+    open: false,
+
+    /* фильтр: сканировать только это направление */
+    direction: '',
+
+    /* к какому поддону добавляются сканы */
+    currentLabel: '1',
+
+    /* необязательная приставка к номеру: 'ОТГР-' и т.п. */
+    prefix: '',
+
+    groups: [],
+
+    /* куда вернуть/переместить */
+    targetWarehouse: '',
+    targetZone: '',
+    targetPallet: ''
+
+  },
+
 
   move: {
 
@@ -1218,11 +1251,14 @@ function parseToolDataLine(line) {
 /* =========================================================
    ЗАДАЧИ
 
-   Отдельного модуля задач больше нет. Единственный
-   задачник проекта — Планировщик (planner.js, таблица
-   planner_tasks). Оттуда же берётся виджет «Задачи»
-   на Главной: window.plannerHomeTasksHtml() и
-   window.setupPlannerHomeTasks().
+   Список дел живёт в tasks.js (таблица public.tasks):
+   tasksState, CRUD, tasksView()/setupTasks() и виджет
+   Главной homeTasksListHtml()/setupHomeTasksWidget().
+
+   Календарь Планировщика (planner.js) читает этот же
+   tasksState, чтобы показывать задачи рядом с
+   отгрузками — это связь между разделами, а не копия
+   данных.
    ========================================================= */
 
 
@@ -6201,7 +6237,7 @@ function baseView() {
 
         <button
           class="sp-btn secondary"
-          data-page="planner"
+          data-page="tasks"
         >
           Задачи
         </button>
@@ -12492,6 +12528,9 @@ function collectedView() {
     </div>
 
 
+    ${collectedPalletBuilderHtml(directions)}
+
+
     <div class="sp-table-wrap">
 
       <table class="sp-table">
@@ -12703,6 +12742,1102 @@ function collectedRow(row) {
 }
 
 /* =========================================================
+   СОБРАНО — ФОРМИРОВАНИЕ ПОДДОНОВ К ОТГРУЗКЕ
+
+   Сценарий кладовщика:
+
+     1. выбрал направление;
+     2. сканером набил коробки на поддон №1;
+     3. нажал «Новый поддон», набил №2, №3...;
+     4. нажал «Сформировать» — номера поддонов
+        записались коробкам одной операцией;
+     5. если поддон нужно убрать с отгрузки —
+        «Переместить на склад» (сменить адрес) или
+        «Вернуть на склад» (снять статус
+        «Скомплектовано»).
+
+   Пока идёт сканирование, в Supabase не уходит НИЧЕГО —
+   всё лежит в state.collectedPalletBuild. Это черновик,
+   его можно очистить без последствий.
+
+   Запись делается уже существующей RPC sp_move_boxes
+   (та же, что у раздела «Перемещение»), поэтому история
+   в box_movements пишется сама и правило
+   «1 штрихкод = 1 физическая коробка» не нарушается.
+   ========================================================= */
+
+
+function cpbState() {
+
+  return state.collectedPalletBuild;
+
+}
+
+
+function cpbGroup(label) {
+
+  return cpbState().groups.find(
+    group =>
+      group.label === label
+  );
+
+}
+
+
+function cpbAllIds() {
+
+  return cpbState().groups.reduce(
+    (acc, group) =>
+      acc.concat(group.ids),
+    []
+  );
+}
+
+
+function cpbFindGroupByBoxId(id) {
+
+  return cpbState().groups.find(
+    group =>
+      group.ids.includes(id)
+  );
+}
+
+
+function cpbNextLabel() {
+
+  const numbers =
+    cpbState().groups
+      .map(group =>
+        parseInt(group.label, 10)
+      )
+      .filter(value =>
+        Number.isFinite(value)
+      );
+
+  return String(
+    (numbers.length
+      ? Math.max(...numbers)
+      : 0) + 1
+  );
+
+}
+
+
+function cpbPalletValue(label) {
+
+  return normalizeText(
+    (cpbState().prefix || '') + label
+  );
+
+}
+
+
+function cpbBoxById(id) {
+
+  return state.boxes.find(
+    row =>
+      String(row.id) === String(id)
+  );
+
+}
+
+
+/* ---------------------------------------------------------
+   СКАНИРОВАНИЕ
+   --------------------------------------------------------- */
+
+function cpbScanBarcode(rawValue) {
+
+  const build =
+    cpbState();
+
+  const barcode =
+    normalizeBarcode(rawValue);
+
+  if (!barcode) {
+    return;
+  }
+
+
+  /*
+    Берём только скомплектованные коробки — поддон к
+    отгрузке собирается из них, а не из складского
+    остатка.
+  */
+
+  const candidates =
+    state.boxes.filter(
+      row =>
+        row.status === STATUSES.COLLECTED &&
+        normalizeBarcode(row.barcode) === barcode
+    );
+
+
+  if (!candidates.length) {
+
+    toast(
+      `Штрихкод ${barcode} не найден среди скомплектованных`,
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  const direction =
+    normalizeText(build.direction);
+
+
+  /*
+    Одна и та же коробка не может лежать на двух
+    поддонах — ищем первую ещё не разложенную.
+  */
+
+  const free =
+    candidates.find(
+      row =>
+        !cpbFindGroupByBoxId(
+          String(row.id)
+        )
+    );
+
+
+  if (!free) {
+
+    const group =
+      cpbFindGroupByBoxId(
+        String(candidates[0].id)
+      );
+
+    toast(
+      `Коробка ${barcode} уже на поддоне ${group ? group.label : '—'}`,
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  if (
+    direction &&
+    normalizeText(free.direction) !== direction
+  ) {
+
+    toast(
+      `Коробка ${barcode} с направлением "${free.direction || '—'}", а не "${direction}"`,
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  const label =
+    normalizeText(build.currentLabel) || '1';
+
+  let group =
+    cpbGroup(label);
+
+  if (!group) {
+
+    group = {
+      label,
+      ids: []
+    };
+
+    build.groups.push(group);
+
+  }
+
+  group.ids.push(
+    String(free.id)
+  );
+
+  build.currentLabel = label;
+
+  render();
+
+}
+
+
+/* ---------------------------------------------------------
+   ЗАПИСЬ В SUPABASE
+   --------------------------------------------------------- */
+
+async function cpbApplyPallets() {
+
+  const build =
+    cpbState();
+
+  const groups =
+    build.groups.filter(
+      group =>
+        group.ids.length
+    );
+
+  if (!groups.length) {
+
+    toast(
+      'Сначала отсканируйте коробки',
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  const preview =
+    groups
+      .map(group =>
+        `${cpbPalletValue(group.label)} — ${group.ids.length}`
+      )
+      .join('\n');
+
+  if (
+    !confirm(
+      `Записать номера поддонов?\n\n${preview}`
+    )
+  ) {
+    return;
+  }
+
+
+  const operator =
+    state.user?.email || null;
+
+  let updated = 0;
+
+  try {
+
+    for (const group of groups) {
+
+      const {
+        data,
+        error
+      } =
+        await supabaseClient
+          .rpc('sp_move_boxes', {
+            p_box_ids: group.ids,
+            p_target_warehouse: null,
+            p_target_zone: null,
+            p_target_pallet: cpbPalletValue(group.label),
+            p_operator: operator,
+            p_reason: 'pallet_build'
+          });
+
+      if (error) {
+        throw error;
+      }
+
+      (Array.isArray(data) ? data : [])
+        .forEach(row => {
+
+          updateLocalBox(
+            row.id,
+            mapDbBoxRow(row)
+          );
+
+          updated += 1;
+
+        });
+
+    }
+
+    build.groups = [];
+    build.currentLabel = '1';
+
+    render();
+
+    toast(
+      `Поддоны сформированы. Коробок: ${updated}`
+    );
+
+  } catch (error) {
+
+    console.error(
+      'cpbApplyPallets:',
+      error
+    );
+
+    toast(
+      error?.message ||
+      'Ошибка формирования поддонов',
+      'error'
+    );
+
+    render();
+
+  }
+
+}
+
+
+async function cpbMoveToWarehouse() {
+
+  const build =
+    cpbState();
+
+  const ids =
+    cpbAllIds();
+
+  if (!ids.length) {
+
+    toast(
+      'Сначала отсканируйте коробки',
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  const warehouse =
+    normalizeText(build.targetWarehouse);
+
+  const zone =
+    normalizeText(build.targetZone);
+
+  const pallet =
+    normalizeText(build.targetPallet);
+
+
+  if (
+    !warehouse &&
+    !zone &&
+    !pallet
+  ) {
+
+    toast(
+      'Укажите склад, зону или поддон назначения',
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  if (
+    !confirm(
+      `Переместить ${ids.length} коробок в: ${warehouse || '—'} / ${zone || '—'} / ${pallet || '—'}?`
+    )
+  ) {
+    return;
+  }
+
+
+  try {
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .rpc('sp_move_boxes', {
+          p_box_ids: ids,
+          p_target_warehouse: warehouse || null,
+          p_target_zone: zone || null,
+          p_target_pallet: pallet || null,
+          p_operator: state.user?.email || null,
+          p_reason: 'move'
+        });
+
+    if (error) {
+      throw error;
+    }
+
+    (Array.isArray(data) ? data : [])
+      .forEach(row => {
+
+        updateLocalBox(
+          row.id,
+          mapDbBoxRow(row)
+        );
+
+      });
+
+    build.groups = [];
+    build.currentLabel = '1';
+
+    render();
+
+    toast(
+      `Перемещено: ${ids.length}`
+    );
+
+  } catch (error) {
+
+    console.error(
+      'cpbMoveToWarehouse:',
+      error
+    );
+
+    toast(
+      error?.message ||
+      'Ошибка перемещения',
+      'error'
+    );
+
+  }
+
+}
+
+
+async function cpbReturnToStock() {
+
+  const build =
+    cpbState();
+
+  const ids =
+    cpbAllIds();
+
+  if (!ids.length) {
+
+    toast(
+      'Сначала отсканируйте коробки',
+      'error'
+    );
+
+    return;
+
+  }
+
+
+  if (
+    !confirm(
+      `Вернуть ${ids.length} коробок из «Скомплектовано» в «На складе»?\n\nОни пропадут из раздела «Собрано» и снова станут обычным складским остатком.`
+    )
+  ) {
+    return;
+  }
+
+
+  try {
+
+    /*
+      Тот же приём, что и в «убрать из сборки»:
+      меняем только статус и с защитой .eq по
+      текущему статусу — чтобы случайно не тронуть
+      уже отгруженные коробки.
+
+      collected_at / collected_by намеренно не
+      обнуляем — это история, она никуда не девается.
+    */
+
+    const {
+      data,
+      error
+    } =
+      await supabaseClient
+        .from('boxes')
+        .update({
+
+          "Статус":
+            STATUSES.STOCK,
+
+          "Изменил":
+            state.user?.email ||
+            null
+
+        })
+        .in('id', ids)
+        .eq('Статус', STATUSES.COLLECTED)
+        .select(BOX_SELECT);
+
+    if (error) {
+      throw error;
+    }
+
+    (Array.isArray(data) ? data : [])
+      .forEach(row => {
+
+        updateLocalBox(
+          row.id,
+          row
+        );
+
+      });
+
+    build.groups = [];
+    build.currentLabel = '1';
+
+    render();
+
+    toast(
+      `Возвращено на склад: ${data?.length || 0}`
+    );
+
+  } catch (error) {
+
+    console.error(
+      'cpbReturnToStock:',
+      error
+    );
+
+    toast(
+      error?.message ||
+      'Ошибка возврата на склад',
+      'error'
+    );
+
+  }
+
+}
+
+
+/* ---------------------------------------------------------
+   РАЗМЕТКА
+   --------------------------------------------------------- */
+
+function collectedPalletBuilderHtml(directions) {
+
+  const build =
+    cpbState();
+
+  if (!build.open) {
+
+    return `
+      <div class="sp-toolbar">
+
+        <button
+          class="sp-btn secondary"
+          id="cpbToggle"
+          type="button"
+        >
+          Формирование поддонов к отгрузке
+        </button>
+
+      </div>
+    `;
+
+  }
+
+
+  const total =
+    cpbAllIds().length;
+
+  return `
+
+    <div class="sp-card cpb">
+
+      <div class="cpb-head">
+
+        <h3>
+          Формирование поддонов к отгрузке
+        </h3>
+
+        <button
+          class="sp-btn secondary"
+          id="cpbToggle"
+          type="button"
+        >
+          Свернуть
+        </button>
+
+      </div>
+
+
+      <div class="cpb-row">
+
+        <label class="cpb-field">
+
+          <span>Направление</span>
+
+          <select id="cpbDirection">
+
+            <option value="">
+              Любое
+            </option>
+
+            ${directions.map(direction => `
+              <option
+                value="${escapeHtml(direction)}"
+                ${
+                  normalizeText(build.direction) === direction
+                    ? 'selected'
+                    : ''
+                }
+              >
+                ${escapeHtml(direction)}
+              </option>
+            `).join('')}
+
+          </select>
+
+        </label>
+
+
+        <label class="cpb-field cpb-field-narrow">
+
+          <span>Приставка</span>
+
+          <input
+            id="cpbPrefix"
+            type="text"
+            placeholder="напр. ОТГР-"
+            value="${escapeHtml(build.prefix || '')}"
+          >
+
+        </label>
+
+
+        <label class="cpb-field cpb-field-narrow">
+
+          <span>Поддон №</span>
+
+          <input
+            id="cpbLabel"
+            type="text"
+            value="${escapeHtml(build.currentLabel || '1')}"
+          >
+
+        </label>
+
+
+        <button
+          class="sp-btn secondary"
+          id="cpbNewPallet"
+          type="button"
+        >
+          Новый поддон
+        </button>
+
+      </div>
+
+
+      <div class="cpb-row">
+
+        <label class="cpb-field cpb-field-wide">
+
+          <span>
+            Сканирование в поддон
+            ${escapeHtml(cpbPalletValue(build.currentLabel || '1'))}
+          </span>
+
+          <input
+            id="cpbScan"
+            type="text"
+            inputmode="none"
+            autocomplete="off"
+            placeholder="Отсканируйте штрихкод и нажмите Enter"
+          >
+
+        </label>
+
+      </div>
+
+
+      ${
+        build.groups.length
+
+          ? `
+            <div class="cpb-groups">
+
+              ${build.groups.map(group => `
+
+                <div class="cpb-group">
+
+                  <div class="cpb-group-head">
+
+                    <b>
+                      Поддон ${escapeHtml(cpbPalletValue(group.label))}
+                    </b>
+
+                    <span class="sp-muted">
+                      коробок: ${group.ids.length}
+                    </span>
+
+                    <button
+                      class="sp-btn secondary cpb-group-remove"
+                      type="button"
+                      data-cpb-remove-group="${escapeHtml(group.label)}"
+                    >
+                      Убрать поддон
+                    </button>
+
+                  </div>
+
+                  <div class="cpb-boxes">
+
+                    ${group.ids.map(id => {
+
+                      const row =
+                        cpbBoxById(id);
+
+                      return `
+                        <span class="cpb-box">
+
+                          ${escapeHtml(
+                            row
+                              ? row.barcode
+                              : id
+                          )}
+
+                          <button
+                            type="button"
+                            class="cpb-box-remove"
+                            data-cpb-remove-box="${escapeHtml(id)}"
+                            title="Убрать коробку"
+                          >
+                            <svg class="icon"><use href="#icon-x"></use></svg>
+                          </button>
+
+                        </span>
+                      `;
+
+                    }).join('')}
+
+                  </div>
+
+                </div>
+
+              `).join('')}
+
+            </div>
+          `
+
+          : `
+            <div class="sp-muted cpb-empty">
+              Пока ничего не отсканировано.
+            </div>
+          `
+      }
+
+
+      <div class="cpb-row cpb-target">
+
+        <label class="cpb-field">
+
+          <span>Склад назначения</span>
+
+          <input
+            id="cpbTargetWarehouse"
+            type="text"
+            value="${escapeHtml(build.targetWarehouse || '')}"
+          >
+
+        </label>
+
+        <label class="cpb-field">
+
+          <span>Зона / ряд</span>
+
+          <input
+            id="cpbTargetZone"
+            type="text"
+            value="${escapeHtml(build.targetZone || '')}"
+          >
+
+        </label>
+
+        <label class="cpb-field">
+
+          <span>Поддон</span>
+
+          <input
+            id="cpbTargetPallet"
+            type="text"
+            value="${escapeHtml(build.targetPallet || '')}"
+          >
+
+        </label>
+
+      </div>
+
+
+      <div class="cpb-actions">
+
+        <button
+          class="sp-btn success"
+          id="cpbApply"
+          type="button"
+          ${total ? '' : 'disabled'}
+        >
+          Сформировать поддоны (${total})
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          id="cpbMove"
+          type="button"
+          ${total ? '' : 'disabled'}
+        >
+          Переместить на склад
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          id="cpbReturn"
+          type="button"
+          ${total ? '' : 'disabled'}
+        >
+          Вернуть на склад
+        </button>
+
+        <button
+          class="sp-btn secondary"
+          id="cpbClear"
+          type="button"
+          ${total ? '' : 'disabled'}
+        >
+          Очистить черновик
+        </button>
+
+      </div>
+
+    </div>
+
+  `;
+
+}
+
+
+function setupCollectedPalletBuilder() {
+
+  const build =
+    cpbState();
+
+
+  $('#cpbToggle')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        build.open = !build.open;
+
+        render();
+
+      }
+    );
+
+
+  if (!build.open) {
+    return;
+  }
+
+
+  $('#cpbDirection')
+    ?.addEventListener(
+      'change',
+      event => {
+
+        build.direction =
+          normalizeText(event.target.value);
+
+      }
+    );
+
+
+  $('#cpbPrefix')
+    ?.addEventListener(
+      'input',
+      event => {
+
+        build.prefix =
+          event.target.value;
+
+      }
+    );
+
+
+  $('#cpbLabel')
+    ?.addEventListener(
+      'input',
+      event => {
+
+        build.currentLabel =
+          event.target.value;
+
+      }
+    );
+
+
+  $('#cpbNewPallet')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        build.currentLabel =
+          cpbNextLabel();
+
+        render();
+
+      }
+    );
+
+
+  const scanInput =
+    $('#cpbScan');
+
+  scanInput
+    ?.addEventListener(
+      'keydown',
+      event => {
+
+        if (event.key !== 'Enter') {
+          return;
+        }
+
+        event.preventDefault();
+
+        const value =
+          event.target.value;
+
+        event.target.value = '';
+
+        cpbScanBarcode(value);
+
+      }
+    );
+
+  scanInput?.focus();
+
+
+  $all('[data-cpb-remove-box]')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          const id =
+            button.dataset.cpbRemoveBox;
+
+          build.groups.forEach(group => {
+
+            group.ids =
+              group.ids.filter(
+                item =>
+                  item !== id
+              );
+
+          });
+
+          build.groups =
+            build.groups.filter(
+              group =>
+                group.ids.length
+            );
+
+          render();
+
+        }
+      );
+
+    });
+
+
+  $all('[data-cpb-remove-group]')
+    .forEach(button => {
+
+      button.addEventListener(
+        'click',
+        () => {
+
+          const label =
+            button.dataset.cpbRemoveGroup;
+
+          build.groups =
+            build.groups.filter(
+              group =>
+                group.label !== label
+            );
+
+          render();
+
+        }
+      );
+
+    });
+
+
+  $('#cpbTargetWarehouse')
+    ?.addEventListener(
+      'input',
+      event => {
+
+        build.targetWarehouse =
+          event.target.value;
+
+      }
+    );
+
+
+  $('#cpbTargetZone')
+    ?.addEventListener(
+      'input',
+      event => {
+
+        build.targetZone =
+          event.target.value;
+
+      }
+    );
+
+
+  $('#cpbTargetPallet')
+    ?.addEventListener(
+      'input',
+      event => {
+
+        build.targetPallet =
+          event.target.value;
+
+      }
+    );
+
+
+  $('#cpbApply')
+    ?.addEventListener(
+      'click',
+      cpbApplyPallets
+    );
+
+
+  $('#cpbMove')
+    ?.addEventListener(
+      'click',
+      cpbMoveToWarehouse
+    );
+
+
+  $('#cpbReturn')
+    ?.addEventListener(
+      'click',
+      cpbReturnToStock
+    );
+
+
+  $('#cpbClear')
+    ?.addEventListener(
+      'click',
+      () => {
+
+        if (
+          !confirm(
+            'Очистить черновик поддонов? В базе ничего не изменится.'
+          )
+        ) {
+          return;
+        }
+
+        build.groups = [];
+        build.currentLabel = '1';
+
+        render();
+
+      }
+    );
+
+}
+
+
+/* =========================================================
    SELECT ALL COLLECTED
    ========================================================= */
 
@@ -12882,6 +14017,8 @@ async function setDirectionForCollected() {
 function setupCollected() {
 
   setupQuickToolsBar();
+
+  setupCollectedPalletBuilder();
 
   $('#collectedDateFilter')
     ?.addEventListener(
@@ -15508,9 +16645,9 @@ function setupMove() {
    ========================================================= */
 
 /*
-  Список задач на Главной рисует планировщик —
-  window.plannerHomeTasksHtml() в planner.js.
-  Отдельного массива задач у Главной нет.
+  homeTasksListHtml() определён в tasks.js —
+  Главная и страница «Задачи» читают один и тот же
+  tasksState.
 */
 
 function dashboardView() {
@@ -15975,7 +17112,7 @@ Excel:
         <button
           class="ghost"
           type="button"
-          data-page="planner"
+          data-page="tasks"
         >
           Все задачи →
         </button>
@@ -16010,7 +17147,7 @@ Excel:
       </div>
 
       <div id="homeTasksList">
-        ${window.plannerHomeTasksHtml()}
+        ${homeTasksListHtml()}
       </div>
 
     </div>
@@ -17165,7 +18302,7 @@ function setupDashboard() {
     с одними и теми же данными в Supabase.
   */
 
-  window.setupPlannerHomeTasks();
+  setupHomeTasksWidget();
 
 
   /*
@@ -29894,21 +31031,34 @@ received: {
 
 
   /*
-    Единственный маршрут задач.
+    Два самостоятельных раздела:
 
-    В меню пункт называется «Задачи», внутри
-    открывается полноценный Планировщик (planner.js) —
-    отсюда и заголовок. Отдельного маршрута 'tasks'
-    больше нет, см. алиас в goToPage().
+      tasks   — список дел (tasks.js, public.tasks)
+      planner — календарь (planner.js, planner_*)
+
+    Связь между ними живёт в календаре Планировщика:
+    он показывает и свои задачи, и задачи из раздела
+    «Задачи» (по полю due_date), и умеет открыть их там.
   */
 
   planner: {
 
     title:
+      'Планировщик',
+
+    heading:
+      'Отгрузки, задачи и планы склада'
+
+  },
+
+
+  tasks: {
+
+    title:
       'Задачи',
 
     heading:
-      'Планировщик задач и отгрузок'
+      'Список задач'
 
   },
 
@@ -29982,24 +31132,6 @@ function goToPage(
   ) {
 
     document.activeElement.blur();
-
-  }
-
-
-  /*
-    Совместимость со старой схемой маршрутов.
-
-    Раньше «Задачи» были отдельной страницей
-    (tasks.js + public.tasks). Теперь задачи живут
-    только в Планировщике, поэтому любой оставшийся
-    где-то data-page="tasks" ведёт туда же, а не
-    на несуществующую страницу.
-  */
-
-  if (page === 'tasks') {
-
-    page =
-      'planner';
 
   }
 
@@ -30439,6 +31571,16 @@ function render() {
         toolsView();
 
       setupTools();
+
+      break;
+
+
+    case 'tasks':
+
+      content.innerHTML =
+        tasksView();
+
+      setupTasks();
 
       break;
 
@@ -31087,15 +32229,22 @@ async function startAuthenticatedApp() {
 
 
     /*
-      Планировщик (planner.js) — задачи и отгрузки.
+      Задачи (tasks.js, public.tasks) — нужны сразу:
+      блок «Задачи» есть на Главной.
+    */
 
-      Грузим здесь, а не при первом открытии страницы
-      «Задачи», потому что блок «Задачи» на Главной
-      показывает те же самые planner_tasks и должен
-      быть заполнен сразу после входа.
+    await loadTasksFromSupabase();
+
+
+    /*
+      Планировщик (planner.js) — грузим здесь же, потому
+      что его календарь показывает и задачи из раздела
+      «Задачи», и наоборот: обе стороны связи должны быть
+      в памяти независимо от того, какую страницу
+      пользователь откроет первой.
 
       rerender=false: render() ниже вызывается один раз
-      сам, второй перерисовки не нужно.
+      сам, вторая перерисовка не нужна.
     */
 
     await window.plannerLoadFromSupabase(false);

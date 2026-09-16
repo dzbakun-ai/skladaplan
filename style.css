@@ -376,7 +376,31 @@ background: #111;
 color: #fff;
 }
 
+/*
+  Подсветка и значок — одно целое.
+
+  Цвет задаётся явно на контейнере иконки, подписи и на
+  самой SVG, а не только наследуется от .nav через
+  currentColor. Причина: внутри <use>, ссылающегося на
+  <symbol> из спрайта, унаследованный currentColor в
+  части браузеров (заметнее всего в WebKit на iOS) не
+  пересчитывается при смене класса — фон пункта
+  становился чёрным, а линия иконки оставалась тёмной,
+  и значок «выпадал» из выделения.
+
+  color здесь нужен не только тексту: у части символов
+  спрайта внутренние точки залиты fill="currentColor".
+*/
+
+.nav.active .nav-icon,
+.nav.active .nav-label,
+.nav.active > span {
+color: #fff;
+}
+
 .nav.active .icon {
+color: #fff;
+stroke: #fff;
 stroke-width: 1.95;
 }
 
@@ -513,7 +537,14 @@ background: #f2f2f2;
 color: #111;
 }
 
+.mobile-nav-btn.active > span,
+.mobile-nav-btn.active > small {
+color: #111;
+}
+
 .mobile-nav-btn.active .icon {
+color: #111;
+stroke: #111;
 stroke-width: 2;
 }
 
@@ -2677,3 +2708,170 @@ body.viewer-mode .viewer-edit-only {
   cursor: not-allowed !important;
 }
 
+
+/* =========================================================
+СОБРАНО — ФОРМИРОВАНИЕ ПОДДОНОВ К ОТГРУЗКЕ
+(разметку строит collectedPalletBuilderHtml() в app.js)
+========================================================= */
+
+.cpb {
+margin-bottom: 12px;
+}
+
+.cpb-head {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 10px;
+margin-bottom: 14px;
+}
+
+.cpb-head h3 {
+margin: 0;
+font-size: 16px;
+}
+
+.cpb-row {
+display: flex;
+flex-wrap: wrap;
+align-items: flex-end;
+gap: 10px;
+margin-bottom: 12px;
+}
+
+.cpb-field {
+display: flex;
+flex-direction: column;
+gap: 5px;
+min-width: 0;
+flex: 1 1 180px;
+}
+
+.cpb-field-narrow {
+flex: 0 0 120px;
+}
+
+.cpb-field-wide {
+flex: 1 1 100%;
+}
+
+.cpb-field > span {
+font-size: 11px;
+font-weight: 600;
+color: #777;
+letter-spacing: .02em;
+}
+
+.cpb-field input,
+.cpb-field select {
+min-height: 40px;
+padding: 0 11px;
+border: 1px solid var(--line);
+border-radius: 10px;
+background: #fff;
+outline: none;
+}
+
+.cpb-field input:focus,
+.cpb-field select:focus {
+border-color: #111;
+}
+
+#cpbScan {
+font-size: 16px;
+font-weight: 600;
+}
+
+.cpb-empty {
+padding: 14px 0;
+font-size: 13px;
+}
+
+.cpb-groups {
+display: flex;
+flex-direction: column;
+gap: 10px;
+margin-bottom: 14px;
+}
+
+.cpb-group {
+border: 1px solid var(--line);
+border-radius: 12px;
+padding: 12px;
+}
+
+.cpb-group-head {
+display: flex;
+align-items: center;
+flex-wrap: wrap;
+gap: 10px;
+margin-bottom: 9px;
+}
+
+.cpb-group-head .cpb-group-remove {
+margin-left: auto;
+}
+
+.cpb-boxes {
+display: flex;
+flex-wrap: wrap;
+gap: 6px;
+}
+
+.cpb-box {
+display: inline-flex;
+align-items: center;
+gap: 4px;
+padding: 4px 4px 4px 10px;
+border-radius: 999px;
+background: #f4f4f4;
+font-size: 12px;
+font-weight: 600;
+}
+
+.cpb-box-remove {
+width: 20px;
+height: 20px;
+display: inline-grid;
+place-items: center;
+border: 0;
+border-radius: 999px;
+background: transparent;
+color: #888;
+cursor: pointer;
+}
+
+.cpb-box-remove:hover {
+background: #e2e2e2;
+color: #111;
+}
+
+.cpb-box-remove .icon {
+width: 11px;
+height: 11px;
+stroke-width: 2.2;
+}
+
+.cpb-target {
+padding-top: 12px;
+border-top: 1px solid var(--line);
+}
+
+.cpb-actions {
+display: flex;
+flex-wrap: wrap;
+gap: 8px;
+}
+
+@media (max-width: 640px) {
+
+.cpb-field,
+.cpb-field-narrow {
+flex: 1 1 100%;
+}
+
+.cpb-actions .sp-btn {
+flex: 1 1 100%;
+}
+
+}

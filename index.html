@@ -32,6 +32,11 @@
     href="planner.css"
   >
 
+  <link
+    rel="stylesheet"
+    href="tasks.css"
+  >
+
 </head>
 
 
@@ -159,6 +164,27 @@
     <!-- ===================================================
          ИКОНКИ — ЗАДАЧИ (виджет Главной и Планировщик)
          =================================================== -->
+
+    <symbol id="icon-x" viewBox="0 0 24 24">
+      <path d="M6 6l12 12"/>
+      <path d="M18 6L6 18"/>
+    </symbol>
+
+    <symbol id="icon-list" viewBox="0 0 24 24">
+      <path d="M9 6h11"/>
+      <path d="M9 12h11"/>
+      <path d="M9 18h11"/>
+      <circle cx="4.5" cy="6" r="1.1" fill="currentColor" stroke="none"/>
+      <circle cx="4.5" cy="12" r="1.1" fill="currentColor" stroke="none"/>
+      <circle cx="4.5" cy="18" r="1.1" fill="currentColor" stroke="none"/>
+    </symbol>
+
+    <symbol id="icon-truck" viewBox="0 0 24 24">
+      <path d="M3 7h10v9H3z"/>
+      <path d="M13 10h4l3 3v3h-7z"/>
+      <circle cx="7" cy="18" r="1.8"/>
+      <circle cx="17" cy="18" r="1.8"/>
+    </symbol>
 
     <symbol id="icon-star" viewBox="0 0 24 24">
       <path d="M12 3.5l2.6 5.6 6 .7-4.4 4.1 1.2 6-5.4-3-5.4 3 1.2-6-4.4-4.1 6-.7Z"/>
@@ -391,12 +417,29 @@
 
 
         <!--
-          ЗАДАЧИ
+          ЗАДАЧИ — список дел (tasks.js, public.tasks)
+        -->
 
-          Пункт называется «Задачи», а открывает
-          полноценный Планировщик (planner.js).
-          Отдельного пункта «Планировщик» нет —
-          это был второй вход в тот же раздел.
+        <button
+          class="nav"
+          type="button"
+          data-page="tasks"
+        >
+
+          <span class="nav-icon"><svg class="icon"><use href="#icon-list"></use></svg></span>
+
+          <span class="nav-label">
+            Задачи
+          </span>
+
+        </button>
+
+
+        <!--
+          ПЛАНИРОВЩИК — календарь отгрузок и задач
+          (planner.js, planner_shipments / planner_tasks).
+          Календарь показывает и задачи из раздела
+          «Задачи» — это и есть связь между разделами.
         -->
 
         <button
@@ -408,7 +451,7 @@
           <span class="nav-icon"><svg class="icon"><use href="#icon-calendar"></use></svg></span>
 
           <span class="nav-label">
-            Задачи
+            Планировщик
           </span>
 
         </button>
@@ -850,6 +893,15 @@
 
 <script
   src="app.js"
+></script>
+
+
+<!-- =====================================================
+     TASKS
+     ===================================================== -->
+
+<script
+  src="tasks.js"
 ></script>
 
 
