@@ -3250,3 +3250,86 @@ box-shadow: inset 0 -3px 0 #e2e8f0;
 .sidebar .nav-icon > svg.icon use {
   display: block;
 }
+
+/* =========================================================
+   SKLADAPLAN — MOBILE BRAND UI
+   Брендовая верхняя и нижняя навигация.
+   Desktop не затрагивается.
+   ========================================================= */
+
+@media (max-width: 700px) {
+  .topbar {
+    background: var(--primary) !important;
+    color: #fff !important;
+    border-bottom-color: rgba(255, 255, 255, .18) !important;
+    box-shadow: 0 2px 12px rgba(15, 23, 42, .12);
+  }
+
+  .topbar h1,
+  .topbar-title,
+  .crumb,
+  .crumb span {
+    color: #fff !important;
+  }
+
+  .crumb {
+    opacity: .78;
+  }
+
+  .mobile-menu {
+    background: rgba(255, 255, 255, .10) !important;
+    color: #fff !important;
+  }
+
+  .mobile-menu:hover,
+  .mobile-menu:active {
+    background: rgba(255, 255, 255, .18) !important;
+    color: #fff !important;
+  }
+
+  .mobile-nav {
+    background: var(--sidebar-bg) !important;
+    border-top-color: rgba(255, 255, 255, .10) !important;
+    box-shadow: 0 -6px 24px rgba(15, 23, 42, .20) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .mobile-nav-btn {
+    color: #94a3b8 !important;
+    background: transparent !important;
+  }
+
+  .mobile-nav-btn:hover {
+    background: rgba(255, 255, 255, .06) !important;
+    color: #e2e8f0 !important;
+  }
+
+  .mobile-nav-btn.active {
+    background: var(--primary) !important;
+    color: #fff !important;
+  }
+
+  .mobile-nav-btn.active > span,
+  .mobile-nav-btn.active > small,
+  .mobile-nav-btn.active .icon,
+  .mobile-nav-btn.active .icon use {
+    color: #fff !important;
+    stroke: #fff !important;
+  }
+
+  .mobile-nav-btn.active .icon,
+  .mobile-nav-btn.active .icon use {
+    stroke-width: 2 !important;
+  }
+
+  .mobile-nav-btn > em {
+    background: var(--primary) !important;
+    color: #fff !important;
+  }
+
+  .mobile-nav-btn.active > em {
+    background: #fff !important;
+    color: var(--primary) !important;
+  }
+}
