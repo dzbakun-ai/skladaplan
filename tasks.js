@@ -1155,6 +1155,14 @@ function contactFormHtml(partnerId, contact = null) {
 }
 
 function partnerCardHtml(partner) {
+   console.log(
+  'PARTNER CARD',
+  partner.id,
+  'contactPartnerId =',
+  partnersState.contactPartnerId,
+  'editingContactId =',
+  partnersState.editingContactId
+);
   const editing = partnersState.editingPartnerId !== null && partnersSameId(partnersState.editingPartnerId, partner.id);
   const expanded = partnersState.expandedPartnerId !== null && partnersSameId(partnersState.expandedPartnerId, partner.id);
 
