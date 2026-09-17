@@ -5,7 +5,10 @@
 
 'use strict';
 
-   // SUPABASE
+
+/* =========================================================
+   SUPABASE
+   ========================================================= */
 
 const SUPABASE_URL =
   'https://ithhecprdosvjiddoalq.supabase.co';
@@ -19,7 +22,10 @@ const supabaseClient =
     SUPABASE_KEY
   );
 
- // CONFIG
+
+/* =========================================================
+   CONFIG
+   ========================================================= */
 
 const PAGE_SIZE = 100;
 
@@ -1761,15 +1767,15 @@ function ensureAppStyles() {
     }
 
     .sp-card {
-      background:#fff;
-      border:1px solid #e8e8e8;
-      border-radius:16px;
+      background:var(--surface);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
       padding:18px;
-      box-shadow:0 4px 18px rgba(0,0,0,.04);
+      box-shadow:var(--shadow-card);
     }
 
     .sp-card-label {
-      color:#777;
+      color:var(--muted);
       font-size:13px;
       margin-bottom:8px;
     }
@@ -1805,17 +1811,18 @@ function ensureAppStyles() {
 
     .sp-btn {
       border:0;
-      border-radius:9px;
+      border-radius:var(--radius-btn);
       padding:10px 15px;
       cursor:pointer;
       font-weight:600;
-      background:#111;
+      background:var(--primary);
       color:#fff;
     }
 
     .sp-btn.secondary {
-      background:#f2f2f2;
-      color:#111;
+      background:var(--bg);
+      color:var(--text);
+      border:1px solid var(--line);
     }
 
     .sp-btn.danger {
@@ -1980,7 +1987,7 @@ function ensureAppStyles() {
       display:flex;
       align-items:center;
       justify-content:center;
-      background:#111;
+      background:var(--primary);
       color:#fff;
       font-size:24px;
       font-weight:700;
@@ -2019,7 +2026,7 @@ function ensureAppStyles() {
       height:44px;
       border:0;
       border-radius:10px;
-      background:#111;
+      background:var(--primary);
       color:#fff;
       font-weight:700;
       cursor:pointer;
@@ -2113,7 +2120,7 @@ function ensureAppStyles() {
     .sp-import-progress-fill {
       height:100%;
       width:0%;
-      background:#111;
+      background:var(--primary);
       border-radius:999px;
       transition:width .2s ease;
     }
@@ -2641,7 +2648,7 @@ function ensureReceivingStyles() {
 
       border:0;
 
-      background:#111;
+      background:var(--primary);
 
       color:#fff;
 
@@ -2656,7 +2663,7 @@ function ensureReceivingStyles() {
 
     .sp-btn-primary:hover {
 
-      background:#222;
+      background:var(--primary-hover);
 
     }
 
@@ -2851,11 +2858,11 @@ function ensureReceivingStyles() {
 
       outline:none;
 
-      border-color:#111;
+      border-color:var(--primary);
 
       box-shadow:
         0 0 0 5px
-        rgba(0,0,0,.055);
+        rgba(15,118,110,.12);
 
     }
 
@@ -3095,7 +3102,7 @@ function ensureReceivingStyles() {
         2px solid
         #d5d5d9;
 
-      border-top-color:#111;
+      border-top-color:var(--primary);
 
       border-radius:50%;
 
@@ -18661,7 +18668,8 @@ Excel:
                 width:38px;
                 height:38px;
                 border-radius:11px;
-                background:#f2f2f2;
+                background:#f1f5f9;
+                color:#475569;
                 display:flex;
                 align-items:center;
                 justify-content:center;
@@ -18688,7 +18696,7 @@ Excel:
               style="
                 width:${total ? Math.min(100, stock / total * 100) : 0}%;
                 height:100%;
-                background:#111;
+                background:#475569;
                 border-radius:10px;
               "
             ></div>
@@ -18746,7 +18754,8 @@ Excel:
                 width:38px;
                 height:38px;
                 border-radius:11px;
-                background:#f2f2f2;
+                background:var(--amber-light);
+                color:var(--amber);
                 display:flex;
                 align-items:center;
                 justify-content:center;
@@ -18773,7 +18782,7 @@ Excel:
               style="
                 width:${total ? Math.min(100, picking / total * 100) : 0}%;
                 height:100%;
-                background:#111;
+                background:var(--amber);
                 border-radius:10px;
               "
             ></div>
@@ -18831,7 +18840,8 @@ Excel:
                 width:38px;
                 height:38px;
                 border-radius:11px;
-                background:#f2f2f2;
+                background:var(--accent-light);
+                color:var(--accent);
                 display:flex;
                 align-items:center;
                 justify-content:center;
@@ -18858,7 +18868,7 @@ Excel:
               style="
                 width:${total ? Math.min(100, collected / total * 100) : 0}%;
                 height:100%;
-                background:#111;
+                background:var(--accent);
                 border-radius:10px;
               "
             ></div>
@@ -18916,7 +18926,8 @@ Excel:
                 width:38px;
                 height:38px;
                 border-radius:11px;
-                background:#f2f2f2;
+                background:#e6f4f3;
+                color:var(--primary);
                 display:flex;
                 align-items:center;
                 justify-content:center;
@@ -18943,7 +18954,7 @@ Excel:
               style="
                 width:${total ? Math.min(100, shipped / total * 100) : 0}%;
                 height:100%;
-                background:#111;
+                background:var(--primary);
                 border-radius:10px;
               "
             ></div>
@@ -19058,7 +19069,7 @@ Excel:
                 style="
                   width:${total ? stock / total * 100 : 0}%;
                   height:100%;
-                  background:#111;
+                  background:var(--primary);
                   border-radius:20px;
                 "
               ></div>
@@ -19446,7 +19457,7 @@ Excel:
                       style="
                         width:${pct(value)}%;
                         height:100%;
-                        background:#111;
+                        background:var(--primary);
                         border-radius:3px;
                       "
                     ></div>
@@ -33510,9 +33521,26 @@ function applyNavIconColor(
       'use'
     );
 
+  /*
+    Sidebar (.nav) — тёмный фон, активная иконка белая.
+    Мобильная нижняя панель (.mobile-nav-btn) — активный
+    пункт там на СВЕТЛОМ фоне (var(--accent-light)),
+    поэтому иконка красится в бренд-цвет, а не в белый —
+    иначе была бы белым по белому.
+  */
+
+  const isMobile =
+    button.classList.contains(
+      'mobile-nav-btn'
+    );
+
   const color =
     isActive
-      ? '#fff'
+      ? (
+          isMobile
+            ? '#0f766e'
+            : '#fff'
+        )
       : '';
 
   [svg, useEl].forEach(

@@ -126,7 +126,7 @@
   height: 18px;
   cursor: pointer;
   flex-shrink: 0;
-  accent-color: #111;
+  accent-color: var(--primary, #0f766e);
 }
 
 .task-card-body {
@@ -215,7 +215,7 @@
 
 .task-icon-btn:hover {
   background: #f2f2f2;
-  color: #111;
+  color: var(--primary, #0f766e);
 }
 
 .task-icon-btn.is-active {
@@ -297,7 +297,7 @@
 }
 
 .task-edit-fav input {
-  accent-color: #111;
+  accent-color: var(--primary, #0f766e);
 }
 
 .task-edit-actions {
@@ -351,7 +351,7 @@
 }
 
 .task-calendar-day.is-selected {
-  border-color: #111;
+  border-color: var(--primary, #0f766e);
 }
 
 .task-calendar-day.has-tasks {
@@ -439,7 +439,7 @@
   height: 18px;
   cursor: pointer;
   flex-shrink: 0;
-  accent-color: #111;
+  accent-color: var(--primary, #0f766e);
 }
 
 .home-task-title {

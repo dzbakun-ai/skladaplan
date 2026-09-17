@@ -4,25 +4,62 @@ GLOBAL UI
 ========================================================= */
 
 :root {
---bg: #f5f5f7;
+
+/*
+  ДИЗАЙН-ТОКЕНЫ SKLADAPLAN
+
+  Единый источник цвета/скруглений/теней для всего
+  приложения. Большинство компонентов (.sp-card, .sp-btn,
+  .nav, таблицы, модалки) уже читают эти переменные, а не
+  хранят цвет внутри себя — поэтому смена значений здесь
+  перекрашивает интерфейс сразу везде, без правки каждого
+  правила по отдельности.
+
+  Палитра — по референсу интерфейса: тёмно-бирюзовый
+  бренд-акцент вместо прежнего монохромного чёрного,
+  янтарный — для «грузовых»/требующих внимания действий,
+  изумрудный — как акцентный успех/прогресс.
+
+  Функциональный смысл цвета (см. также .kpi-icon-* ниже):
+    emerald/accent — приёмка, положительная динамика;
+    amber          — сборка, «требует действия»;
+    primary(teal)  — основной бренд-цвет, обычные кнопки;
+    success        — подтверждённые/завершённые операции;
+    danger         — ошибки, удаление.
+*/
+
+--bg: #f8fafc;
 --surface: #ffffff;
---surface-soft: #fafafa;
+--surface-soft: #f8fafc;
 
---text: #111111;
---muted: #737373;
+--text: #0f172a;
+--muted: #64748b;
 
---line: #e6e6e6;
+--line: #e2e8f0;
 
---primary: #111111;
---primary-hover: #2a2a2a;
+--primary: #0f766e;
+--primary-hover: #115e59;
+
+--accent: #10b981;
+--accent-light: #ecfdf5;
+
+--amber: #f59e0b;
+--amber-light: #fffbeb;
+--amber-border: #fcd34d;
 
 --success: #18794e;
 --danger: #b42318;
 
+--sidebar-bg: #0f172a;
 --sidebar-width: 250px;
 
---radius: 14px;
---radius-lg: 18px;
+--radius: 16px;
+--radius-lg: 20px;
+--radius-btn: 10px;
+
+--shadow-card:
+  0 10px 25px -5px rgba(15, 23, 42, .06),
+  0 4px 6px -4px rgba(15, 23, 42, .03);
 }
 
 /* =========================================================
@@ -90,9 +127,16 @@ min-width: var(--sidebar-width);
 min-height: 100vh;
 height: 100vh;
 
-background: #fff;
+/*
+  Тёмный sidebar — по референсу интерфейса. Внутренние
+  элементы (.nav, .brand-text, .sidebar-foot) ниже имеют
+  СВОИ явные цвета текста, а не наследуют var(--text) —
+  var(--text) теперь тёмный (для светлого фона main),
+  на тёмном фоне сайдбара он был бы нечитаем.
+*/
+background: var(--sidebar-bg);
 
-border-right: 1px solid var(--line);
+border-right: 1px solid rgba(255,255,255,.06);
 
 display: flex;
 flex-direction: column;
@@ -126,7 +170,7 @@ border-radius: 11px;
 display: grid;
 place-items: center;
 
-background: #111;
+background: var(--primary);
 color: #fff;
 
 font-weight: 800;
@@ -143,13 +187,16 @@ min-width: 0;
 .brand-text b {
 font-size: 14px;
 letter-spacing: .02em;
+
+/* явный светлый цвет — фон сайдбара тёмный */
+color: #fff;
 }
 
 .brand-text span {
 margin-top: 3px;
 
 font-size: 8px;
-color: #999;
+color: #64748b;
 
 letter-spacing: .08em;
 }
@@ -173,7 +220,8 @@ margin-bottom: 22px;
 .nav-section-title {
 padding: 0 10px 8px;
 
-color: #999;
+/* явный светлый (приглушённый) цвет — фон сайдбара тёмный */
+color: #64748b;
 
 font-size: 9px;
 font-weight: 700;
@@ -261,7 +309,9 @@ border: 0;
 border-radius: 10px;
 
 background: transparent;
-color: #111;
+
+/* неактивный пункт на тёмном сайдбаре — приглушённый серый */
+color: #94a3b8;
 
 font-family: inherit;
 text-align: left;
@@ -346,7 +396,7 @@ place-items: center;
 
 border-radius: 999px;
 
-background: #111;
+background: var(--primary);
 color: #fff;
 
 font-size: 10px;
@@ -367,12 +417,12 @@ display: none;
    --------------------------------------------------------- */
 
 .nav:hover {
-background: #f0f0f0;
-color: #111;
+background: rgba(255, 255, 255, .06);
+color: #fff;
 }
 
 .nav.active {
-background: #111;
+background: var(--primary);
 color: #fff;
 }
 
@@ -418,7 +468,7 @@ stroke-width: 1.95;
 
 .nav.active em {
 background: #fff;
-color: #111;
+color: var(--primary, #0f766e);
 }
 
 
@@ -545,19 +595,19 @@ color: #555;
 }
 
 .mobile-nav-btn.active {
-background: #f2f2f2;
-color: #111;
+background: var(--accent-light);
+color: var(--primary);
 }
 
 .mobile-nav-btn.active > span,
 .mobile-nav-btn.active > small {
-color: #111;
+color: var(--primary);
 }
 
 .mobile-nav-btn.active .icon,
 .mobile-nav-btn.active .icon use {
-color: #111;
-stroke: #111;
+color: var(--primary);
+stroke: var(--primary);
 stroke-width: 2;
 }
 
@@ -577,7 +627,7 @@ place-items: center;
 
 border-radius: 999px;
 
-background: #111;
+background: var(--primary, #0f766e);
 color: #fff;
 
 font-size: 9px;
@@ -607,7 +657,8 @@ SIDEBAR FOOT
 .sidebar-foot {
 padding: 14px 8px 2px;
 
-border-top: 1px solid var(--line);
+/* var(--line) теперь светлый — на тёмном фоне взяли rgba */
+border-top: 1px solid rgba(255, 255, 255, .08);
 }
 
 .offline {
@@ -619,7 +670,7 @@ gap: 7px;
 margin-bottom: 12px;
 
 font-size: 11px;
-color: #555;
+color: #94a3b8;
 }
 
 .offline i {
@@ -628,11 +679,11 @@ height: 7px;
 
 border-radius: 50%;
 
-background: #25a55f;
+background: var(--accent);
 }
 
 .sidebar-foot small {
-color: #aaa;
+color: #64748b;
 
 font-size: 9px;
 line-height: 1.5;
@@ -753,23 +804,23 @@ transform .15s ease;
 .primary {
 border: 0;
 
-background: #111;
+background: var(--primary);
 color: #fff;
 }
 
 .primary:hover {
-background: #2a2a2a;
+background: var(--primary-hover);
 }
 
 .ghost {
 border: 1px solid var(--line);
 
 background: #fff;
-color: #111;
+color: var(--text);
 }
 
 .ghost:hover {
-background: #f5f5f5;
+background: var(--bg);
 }
 
 /* =========================================================
@@ -803,20 +854,19 @@ margin-bottom: 20px;
 }
 
 .sp-card {
-background: #fff;
+background: var(--surface);
 
-border: 1px solid #e8e8e8;
+border: 1px solid var(--line);
 
-border-radius: 16px;
+border-radius: var(--radius);
 
 padding: 18px;
 
-box-shadow:
-0 4px 18px rgba(0, 0, 0, .04);
+box-shadow: var(--shadow-card);
 }
 
 .sp-card-label {
-color: #777;
+color: var(--muted);
 
 font-size: 13px;
 
@@ -873,7 +923,7 @@ GENERIC BUTTONS
 .sp-btn {
 border: 0;
 
-border-radius: 9px;
+border-radius: var(--radius-btn);
 
 padding: 10px 15px;
 
@@ -881,13 +931,24 @@ cursor: pointer;
 
 font-weight: 600;
 
-background: #111;
+background: var(--primary);
 color: #fff;
+
+transition: background .15s ease;
+}
+
+.sp-btn:hover {
+background: var(--primary-hover);
 }
 
 .sp-btn.secondary {
-background: #f2f2f2;
-color: #111;
+background: var(--bg);
+color: var(--text);
+border: 1px solid var(--line);
+}
+
+.sp-btn.secondary:hover {
+background: var(--line);
 }
 
 .sp-btn.danger {
@@ -1223,7 +1284,7 @@ outline: none;
 }
 
 .scan-input:focus {
-border-color: #111;
+border-color: var(--primary, #0f766e);
 }
 
 .scan-status {
@@ -1606,7 +1667,7 @@ height: 17px;
 
 margin: 0;
 
-accent-color: #111;
+accent-color: var(--primary, #0f766e);
 
 cursor: pointer;
 }
@@ -2162,7 +2223,7 @@ grid-template-columns: 1fr !important;
 }
 
 .search:focus {
-  border-color: #111;
+  border-color: var(--primary, #0f766e);
 }
 
 
@@ -2654,13 +2715,13 @@ grid-template-columns: 1fr !important;
    ========================================================= */
 
 .sp-toolbar button.sp-btn {
-  background: #111;
+  background: var(--primary, #0f766e);
   color: #fff;
   border: 0;
 }
 
 .sp-toolbar button.sp-btn:hover {
-  background: #2a2a2a;
+  background: var(--primary-hover);
 }
 
 .sp-toolbar button.sp-btn.success {
@@ -2697,7 +2758,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
   outline:
-    2px solid #111;
+    2px solid var(--primary, #0f766e);
 
   outline-offset:
     2px;
@@ -2791,7 +2852,7 @@ outline: none;
 
 .cpb-field input:focus,
 .cpb-field select:focus {
-border-color: #111;
+border-color: var(--primary, #0f766e);
 }
 
 #cpbScan {
@@ -2903,7 +2964,7 @@ align-items: center;
 gap: 5px;
 padding: 4px 9px;
 border-radius: 999px;
-background: #111;
+background: var(--primary, #0f766e);
 color: #fff;
 font-weight: 600;
 font-size: 12px;
@@ -2981,8 +3042,8 @@ background: #f5f5f5;
 }
 
 .cpb-existing-btn.is-current {
-background: #111;
-border-color: #111;
+background: var(--primary, #0f766e);
+border-color: var(--primary, #0f766e);
 color: #fff;
 }
 
@@ -3008,7 +3069,7 @@ resize: vertical;
 }
 
 .cpb-field textarea:focus {
-border-color: #111;
+border-color: var(--primary, #0f766e);
 }
 
 .cpb-note-save {
