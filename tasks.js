@@ -1345,10 +1345,8 @@ function setupPartners() {
     // чтобы кнопка работала независимо от вложенного SVG/use.
     const partnerAction = target.dataset?.partnerAction;
     if (partnerAction === 'add-contact') {
-       
-       console.log('ADD CONTACT CLICK', partnerId, partnersState.items);
-       
       const partnerId = target.dataset.addContact;
+       console.log('ADD CONTACT CLICK', partnerId, partnersState.items);
       if (!partnerById(partnerId)) {
         toast('Контрагент не найден', 'error');
         return;
