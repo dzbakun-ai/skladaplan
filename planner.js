@@ -1324,6 +1324,9 @@ function plannerOpenShipmentModal(
   id = null
 ) {
 
+  plannerState.editingTaskId =
+    null;
+
   plannerState.editingShipmentId =
     id;
 
@@ -1828,6 +1831,9 @@ function plannerOpenTaskModal(
   id = null
 ) {
 
+  plannerState.editingShipmentId =
+    null;
+
   plannerState.editingTaskId =
     id;
 
@@ -2321,7 +2327,14 @@ function plannerShowModal(
   content
 ) {
 
-  plannerCloseModal();
+  // Закрываем только старый DOM-модал.
+  // Не вызываем plannerCloseModal(), потому что он
+  // сбрасывает editingTaskId / editingShipmentId до сохранения.
+  document
+    .getElementById(
+      'plannerModalOverlay'
+    )
+    ?.remove();
 
 
   const overlay =
