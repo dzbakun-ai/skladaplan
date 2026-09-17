@@ -994,3 +994,34 @@
   margin: 0 !important;
   flex: 0 0 auto !important;
 }
+
+/* ============================================================
+   PLANNER — ICON BUTTON ALIGNMENT
+   ============================================================ */
+
+.planner-icon-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  width: 38px !important;
+  height: 38px !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  line-height: 0 !important;
+  text-align: center !important;
+}
+
+.planner-icon-button .icon {
+  display: block !important;
+
+  width: 18px !important;
+  height: 18px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  flex: 0 0 18px !important;
+}
