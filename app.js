@@ -25536,64 +25536,147 @@ async function applyInventoryResult() {
 
 
   try {
+
     const operatorEmail = state.user?.email || null;
     const appliedAt = new Date().toISOString();
+
     const historyDetails = {
-      inventory_type: 'pallet', warehouse: state.inventory.warehouse,
-      zone: state.inventory.zone, pallet: state.inventory.pallet,
-      target: { warehouse_id: target.warehouse_id, location_id: target.location_id, pallet_id: target.pallet_id },
+      inventory_type: 'pallet',
+      warehouse: state.inventory.warehouse,
+      zone: state.inventory.zone,
+      pallet: state.inventory.pallet,
+      target: {
+        warehouse_id: target.warehouse_id,
+        location_id: target.location_id,
+        pallet_id: target.pallet_id
+      },
       scanned_ids: scanned.map(row => String(row.id)),
-      missing_boxes: missing.map(row => ({ id: row.id, barcode: normalizeBarcode(row.barcode), previous_warehouse_id: row.warehouse_id, previous_location_id: row.location_id, previous_pallet_id: row.pallet_id })),
-      outside_ids: outsideIds, unknown_barcodes: unknownBarcodes
+      missing_boxes: missing.map(row => ({
+        id: row.id,
+        barcode: normalizeBarcode(row.barcode),
+        previous_warehouse_id: row.warehouse_id,
+        previous_location_id: row.location_id,
+        previous_pallet_id: row.pallet_id
+      })),
+      outside_ids: outsideIds,
+      unknown_barcodes: unknownBarcodes
     };
 
-    const { data, error } = await supabaseClient.rpc('sp_apply_inventory', {
-      p_warehouse: state.inventory.warehouse,
-      p_zone: state.inventory.zone,
-      p_pallet: state.inventory.pallet,
-      p_started_at: state.inventory.startedAt,
-      p_finished_at: state.inventory.finishedAt,
-      p_operator: operatorEmail,
-      p_missing_ids: missing.map(row => Number(row.id)),
-      p_outside_ids: outsideIds.map(id => Number(id)),
-      p_unknown_barcodes: unknownBarcodes,
-      p_target_warehouse_id: target.warehouse_id,
-      p_target_location_id: target.location_id,
-      p_target_pallet_id: target.pallet_id,
-      p_scanned_count: scanned.length,
-      p_expected_count: expected.length,
-      p_details: historyDetails
-    });
+    /*
+      Критическая операция выполняется одной PostgreSQL-транзакцией.
+      Если UPDATE/INSERT/history не проходит — вся инвентаризация
+      откатывается, поэтому частичного проведения не возникает.
+    */
+    const { data, error } = await supabaseClient.rpc(
+      'sp_apply_inventory',
+      {
+        p_warehouse: state.inventory.warehouse,
+        p_zone: state.inventory.zone,
+        p_pallet: state.inventory.pallet,
+        p_started_at: state.inventory.startedAt,
+        p_finished_at: state.inventory.finishedAt,
+        p_operator: operatorEmail,
+        p_missing_ids: missing.map(row => Number(row.id)),
+        p_outside_ids: outsideIds.map(id => Number(id)),
+        p_unknown_barcodes: unknownBarcodes,
+        p_target_warehouse_id: target.warehouse_id,
+        p_target_location_id: target.location_id,
+        p_target_pallet_id: target.pallet_id,
+        p_scanned_count: scanned.length,
+        p_expected_count: expected.length,
+        p_details: historyDetails
+      }
+    );
 
-    if (error) throw error;
+    if (error) {
+      throw error;
+    }
 
     const result = data || {};
     const movedCount = Number(result.moved_count || 0);
     const removedCount = Number(result.removed_count || 0);
     const createdCount = Number(result.created_count || 0);
+    const historyId = result.history_id ?? null;
+    const inventoryNo = result.inventory_no ?? null;
 
     state.inventory.result = {
-      ...state.inventory.result, applied: true,
-      moved: movedCount, removed: removedCount, created: createdCount,
-      appliedAt, historyId: result.history_id ?? null,
-      inventoryNo: result.inventory_no ?? null
+      ...state.inventory.result,
+      applied: true,
+      moved: movedCount,
+      removed: removedCount,
+      created: createdCount,
+      appliedAt,
+      historyId,
+      inventoryNo
     };
 
-    const { data: freshBoxes, error: reloadError } = await supabaseClient
-      .from('boxes').select(BOX_SELECT).order('id', { ascending: true });
-    if (reloadError) throw reloadError;
+    const {
+      data: freshBoxes,
+      error: reloadError
+    } = await supabaseClient
+      .from('boxes')
+      .select(BOX_SELECT)
+      .order('id', { ascending: true });
+
+    if (reloadError) {
+      throw reloadError;
+    }
+
     state.boxes = freshBoxes || [];
 
-    toast(['Инвентаризация проведена.', `Перемещено: ${movedCount}`, `Снято: ${removedCount}`, `Создано: ${createdCount}`].join(' · '));
+    toast([
+      'Инвентаризация проведена.',
+      `Перемещено: ${movedCount}`,
+      `Снято: ${removedCount}`,
+      `Создано: ${createdCount}`
+    ].join(' · '));
+
     render();
+
+    toast(
+      [
+        'Инвентаризация проведена.',
+        `Перемещено: ${movedCount}`,
+        `Снято: ${removedCount}`,
+        `Создано: ${createdCount}`
+      ].join(' · ')
+    );
+
+
+    render();
+
   } catch (error) {
-    console.error('applyInventoryResult:', error);
-    toast('Ошибка проведения: ' + (error?.message || 'неизвестная ошибка'), 'error');
-    const currentButton = $('#inventoryApplyBtn');
+
+    console.error(
+      'applyInventoryResult:',
+      error
+    );
+
+
+    toast(
+      'Ошибка проведения: ' +
+      (
+        error?.message ||
+        'неизвестная ошибка'
+      ),
+      'error'
+    );
+
+
+    const currentButton =
+      $('#inventoryApplyBtn');
+
+
     if (currentButton) {
-      currentButton.disabled = false;
-      currentButton.textContent = '✓ Провести инвентаризацию';
+
+      currentButton.disabled =
+        false;
+
+      currentButton.textContent =
+        '✓ Провести инвентаризацию';
+
     }
+
   }
 
 }
@@ -28154,8 +28237,21 @@ async function loadDashboardErrorStats() {
 
     state.dashboardErrorStats.loading = false;
 
+    /*
+      Ошибка загрузки необязательного KPI не должна
+      инициировать новый render(). Иначе setupDashboard()
+      снова вызывает loadDashboardErrorStats(), который
+      снова получает ошибку и снова вызывает render().
+      Это создаёт бесконечный render-loop: DOM постоянно
+      пересоздаётся, поэтому hover по кнопкам моргает,
+      а click теряется вместе с заменённым DOM-узлом.
+    */
+
+    return;
+
   }
 
+  /* Перерисовываем только после успешной загрузки KPI. */
   render();
 
 }
