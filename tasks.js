@@ -1524,7 +1524,7 @@ function setupPartners() {
   });
 
   // Поиск и фильтр не конфликтуют с динамической отрисовкой.
-  document.addEventListener('input', event => {
+   document.addEventListener('click', async event => {
     const input = event.target;
     if (!(input instanceof HTMLInputElement) || input.id !== 'partnerSearchInput') return;
 
@@ -1539,7 +1539,7 @@ function setupPartners() {
       const nextCursor = Math.min(cursor, nextInput.value.length);
       nextInput.setSelectionRange(nextCursor, nextCursor);
     });
-  });
+    }, true);
 
   document.addEventListener('change', event => {
     const select = event.target;
