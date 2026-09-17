@@ -125,7 +125,7 @@
 }
 
 .help-quick-nav a:focus-visible {
-  outline: 2px solid var(--primary, #0f766e);
+  outline: 2px solid #111;
   outline-offset: 2px;
 }
 
@@ -568,7 +568,7 @@
 
   color: #fff;
 
-  background: var(--primary, #0f766e);
+  background: #111;
 
   font-size: 11px;
   line-height: 1;

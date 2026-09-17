@@ -86,8 +86,8 @@
 
 
 .planner-button-primary {
-  background: var(--primary, #0f766e);
-  border-color: var(--primary, #0f766e);
+  background: #111;
+  border-color: #111;
   color: #fff;
 }
 
@@ -277,14 +277,14 @@
 
 .planner-day-today
 .planner-day-number {
-  background: var(--primary, #0f766e);
+  background: #111;
   color: #fff;
 }
 
 
 .planner-day-selected {
   box-shadow:
-    inset 0 0 0 2px var(--primary, #0f766e);
+    inset 0 0 0 2px #111;
 }
 
 
@@ -315,7 +315,7 @@
 
 
 .planner-event-dot.shipment {
-  background: var(--primary, #0f766e);
+  background: #111;
   color: #fff;
 }
 
@@ -898,7 +898,7 @@
 .planner-check input {
   width: 18px;
   height: 18px;
-  accent-color: var(--primary, #0f766e);
+  accent-color: #111;
   cursor: pointer;
 }
 
