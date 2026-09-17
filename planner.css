@@ -86,8 +86,8 @@
 
 
 .planner-button-primary {
-  background: var(--primary, #0f766e);
-  border-color: var(--primary, #0f766e);
+  background: var(--primary, #2563EB);
+  border-color: var(--primary, #2563EB);
   color: #fff;
 }
 
