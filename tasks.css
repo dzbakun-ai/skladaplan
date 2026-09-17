@@ -126,7 +126,7 @@
   height: 18px;
   cursor: pointer;
   flex-shrink: 0;
-  accent-color: var(--primary, #0f766e);
+  accent-color: var(--primary, #2563EB);
 }
 
 .task-card-body {
@@ -215,7 +215,7 @@
 
 .task-icon-btn:hover {
   background: #f2f2f2;
-  color: var(--primary, #0f766e);
+  color: var(--primary, #2563EB);
 }
 
 .task-icon-btn.is-active {
@@ -297,7 +297,7 @@
 }
 
 .task-edit-fav input {
-  accent-color: var(--primary, #0f766e);
+  accent-color: var(--primary, #2563EB);
 }
 
 .task-edit-actions {
@@ -351,7 +351,7 @@
 }
 
 .task-calendar-day.is-selected {
-  border-color: var(--primary, #0f766e);
+  border-color: var(--primary, #2563EB);
 }
 
 .task-calendar-day.has-tasks {
@@ -439,7 +439,7 @@
   height: 18px;
   cursor: pointer;
   flex-shrink: 0;
-  accent-color: var(--primary, #0f766e);
+  accent-color: var(--primary, #2563EB);
 }
 
 .home-task-title {
@@ -519,4 +519,393 @@
     margin-left: 0;
   }
 
+}
+
+
+/* =========================================================
+   SKLADAPLAN — КОНТРАГЕНТЫ И КОНТАКТЫ
+   Фирменный цвет: Graphite Blue #2563EB
+   ========================================================= */
+
+.partners-block {
+  margin-top: 16px;
+}
+
+.partners-block-head {
+  margin-bottom: 14px;
+}
+
+.partners-block-head h2 {
+  font-size: 17px;
+}
+
+.partners-subtitle {
+  margin-top: 3px;
+  font-size: 12px;
+}
+
+.partners-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.partners-toolbar input,
+.partners-toolbar select,
+.partner-form input,
+.partner-form select,
+.partner-form textarea,
+.contact-form input,
+.contact-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 9px 11px;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  background: #fff;
+}
+
+.partners-toolbar input:focus,
+.partners-toolbar select:focus,
+.partner-form input:focus,
+.partner-form select:focus,
+.partner-form textarea:focus,
+.contact-form input:focus,
+.contact-form textarea:focus {
+  border-color: var(--primary, #2563EB);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .10);
+}
+
+.partner-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.partner-card {
+  padding: 14px 16px;
+  border: 1px solid #ececec;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.partner-card.is-inactive {
+  opacity: .62;
+}
+
+.partner-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.partner-card-title-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+}
+
+.partner-card-title-wrap h4 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.partner-category {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, .09);
+  color: var(--primary, #2563EB);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.partner-star {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 30px;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+}
+
+.partner-star:hover {
+  background: #f2f2f2;
+  color: var(--primary, #2563EB);
+}
+
+.partner-star.is-active {
+  color: #d99a00;
+}
+
+.partner-star .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.partner-card-actions,
+.partner-contact-actions,
+.partner-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.partner-company-data {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #555;
+}
+
+.partner-card-comment {
+  margin-top: 7px;
+  font-size: 12px;
+}
+
+.partner-contacts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 13px;
+  padding-top: 11px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.partner-contacts-head b {
+  font-size: 13px;
+}
+
+.partner-contacts-head b span {
+  color: #999;
+  font-weight: 600;
+}
+
+.partner-add-contact {
+  padding: 6px 9px;
+  font-size: 12px;
+}
+
+.partner-add-contact .icon {
+  width: 13px;
+  height: 13px;
+}
+
+.partner-contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.partner-contact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid #f0f0f0;
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.partner-contact.is-inactive {
+  opacity: .58;
+}
+
+.partner-contact-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.partner-contact-name {
+  font-size: 13px;
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.partner-contact-position {
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.partner-contact-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+  margin-top: 4px;
+  color: #555;
+  font-size: 11px;
+}
+
+.partner-primary-badge {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, .10);
+  color: var(--primary, #2563EB);
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
+.partner-no-contacts {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.partner-show-more {
+  margin-top: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary, #2563EB);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.partner-show-more:hover {
+  color: var(--primary-hover, #1D4ED8);
+  text-decoration: underline;
+}
+
+.partner-form,
+.contact-form {
+  padding: 2px;
+}
+
+.partner-form-grid,
+.contact-form-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 8px;
+}
+
+.partner-form textarea,
+.contact-form textarea {
+  min-height: 58px;
+  margin-top: 8px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.partner-form-bottom,
+.contact-form-bottom {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 9px;
+}
+
+.partner-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #555;
+  cursor: pointer;
+}
+
+.partner-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--primary, #2563EB);
+}
+
+.partner-check .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.partner-form-actions {
+  margin-left: auto;
+}
+
+.partner-form-actions .sp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.partner-form-actions .sp-btn:not(.secondary) {
+  background: var(--primary, #2563EB);
+  color: #fff;
+}
+
+.partner-form-actions .sp-btn:not(.secondary):hover {
+  background: var(--primary-hover, #1D4ED8);
+}
+
+.contact-form {
+  margin-top: 8px;
+  padding-top: 9px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.contact-form-grid {
+  grid-template-columns: 2fr 1fr 1fr;
+}
+
+@media (max-width: 640px) {
+  .partners-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .partner-card-head {
+    align-items: flex-start;
+  }
+
+  .partner-company-data,
+  .partner-contact-links {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .partner-form-grid,
+  .contact-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .partner-form-bottom,
+  .contact-form-bottom {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .partner-form-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .partner-form-actions .sp-btn {
+    flex: 1;
+  }
+
+  .partner-contact {
+    align-items: flex-start;
+  }
 }

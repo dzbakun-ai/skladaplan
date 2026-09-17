@@ -802,6 +802,704 @@ function tasksCalendarHtml() {
 }
 
 
+
+/* =========================================================
+   КОНТРАГЕНТЫ И КОНТАКТЫ
+   Отдельное состояние: не пересекается с tasksState.
+   ========================================================= */
+
+const PARTNER_CATEGORIES = [
+  'Клиент',
+  'Поставщик',
+  'Перевозчик',
+  'Транспортная компания',
+  'Склад / 3PL',
+  'Партнёр',
+  'Прочее'
+];
+
+const partnersState = {
+  items: [],
+  loading: false,
+  loaded: false,
+  loadError: null,
+  search: '',
+  category: 'all',
+  editingPartnerId: null,
+  editingContactId: null,
+  contactPartnerId: null,
+  expandedPartnerId: null
+};
+
+function partnersSameId(a, b) {
+  return String(a) === String(b);
+}
+
+function partnerById(id) {
+  return partnersState.items.find(partner => partnersSameId(partner.id, id)) || null;
+}
+
+async function loadPartnersFromSupabase() {
+  if (partnersState.loading || partnersState.loaded) return;
+
+  partnersState.loading = true;
+  partnersState.loadError = null;
+
+  try {
+    const { data, error } = await supabaseClient
+      .from('partners')
+      .select(`
+        *,
+        contacts (*)
+      `)
+      .order('active', { ascending: false })
+      .order('favorite', { ascending: false })
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+
+    partnersState.items = Array.isArray(data)
+      ? data.map(partner => ({
+          ...partner,
+          contacts: Array.isArray(partner.contacts)
+            ? partner.contacts
+                .slice()
+                .sort((a, b) => {
+                  if (a.primary_contact !== b.primary_contact) {
+                    return a.primary_contact ? -1 : 1;
+                  }
+                  return String(a.name || '').localeCompare(String(b.name || ''), 'ru');
+                })
+            : []
+        }))
+      : [];
+
+    partnersState.loaded = true;
+  } catch (error) {
+    console.error('SKLADAPLAN PARTNERS load error:', error);
+    partnersState.loadError = error.message || 'Не удалось загрузить контрагентов';
+    toast('Не удалось загрузить контрагентов: ' + (error.message || 'ошибка Supabase'), 'error');
+  } finally {
+    partnersState.loading = false;
+  }
+}
+
+function upsertPartnerLocal(partner) {
+  const index = partnersState.items.findIndex(item => partnersSameId(item.id, partner.id));
+  if (index === -1) {
+    partnersState.items.unshift({ ...partner, contacts: [] });
+  } else {
+    partnersState.items[index] = {
+      ...partnersState.items[index],
+      ...partner,
+      contacts: partnersState.items[index].contacts || []
+    };
+  }
+}
+
+async function savePartner(partnerData) {
+  const name = normalizeText(partnerData.name);
+  if (!name) {
+    toast('Введите название контрагента', 'error');
+    return null;
+  }
+
+  const payload = {
+    name,
+    category: partnerData.category || 'Прочее',
+    phone: normalizeText(partnerData.phone || ''),
+    email: normalizeText(partnerData.email || ''),
+    website: normalizeText(partnerData.website || ''),
+    address: normalizeText(partnerData.address || ''),
+    city: normalizeText(partnerData.city || ''),
+    country: normalizeText(partnerData.country || ''),
+    tax_id: normalizeText(partnerData.tax_id || ''),
+    registration_id: normalizeText(partnerData.registration_id || ''),
+    comment: normalizeText(partnerData.comment || ''),
+    favorite: !!partnerData.favorite,
+    active: partnerData.active !== false,
+    updated_by: state.user?.email || null
+  };
+
+  try {
+    let data;
+    let error;
+
+    if (partnersState.editingPartnerId !== null && partnersState.editingPartnerId !== 'new') {
+      ({ data, error } = await supabaseClient
+        .from('partners')
+        .update(payload)
+        .eq('id', partnersState.editingPartnerId)
+        .select('*')
+        .single());
+    } else {
+      ({ data, error } = await supabaseClient
+        .from('partners')
+        .insert({
+          ...payload,
+          created_by: state.user?.email || null
+        })
+        .select('*')
+        .single());
+    }
+
+    if (error) throw error;
+
+    upsertPartnerLocal(data);
+    partnersState.editingPartnerId = null;
+    return data;
+  } catch (error) {
+    console.error('SKLADAPLAN PARTNERS save error:', error);
+    toast('Не удалось сохранить контрагента: ' + (error.message || 'ошибка Supabase'), 'error');
+    return null;
+  }
+}
+
+async function deletePartner(id) {
+  const partner = partnerById(id);
+  if (!partner) return false;
+
+  if (!window.confirm(`Удалить контрагента «${partner.name}» и его контакты?`)) {
+    return false;
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from('partners')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    partnersState.items = partnersState.items.filter(item => !partnersSameId(item.id, id));
+    if (partnersSameId(partnersState.expandedPartnerId, id)) partnersState.expandedPartnerId = null;
+    return true;
+  } catch (error) {
+    console.error('SKLADAPLAN PARTNERS delete error:', error);
+    toast('Не удалось удалить контрагента: ' + (error.message || 'ошибка Supabase'), 'error');
+    return false;
+  }
+}
+
+async function saveContact(contactData) {
+  const partnerId = contactData.partner_id;
+  const name = normalizeText(contactData.name);
+
+  if (partnerId === null || partnerId === undefined || partnerId === '') {
+    toast('Не выбран контрагент', 'error');
+    return null;
+  }
+
+  if (!name) {
+    toast('Введите имя контакта', 'error');
+    return null;
+  }
+
+  const payload = {
+    partner_id: partnerId,
+    name,
+    position: normalizeText(contactData.position || ''),
+    phone: normalizeText(contactData.phone || ''),
+    phone_extra: normalizeText(contactData.phone_extra || ''),
+    email: normalizeText(contactData.email || ''),
+    comment: normalizeText(contactData.comment || ''),
+    primary_contact: !!contactData.primary_contact,
+    active: contactData.active !== false,
+    updated_by: state.user?.email || null
+  };
+
+  try {
+    let data;
+    let error;
+
+    if (partnersState.editingContactId !== null) {
+      ({ data, error } = await supabaseClient
+        .from('contacts')
+        .update(payload)
+        .eq('id', partnersState.editingContactId)
+        .select('*')
+        .single());
+    } else {
+      ({ data, error } = await supabaseClient
+        .from('contacts')
+        .insert({
+          ...payload,
+          created_by: state.user?.email || null
+        })
+        .select('*')
+        .single());
+    }
+
+    if (error) throw error;
+
+    const partner = partnerById(partnerId);
+    if (partner) {
+      if (partnersState.editingContactId !== null) {
+        partner.contacts = (partner.contacts || []).map(contact =>
+          partnersSameId(contact.id, data.id) ? data : contact
+        );
+      } else {
+        partner.contacts = [...(partner.contacts || []), data];
+      }
+
+      partner.contacts.sort((a, b) => {
+        if (a.primary_contact !== b.primary_contact) return a.primary_contact ? -1 : 1;
+        return String(a.name || '').localeCompare(String(b.name || ''), 'ru');
+      });
+
+      if (data.primary_contact) {
+        partner.contacts = partner.contacts.map(contact =>
+          partnersSameId(contact.id, data.id)
+            ? contact
+            : { ...contact, primary_contact: false }
+        );
+      }
+    }
+
+    partnersState.editingContactId = null;
+    partnersState.contactPartnerId = null;
+    return data;
+  } catch (error) {
+    console.error('SKLADAPLAN CONTACTS save error:', error);
+    toast('Не удалось сохранить контакт: ' + (error.message || 'ошибка Supabase'), 'error');
+    return null;
+  }
+}
+
+async function deleteContact(id, partnerId) {
+  try {
+    const { error } = await supabaseClient
+      .from('contacts')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    const partner = partnerById(partnerId);
+    if (partner) {
+      partner.contacts = (partner.contacts || []).filter(contact => !partnersSameId(contact.id, id));
+    }
+    return true;
+  } catch (error) {
+    console.error('SKLADAPLAN CONTACTS delete error:', error);
+    toast('Не удалось удалить контакт: ' + (error.message || 'ошибка Supabase'), 'error');
+    return false;
+  }
+}
+
+function partnerFormHtml(partner = null) {
+  const editing = !!partner;
+  return `
+    <div class="partner-form">
+      <div class="partner-form-grid">
+        <input type="text" class="partner-edit-name" value="${escapeHtml(partner?.name || '')}" placeholder="Название компании *">
+        <select class="partner-edit-category">
+          ${PARTNER_CATEGORIES.map(category => `<option value="${escapeHtml(category)}" ${category === (partner?.category || 'Прочее') ? 'selected' : ''}>${escapeHtml(category)}</option>`).join('')}
+        </select>
+        <input type="text" class="partner-edit-phone" value="${escapeHtml(partner?.phone || '')}" placeholder="Телефон">
+        <input type="email" class="partner-edit-email" value="${escapeHtml(partner?.email || '')}" placeholder="Email">
+        <input type="text" class="partner-edit-website" value="${escapeHtml(partner?.website || '')}" placeholder="Сайт">
+        <input type="text" class="partner-edit-city" value="${escapeHtml(partner?.city || '')}" placeholder="Город">
+        <input type="text" class="partner-edit-address" value="${escapeHtml(partner?.address || '')}" placeholder="Адрес">
+        <input type="text" class="partner-edit-tax-id" value="${escapeHtml(partner?.tax_id || '')}" placeholder="ИНН / налоговый номер">
+        <input type="text" class="partner-edit-registration-id" value="${escapeHtml(partner?.registration_id || '')}" placeholder="Регистрационный номер">
+      </div>
+      <textarea class="partner-edit-comment" placeholder="Комментарий">${escapeHtml(partner?.comment || '')}</textarea>
+      <div class="partner-form-bottom">
+        <label class="partner-check">
+          <input type="checkbox" class="partner-edit-favorite" ${partner?.favorite ? 'checked' : ''}>
+          <svg class="icon"><use href="#icon-star"></use></svg>
+          Избранный
+        </label>
+        <label class="partner-check">
+          <input type="checkbox" class="partner-edit-active" ${partner?.active !== false ? 'checked' : ''}>
+          Активен
+        </label>
+        <div class="partner-form-actions">
+          <button type="button" class="sp-btn" data-save-partner="${editing ? escapeHtml(partner.id) : 'new'}">Сохранить</button>
+          <button type="button" class="sp-btn secondary" data-cancel-partner>Отмена</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function contactFormHtml(partnerId, contact = null) {
+  return `
+    <div class="contact-form">
+      <div class="contact-form-grid">
+        <input type="text" class="contact-edit-name" value="${escapeHtml(contact?.name || '')}" placeholder="Имя и фамилия *">
+        <input type="text" class="contact-edit-position" value="${escapeHtml(contact?.position || '')}" placeholder="Должность">
+        <input type="text" class="contact-edit-phone" value="${escapeHtml(contact?.phone || '')}" placeholder="Телефон">
+        <input type="text" class="contact-edit-phone-extra" value="${escapeHtml(contact?.phone_extra || '')}" placeholder="Доп. телефон">
+        <input type="email" class="contact-edit-email" value="${escapeHtml(contact?.email || '')}" placeholder="Email">
+      </div>
+      <textarea class="contact-edit-comment" placeholder="Комментарий">${escapeHtml(contact?.comment || '')}</textarea>
+      <div class="contact-form-bottom">
+        <label class="partner-check">
+          <input type="checkbox" class="contact-edit-primary" ${contact?.primary_contact ? 'checked' : ''}>
+          Основной контакт
+        </label>
+        <label class="partner-check">
+          <input type="checkbox" class="contact-edit-active" ${contact?.active !== false ? 'checked' : ''}>
+          Активен
+        </label>
+        <div class="partner-form-actions">
+          <button type="button" class="sp-btn" data-save-contact="${escapeHtml(partnerId)}">Сохранить</button>
+          <button type="button" class="sp-btn secondary" data-cancel-contact>Отмена</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function partnerCardHtml(partner) {
+  const editing = partnersState.editingPartnerId !== null && partnersSameId(partnersState.editingPartnerId, partner.id);
+  const expanded = partnersState.expandedPartnerId !== null && partnersSameId(partnersState.expandedPartnerId, partner.id);
+
+  if (editing) {
+    return `
+      <div class="partner-card is-editing">
+        ${partnerFormHtml(partner)}
+      </div>
+    `;
+  }
+
+  const contacts = Array.isArray(partner.contacts) ? partner.contacts : [];
+  const visibleContacts = expanded ? contacts : contacts.slice(0, 2);
+
+  return `
+    <article class="partner-card ${partner.active === false ? 'is-inactive' : ''}">
+      <div class="partner-card-main">
+        <div class="partner-card-head">
+          <div class="partner-card-title-wrap">
+            <button type="button" class="partner-star ${partner.favorite ? 'is-active' : ''}" data-toggle-partner-favorite="${escapeHtml(partner.id)}" title="Избранное">
+              <svg class="icon"><use href="#icon-${partner.favorite ? 'star-filled' : 'star'}"></use></svg>
+            </button>
+            <div>
+              <h4>${escapeHtml(partner.name)}</h4>
+              <span class="partner-category">${escapeHtml(partner.category || 'Прочее')}</span>
+            </div>
+          </div>
+          <div class="partner-card-actions">
+            <button type="button" class="task-icon-btn" data-edit-partner="${escapeHtml(partner.id)}" title="Изменить">
+              <svg class="icon"><use href="#icon-edit"></use></svg>
+            </button>
+            <button type="button" class="task-icon-btn danger" data-delete-partner="${escapeHtml(partner.id)}" title="Удалить">
+              <svg class="icon"><use href="#icon-trash"></use></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="partner-company-data">
+          ${partner.phone ? `<span>☎ ${escapeHtml(partner.phone)}</span>` : ''}
+          ${partner.email ? `<span>✉ ${escapeHtml(partner.email)}</span>` : ''}
+          ${partner.city ? `<span>⌖ ${escapeHtml(partner.city)}</span>` : ''}
+        </div>
+
+        ${partner.comment ? `<div class="sp-muted partner-card-comment">${escapeHtml(partner.comment)}</div>` : ''}
+      </div>
+
+      <div class="partner-contacts-head">
+        <b>Контакты <span>${contacts.length}</span></b>
+        <button type="button" class="sp-btn secondary partner-add-contact" data-add-contact="${escapeHtml(partner.id)}">
+          <svg class="icon"><use href="#icon-plus"></use></svg>
+          Контакт
+        </button>
+      </div>
+
+      ${
+        partnersState.editingContactId !== null &&
+        partnersState.contactPartnerId !== null &&
+        partnersSameId(partnersState.contactPartnerId, partner.id)
+          ? contactFormHtml(partner.id, contacts.find(contact => partnersSameId(contact.id, partnersState.editingContactId)) || null)
+          : `
+            <div class="partner-contact-list">
+              ${visibleContacts.length ? visibleContacts.map(contact => `
+                <div class="partner-contact ${contact.active === false ? 'is-inactive' : ''}">
+                  <div class="partner-contact-info">
+                    <div class="partner-contact-name">
+                      ${escapeHtml(contact.name)}
+                      ${contact.primary_contact ? '<span class="partner-primary-badge">Основной</span>' : ''}
+                    </div>
+                    ${contact.position ? `<div class="sp-muted partner-contact-position">${escapeHtml(contact.position)}</div>` : ''}
+                    <div class="partner-contact-links">
+                      ${contact.phone ? `<span>☎ ${escapeHtml(contact.phone)}</span>` : ''}
+                      ${contact.phone_extra ? `<span>☎ ${escapeHtml(contact.phone_extra)}</span>` : ''}
+                      ${contact.email ? `<span>✉ ${escapeHtml(contact.email)}</span>` : ''}
+                    </div>
+                  </div>
+                  <div class="partner-contact-actions">
+                    <button type="button" class="task-icon-btn" data-edit-contact="${escapeHtml(contact.id)}" data-contact-partner="${escapeHtml(partner.id)}" title="Изменить">
+                      <svg class="icon"><use href="#icon-edit"></use></svg>
+                    </button>
+                    <button type="button" class="task-icon-btn danger" data-delete-contact="${escapeHtml(contact.id)}" data-contact-partner="${escapeHtml(partner.id)}" title="Удалить">
+                      <svg class="icon"><use href="#icon-trash"></use></svg>
+                    </button>
+                  </div>
+                </div>
+              `).join('') : '<div class="sp-muted partner-no-contacts">Контактов пока нет.</div>'}
+            </div>
+          `
+      }
+
+      ${contacts.length > 2 ? `
+        <button type="button" class="partner-show-more" data-toggle-partner="${escapeHtml(partner.id)}">
+          ${expanded ? 'Свернуть' : `Показать ещё (${contacts.length - 2})`}
+        </button>
+      ` : ''}
+    </article>
+  `;
+}
+
+function getFilteredPartners() {
+  const search = normalizeText(partnersState.search).toLowerCase();
+
+  return partnersState.items.filter(partner => {
+    if (partnersState.category !== 'all' && partner.category !== partnersState.category) return false;
+    if (!search) return true;
+
+    const haystack = [
+      partner.name,
+      partner.category,
+      partner.phone,
+      partner.email,
+      partner.city,
+      ...(partner.contacts || []).flatMap(contact => [contact.name, contact.position, contact.phone, contact.email])
+    ].join(' ').toLowerCase();
+
+    return haystack.includes(search);
+  });
+}
+
+function partnersViewHtml() {
+  if (partnersState.loading && !partnersState.loaded) {
+    return '<div class="sp-empty">Загружаем контрагентов...</div>';
+  }
+
+  if (partnersState.loadError && !partnersState.loaded) {
+    return `<div class="sp-empty">Не удалось загрузить контрагентов.<div class="sp-muted" style="margin-top:6px;font-size:12px;">${escapeHtml(partnersState.loadError)}</div></div>`;
+  }
+
+  if (partnersState.editingPartnerId === 'new') {
+    return `<div class="partner-card is-editing">${partnerFormHtml()}</div>`;
+  }
+
+  const partners = getFilteredPartners();
+  if (!partners.length) {
+    return '<div class="sp-empty">Контрагенты не найдены.</div>';
+  }
+
+  return `<div class="partner-list">${partners.map(partnerCardHtml).join('')}</div>`;
+}
+
+function partnersBlockHtml() {
+  return `
+    <section class="sp-card partners-block">
+      <div class="sp-dashboard-block-head partners-block-head">
+        <div>
+          <h2>Контрагенты и контакты</h2>
+          <div class="sp-muted partners-subtitle">Компании, перевозчики и контактные лица</div>
+        </div>
+        <button type="button" class="sp-btn" id="addPartnerBtn">
+          <svg class="icon"><use href="#icon-plus"></use></svg>
+          Добавить
+        </button>
+      </div>
+
+      <div class="partners-toolbar">
+        <input id="partnerSearchInput" type="search" value="${escapeHtml(partnersState.search)}" placeholder="Поиск компании или контакта...">
+        <select id="partnerCategoryFilter">
+          <option value="all" ${partnersState.category === 'all' ? 'selected' : ''}>Все категории</option>
+          ${PARTNER_CATEGORIES.map(category => `<option value="${escapeHtml(category)}" ${partnersState.category === category ? 'selected' : ''}>${escapeHtml(category)}</option>`).join('')}
+        </select>
+      </div>
+
+      ${partnersState.editingPartnerId === 'new' ? '' : partnersViewHtml()}
+
+      ${partnersState.editingPartnerId === 'new' ? partnerFormHtml() : ''}
+    </section>
+  `;
+}
+
+function setupPartners() {
+  if (!partnersState.loaded && !partnersState.loading) {
+    loadPartnersFromSupabase().then(() => {
+      if (document.getElementById('addPartnerBtn')) render();
+    });
+  }
+
+  $('#addPartnerBtn')?.addEventListener('click', () => {
+    partnersState.editingPartnerId = 'new';
+    render();
+  });
+
+  $('#partnerSearchInput')?.addEventListener('input', event => {
+    partnersState.search = event.target.value || '';
+
+    const cursor = event.target.selectionStart ?? partnersState.search.length;
+    render();
+
+    requestAnimationFrame(() => {
+      const input = document.getElementById('partnerSearchInput');
+      if (!input) return;
+      input.focus();
+      const nextCursor = Math.min(cursor, input.value.length);
+      input.setSelectionRange(nextCursor, nextCursor);
+    });
+  });
+
+  $('#partnerCategoryFilter')?.addEventListener('change', event => {
+    partnersState.category = event.target.value || 'all';
+    render();
+  });
+
+  $all('[data-cancel-partner]').forEach(button => {
+    button.addEventListener('click', () => {
+      partnersState.editingPartnerId = null;
+      render();
+    });
+  });
+
+  $all('[data-save-partner]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const form = button.closest('.partner-form');
+      if (!form) return;
+
+      const saved = await savePartner({
+        name: form.querySelector('.partner-edit-name')?.value,
+        category: form.querySelector('.partner-edit-category')?.value,
+        phone: form.querySelector('.partner-edit-phone')?.value,
+        email: form.querySelector('.partner-edit-email')?.value,
+        website: form.querySelector('.partner-edit-website')?.value,
+        city: form.querySelector('.partner-edit-city')?.value,
+        address: form.querySelector('.partner-edit-address')?.value,
+        tax_id: form.querySelector('.partner-edit-tax-id')?.value,
+        registration_id: form.querySelector('.partner-edit-registration-id')?.value,
+        comment: form.querySelector('.partner-edit-comment')?.value,
+        favorite: !!form.querySelector('.partner-edit-favorite')?.checked,
+        active: !!form.querySelector('.partner-edit-active')?.checked
+      });
+
+      if (saved) {
+        render();
+        toast('Контрагент сохранён');
+      }
+    });
+  });
+
+  $all('[data-edit-partner]').forEach(button => {
+    button.addEventListener('click', () => {
+      partnersState.editingPartnerId = button.dataset.editPartner;
+      render();
+    });
+  });
+
+  $all('[data-delete-partner]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const deleted = await deletePartner(button.dataset.deletePartner);
+      if (deleted) {
+        render();
+        toast('Контрагент удалён');
+      }
+    });
+  });
+
+  $all('[data-toggle-partner-favorite]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const partner = partnerById(button.dataset.togglePartnerFavorite);
+      if (!partner) return;
+
+      try {
+        const { data, error } = await supabaseClient
+          .from('partners')
+          .update({ favorite: !partner.favorite, updated_by: state.user?.email || null })
+          .eq('id', partner.id)
+          .select('*')
+          .single();
+        if (error) throw error;
+        upsertPartnerLocal(data);
+        render();
+      } catch (error) {
+        console.error('SKLADAPLAN PARTNERS favorite error:', error);
+        toast('Не удалось изменить избранное: ' + (error.message || 'ошибка Supabase'), 'error');
+      }
+    });
+  });
+
+  $all('[data-toggle-partner]').forEach(button => {
+    button.addEventListener('click', () => {
+      const id = button.dataset.togglePartner;
+      partnersState.expandedPartnerId = partnersSameId(partnersState.expandedPartnerId, id) ? null : id;
+      render();
+    });
+  });
+
+  $all('[data-add-contact]').forEach(button => {
+    button.addEventListener('click', () => {
+      partnersState.contactPartnerId = button.dataset.addContact;
+      partnersState.editingContactId = null;
+      render();
+    });
+  });
+
+  $all('[data-cancel-contact]').forEach(button => {
+    button.addEventListener('click', () => {
+      partnersState.editingContactId = null;
+      partnersState.contactPartnerId = null;
+      render();
+    });
+  });
+
+  $all('[data-edit-contact]').forEach(button => {
+    button.addEventListener('click', () => {
+      partnersState.editingContactId = button.dataset.editContact;
+      partnersState.contactPartnerId = button.dataset.contactPartner;
+      render();
+    });
+  });
+
+  $all('[data-save-contact]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const form = button.closest('.contact-form');
+      if (!form) return;
+
+      const saved = await saveContact({
+        partner_id: button.dataset.saveContact,
+        name: form.querySelector('.contact-edit-name')?.value,
+        position: form.querySelector('.contact-edit-position')?.value,
+        phone: form.querySelector('.contact-edit-phone')?.value,
+        phone_extra: form.querySelector('.contact-edit-phone-extra')?.value,
+        email: form.querySelector('.contact-edit-email')?.value,
+        comment: form.querySelector('.contact-edit-comment')?.value,
+        primary_contact: !!form.querySelector('.contact-edit-primary')?.checked,
+        active: !!form.querySelector('.contact-edit-active')?.checked
+      });
+
+      if (saved) {
+        render();
+        toast('Контакт сохранён');
+      }
+    });
+  });
+
+  $all('[data-delete-contact]').forEach(button => {
+    button.addEventListener('click', async () => {
+      if (!window.confirm('Удалить этот контакт?')) return;
+
+      const deleted = await deleteContact(
+        button.dataset.deleteContact,
+        button.dataset.contactPartner
+      );
+
+      if (deleted) {
+        render();
+        toast('Контакт удалён');
+      }
+    });
+  });
+}
+
 /* =========================================================
    СТРАНИЦА «ЗАДАЧИ»
    ========================================================= */
@@ -933,6 +1631,8 @@ function tasksView() {
       }
     </div>
 
+    ${partnersBlockHtml()}
+
   `;
 
 }
@@ -943,6 +1643,8 @@ function tasksView() {
    ========================================================= */
 
 function setupTasks() {
+
+  setupPartners();
 
   $('#addTaskBtn')?.addEventListener('click', async () => {
 
