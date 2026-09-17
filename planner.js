@@ -898,7 +898,11 @@ function plannerTaskCard(
 
         <div class="planner-card-content">
 
-          <div class="planner-card-title">
+          <div class="planner-card-title ${
+            task.status === PLANNER_TASK_STATUS_DONE
+              ? 'planner-card-title-done'
+              : ''
+          }">
             ${plannerEscape(
               task.title ||
               'Задача'
@@ -942,6 +946,30 @@ function plannerTaskCard(
         }
 
         <div class="planner-card-buttons">
+
+          <button
+            type="button"
+            class="planner-icon-button planner-task-complete ${
+              task.status === PLANNER_TASK_STATUS_DONE
+                ? 'is-active'
+                : ''
+            }"
+            data-toggle-task-status="${plannerEscape(
+              task.id
+            )}"
+            title="${
+              task.status === PLANNER_TASK_STATUS_DONE
+                ? 'Вернуть в работу'
+                : 'Выполнено'
+            }"
+            aria-label="${
+              task.status === PLANNER_TASK_STATUS_DONE
+                ? 'Вернуть в работу'
+                : 'Выполнено'
+            }"
+          >
+            ✓
+          </button>
 
           <button
             type="button"
@@ -1204,7 +1232,7 @@ function setupPlanner() {
 
   document.addEventListener('click', event => {
     const button = event.target.closest(
-      '#plannerRetryLoad, #plannerTodayButton, #plannerPrevMonth, #plannerNextMonth, [data-planner-date], #plannerAddShipment, #plannerAddTask, [data-edit-shipment], [data-delete-shipment], [data-favorite-task], [data-edit-task], [data-delete-task]'
+      '#plannerRetryLoad, #plannerTodayButton, #plannerPrevMonth, #plannerNextMonth, [data-planner-date], #plannerAddShipment, #plannerAddTask, [data-edit-shipment], [data-delete-shipment], [data-favorite-task], [data-toggle-task-status], [data-edit-task], [data-delete-task]'
     );
 
     if (!button) return;
@@ -1294,6 +1322,15 @@ function setupPlanner() {
       const id = button.dataset.favoriteTask;
       if (!id) return;
       plannerToggleTaskFavorite(id);
+      return;
+    }
+
+    if (button.matches('[data-toggle-task-status]')) {
+      event.preventDefault();
+      event.stopPropagation();
+      const id = button.dataset.toggleTaskStatus;
+      if (!id) return;
+      plannerToggleTaskStatus(id);
       return;
     }
 
@@ -2557,6 +2594,36 @@ function plannerExternalTaskCard(task) {
     </article>
   `;
 
+}
+
+
+/* ============================================================
+   СТАТУС ЗАДАЧИ ПЛАНИРОВЩИКА
+   ============================================================ */
+
+async function plannerToggleTaskStatus(id) {
+
+  const task =
+    plannerState.tasks.find(
+      item =>
+        plannerSameId(item.id, id)
+    );
+
+  if (!task) {
+    return;
+  }
+
+  const nextStatus =
+    task.status === PLANNER_TASK_STATUS_DONE
+      ? 'В работе'
+      : PLANNER_TASK_STATUS_DONE;
+
+  await plannerPatchTask(
+    id,
+    {
+      status: nextStatus
+    }
+  );
 }
 
 
