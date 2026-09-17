@@ -1217,12 +1217,16 @@ function partnerCardHtml(partner) {
         </button>
       </div>
 
-      ${
-        partnersState.editingContactId !== null &&
-        partnersState.contactPartnerId !== null &&
-        partnersSameId(partnersState.contactPartnerId, partner.id)
-          ? contactFormHtml(partner.id, contacts.find(contact => partnersSameId(contact.id, partnersState.editingContactId)) || null)
-          : `
+${
+  partnersState.contactPartnerId !== null &&
+  partnersSameId(partnersState.contactPartnerId, partner.id)
+    ? contactFormHtml(
+        partner.id,
+        partnersState.editingContactId !== null
+          ? contacts.find(contact => partnersSameId(contact.id, partnersState.editingContactId)) || null
+          : null
+      )
+    : `
             <div class="partner-contact-list">
               ${visibleContacts.length ? visibleContacts.map(contact => `
                 <div class="partner-contact ${contact.active === false ? 'is-inactive' : ''}">
