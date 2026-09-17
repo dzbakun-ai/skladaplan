@@ -9,6 +9,7 @@
    ============================================================ */
 
 const plannerState = {
+  eventsBound: false,
   currentDate: new Date(),
   selectedDate: new Date(),
 
@@ -30,11 +31,7 @@ const plannerState = {
   // для одного браузера/устройства.
   loading: false,
   loaded: false,
-  loadError: null,
-
-  // События Планировщика делегируются через document один раз.
-  // Это важно, потому что карточки и кнопки перерисовываются через render().
-  eventsBound: false
+  loadError: null
 };
 
 
@@ -121,10 +118,6 @@ function plannerEscape(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
-}
-
-function plannerSameId(a, b) {
-  return String(a) === String(b);
 }
 
 
@@ -842,6 +835,24 @@ function plannerShipmentCard(
         </span>
 
         <div class="planner-card-buttons">
+        <button
+            type="button"
+            class="planner-icon-button ${
+              task.status === 'Выполнено'
+                ? 'is-active'
+                : ''
+            }"
+            data-complete-task="${plannerEscape(task.id)}"
+            title="${
+              task.status === 'Выполнено'
+                ? 'Вернуть в работу'
+                : 'Отметить выполненной'
+            }"
+          >
+            <svg class="icon"><use href="#icon-check"></use></svg>
+          </button>
+
+
 
           <button
             type="button"
@@ -871,6 +882,11 @@ function plannerShipmentCard(
 
     </article>
   `;
+}
+
+
+function plannerSameId(a, b) {
+  return String(a) === String(b);
 }
 
 
@@ -1198,244 +1214,170 @@ function plannerView() {
    ============================================================ */
 
 function setupPlanner() {
-
   if (plannerState.eventsBound) {
     return;
   }
 
   plannerState.eventsBound = true;
 
-  document.addEventListener(
-    'click',
-    event => {
+  document.addEventListener('click', event => {
+    const button = event.target.closest(
+      '#plannerRetryLoad, #plannerTodayButton, #plannerPrevMonth, #plannerNextMonth, [data-planner-date], #plannerAddShipment, #plannerAddTask, [data-edit-shipment], [data-delete-shipment], [data-favorite-task], [data-edit-task], [data-delete-task], [data-complete-task]'
+    );
 
-      const target = event.target;
-
-      /*
-        Кнопки Планировщика перерисовываются через render(),
-        поэтому нельзя навешивать обработчики через
-        querySelectorAll() только один раз.
-      */
-
-      const retryButton =
-        target.closest('#plannerRetryLoad');
-
-      if (retryButton) {
-        event.preventDefault();
-
-        plannerState.initialized = false;
-        plannerState.loadError = null;
-
-        render();
-        return;
-      }
-
-      const todayButton =
-        target.closest('#plannerTodayButton');
-
-      if (todayButton) {
-        event.preventDefault();
-
-        const today = new Date();
-
-        plannerState.currentDate =
-          new Date(today);
-
-        plannerState.selectedDate =
-          new Date(today);
-
-        render();
-        return;
-      }
-
-      const prevMonthButton =
-        target.closest('#plannerPrevMonth');
-
-      if (prevMonthButton) {
-        event.preventDefault();
-
-        plannerState.currentDate =
-          new Date(
-            plannerState.currentDate.getFullYear(),
-            plannerState.currentDate.getMonth() - 1,
-            1
-          );
-
-        render();
-        return;
-      }
-
-      const nextMonthButton =
-        target.closest('#plannerNextMonth');
-
-      if (nextMonthButton) {
-        event.preventDefault();
-
-        plannerState.currentDate =
-          new Date(
-            plannerState.currentDate.getFullYear(),
-            plannerState.currentDate.getMonth() + 1,
-            1
-          );
-
-        render();
-        return;
-      }
-
-      const dateButton =
-        target.closest('[data-planner-date]');
-
-      if (dateButton) {
-        event.preventDefault();
-
-        const date =
-          plannerParseDate(
-            dateButton.dataset.plannerDate
-          );
-
-        plannerState.selectedDate =
-          date;
-
-        if (
-          date.getMonth() !==
-          plannerState.currentDate.getMonth()
-        ) {
-          plannerState.currentDate =
-            new Date(date);
-        }
-
-        render();
-        return;
-      }
-
-      const addShipmentButton =
-        target.closest('#plannerAddShipment');
-
-      if (addShipmentButton) {
-        event.preventDefault();
-
-        plannerOpenShipmentModal();
-        return;
-      }
-
-      const addTaskButton =
-        target.closest('#plannerAddTask');
-
-      if (addTaskButton) {
-        event.preventDefault();
-
-        plannerOpenTaskModal();
-        return;
-      }
-
-      const editShipmentButton =
-        target.closest('[data-edit-shipment]');
-
-      if (editShipmentButton) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const id =
-          editShipmentButton.dataset.editShipment;
-
-        if (!id) {
-          console.error(
-            'Planner: отсутствует data-edit-shipment'
-          );
-          return;
-        }
-
-        plannerOpenShipmentModal(id);
-        return;
-      }
-
-      const deleteShipmentButton =
-        target.closest('[data-delete-shipment]');
-
-      if (deleteShipmentButton) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const id =
-          deleteShipmentButton.dataset.deleteShipment;
-
-        if (!id) {
-          console.error(
-            'Planner: отсутствует data-delete-shipment'
-          );
-          return;
-        }
-
-        plannerDeleteShipment(id);
-        return;
-      }
-
-      const favoriteTaskButton =
-        target.closest('[data-favorite-task]');
-
-      if (favoriteTaskButton) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const id =
-          favoriteTaskButton.dataset.favoriteTask;
-
-        if (!id) {
-          console.error(
-            'Planner: отсутствует data-favorite-task'
-          );
-          return;
-        }
-
-        plannerToggleTaskFavorite(id);
-        return;
-      }
-
-      const editTaskButton =
-        target.closest('[data-edit-task]');
-
-      if (editTaskButton) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const id =
-          editTaskButton.dataset.editTask;
-
-        if (!id) {
-          console.error(
-            'Planner: отсутствует data-edit-task'
-          );
-          return;
-        }
-
-        plannerOpenTaskModal(id);
-        return;
-      }
-
-      const deleteTaskButton =
-        target.closest('[data-delete-task]');
-
-      if (deleteTaskButton) {
-        event.preventDefault();
-        event.stopPropagation();
-
-        const id =
-          deleteTaskButton.dataset.deleteTask;
-
-        if (!id) {
-          console.error(
-            'Planner: отсутствует data-delete-task'
-          );
-          return;
-        }
-
-        plannerDeleteTask(id);
-      }
-
+    if (!button) {
+      return;
     }
-  );
-}
 
+    if (button.id === 'plannerRetryLoad') {
+      plannerState.initialized = false;
+      plannerState.loadError = null;
+      render();
+      return;
+    }
+
+    if (button.id === 'plannerTodayButton') {
+      const today = new Date();
+      plannerState.currentDate = new Date(today);
+      plannerState.selectedDate = new Date(today);
+      render();
+      return;
+    }
+
+    if (button.id === 'plannerPrevMonth') {
+      plannerState.currentDate = new Date(
+        plannerState.currentDate.getFullYear(),
+        plannerState.currentDate.getMonth() - 1,
+        1
+      );
+      render();
+      return;
+    }
+
+    if (button.id === 'plannerNextMonth') {
+      plannerState.currentDate = new Date(
+        plannerState.currentDate.getFullYear(),
+        plannerState.currentDate.getMonth() + 1,
+        1
+      );
+      render();
+      return;
+    }
+
+    if (button.matches('[data-planner-date]')) {
+      const value = button.dataset.plannerDate;
+      if (!value) return;
+
+      const date = plannerParseDate(value);
+      if (Number.isNaN(date.getTime())) return;
+
+      plannerState.selectedDate = date;
+
+      if (
+        date.getMonth() !== plannerState.currentDate.getMonth() ||
+        date.getFullYear() !== plannerState.currentDate.getFullYear()
+      ) {
+        plannerState.currentDate = new Date(date);
+      }
+
+      render();
+      return;
+    }
+
+    if (button.id === 'plannerAddShipment') {
+      plannerOpenShipmentModal();
+      return;
+    }
+
+    if (button.id === 'plannerAddTask') {
+      plannerOpenTaskModal();
+      return;
+    }
+
+    if (button.matches('[data-edit-shipment]')) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const id = button.dataset.editShipment;
+      if (!id) {
+        console.error('Planner: отсутствует data-edit-shipment');
+        return;
+      }
+
+      plannerOpenShipmentModal(id);
+      return;
+    }
+
+    if (button.matches('[data-delete-shipment]')) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const id = button.dataset.deleteShipment;
+      if (!id) {
+        console.error('Planner: отсутствует data-delete-shipment');
+        return;
+      }
+
+      plannerDeleteShipment(id);
+      return;
+    }
+
+    if (button.matches('[data-favorite-task]')) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const id = button.dataset.favoriteTask;
+      if (!id) {
+        console.error('Planner: отсутствует data-favorite-task');
+        return;
+      }
+
+      plannerToggleTaskFavorite(id);
+      return;
+    }
+
+    if (button.matches('[data-edit-task]')) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const id = button.dataset.editTask;
+      if (!id) {
+        console.error('Planner: отсутствует data-edit-task');
+        return;
+      }
+
+      plannerOpenTaskModal(id);
+      return;
+    }
+
+    if (button.matches('[data-complete-task]')) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const id = button.dataset.completeTask;
+      if (!id) {
+        console.error('Planner: отсутствует data-complete-task');
+        return;
+      }
+
+      plannerToggleTaskDone(id);
+      return;
+    }
+
+    if (button.matches('[data-delete-task]')) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const id = button.dataset.deleteTask;
+      if (!id) {
+        console.error('Planner: отсутствует data-delete-task');
+        return;
+      }
+
+      plannerDeleteTask(id);
+    }
+  });
+}
 
 /* ============================================================
    SHIPMENT MODAL
@@ -1458,13 +1400,13 @@ function plannerOpenShipmentModal(
 
   if (id && !shipment) {
     console.error(
-      'Planner: отгрузка не найдена:',
+      'Planner: отгрузка для редактирования не найдена:',
       id
     );
 
     if (typeof toast === 'function') {
       toast(
-        'Не удалось открыть отгрузку для редактирования',
+        'Отгрузка не найдена',
         'error'
       );
     }
@@ -1657,6 +1599,19 @@ function plannerOpenShipmentModal(
         </label>
 
 
+        <label class="planner-check">
+
+          <input
+            type="checkbox"
+            name="favorite"
+            ${favorite ? 'checked' : ''}
+          >
+
+          <span>Избранная задача</span>
+
+        </label>
+
+
         <div class="planner-form-actions">
 
           <button
@@ -1804,10 +1759,8 @@ async function plannerSaveShipment(
     const index =
       plannerState.shipments.findIndex(
         item =>
-          plannerSameId(
-          item.id,
+          item.id ===
           plannerState.editingShipmentId
-        )
       );
 
     const mapped =
@@ -1892,7 +1845,7 @@ async function plannerDeleteShipment(
   const shipment =
     plannerState.shipments.find(
       item =>
-        item.id === id
+        plannerSameId(item.id, id)
     );
 
   if (!shipment) {
@@ -1946,7 +1899,7 @@ async function plannerDeleteShipment(
   plannerState.shipments =
     plannerState.shipments.filter(
       item =>
-        !plannerSameId(item.id, id)
+        !(plannerSameId(item.id, id))
     );
 
   render();
@@ -1974,13 +1927,13 @@ function plannerOpenTaskModal(
 
   if (id && !task) {
     console.error(
-      'Planner: задача не найдена:',
+      'Planner: задача для редактирования не найдена:',
       id
     );
 
     if (typeof toast === 'function') {
       toast(
-        'Не удалось открыть задачу для редактирования',
+        'Задача не найдена',
         'error'
       );
     }
@@ -2309,10 +2262,8 @@ async function plannerSaveTask(
     const index =
       plannerState.tasks.findIndex(
         item =>
-          plannerSameId(
-          item.id,
+          item.id ===
           plannerState.editingTaskId
-        )
       );
 
     const mapped =
@@ -2390,6 +2341,72 @@ async function plannerSaveTask(
    DELETE TASK
    ============================================================ */
 
+async function plannerToggleTaskDone(id) {
+  const task = plannerState.tasks.find(
+    item => plannerSameId(item.id, id)
+  );
+
+  if (!task) {
+    console.error(
+      'Planner: задача для завершения не найдена:',
+      id
+    );
+
+    if (typeof toast === 'function') {
+      toast('Задача не найдена', 'error');
+    }
+
+    return;
+  }
+
+  const nextStatus =
+    task.status === 'Выполнено'
+      ? 'К выполнению'
+      : 'Выполнено';
+
+  const { data, error } =
+    await supabaseClient
+      .from('planner_tasks')
+      .update({
+        status: nextStatus
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+  if (error) {
+    console.error(
+      'Planner toggle task done error:',
+      error
+    );
+
+    if (typeof toast === 'function') {
+      toast(
+        error.message ||
+        'Не удалось изменить статус задачи',
+        'error'
+      );
+    }
+
+    return;
+  }
+
+  const index =
+    plannerState.tasks.findIndex(
+      item => plannerSameId(item.id, id)
+    );
+
+  if (index !== -1) {
+    plannerState.tasks[index] =
+      data || {
+        ...plannerState.tasks[index],
+        status: nextStatus
+      };
+  }
+
+  render();
+}
+
 async function plannerDeleteTask(
   id
 ) {
@@ -2397,7 +2414,7 @@ async function plannerDeleteTask(
   const task =
     plannerState.tasks.find(
       item =>
-        item.id === id
+        plannerSameId(item.id, id)
     );
 
   if (!task) {
@@ -2451,7 +2468,7 @@ async function plannerDeleteTask(
   plannerState.tasks =
     plannerState.tasks.filter(
       item =>
-        !plannerSameId(item.id, id)
+        !(plannerSameId(item.id, id))
     );
 
   render();
@@ -2702,7 +2719,7 @@ async function plannerToggleTaskFavorite(id) {
   const task =
     plannerState.tasks.find(
       item =>
-        item.id === id
+        plannerSameId(item.id, id)
     );
 
   if (!task) {
@@ -2768,7 +2785,7 @@ async function plannerPatchTask(
   const index =
     plannerState.tasks.findIndex(
       item =>
-        item.id === id
+        plannerSameId(item.id, id)
     );
 
   if (index !== -1) {
