@@ -14361,7 +14361,12 @@ async function setDirectionForCollected() {
       )
       .map(
         checkbox =>
-          checkbox.dataset.id
+          Number(checkbox.dataset.id)
+      )
+      .filter(
+        id =>
+          Number.isSafeInteger(id) &&
+          id > 0
       );
 
 
@@ -33537,7 +33542,7 @@ function applyNavIconColor(
     isActive
       ? (
           isMobile
-            ? '#2563EB'
+            ? '#0f766e'
             : '#fff'
         )
       : '';
