@@ -974,3 +974,23 @@
   font-weight: 700;
   white-space: nowrap;
 }
+
+/* ============================================================
+   SKLADAPLAN — CALENDAR DAY ALIGNMENT
+   Цифра дня всегда в левом верхнем углу ячейки
+   ============================================================ */
+
+.planner-day {
+  display: flex !important;
+  flex-direction: column !important;
+
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+
+  text-align: left !important;
+}
+
+.planner-day-number {
+  margin: 0 !important;
+  flex: 0 0 auto !important;
+}
