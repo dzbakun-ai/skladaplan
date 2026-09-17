@@ -111,6 +111,11 @@ function plannerSameDate(a, b) {
 }
 
 
+function plannerSameId(a, b) {
+  return String(a) === String(b);
+}
+
+
 function plannerEscape(value) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -835,24 +840,6 @@ function plannerShipmentCard(
         </span>
 
         <div class="planner-card-buttons">
-        <button
-            type="button"
-            class="planner-icon-button ${
-              task.status === 'Выполнено'
-                ? 'is-active'
-                : ''
-            }"
-            data-complete-task="${plannerEscape(task.id)}"
-            title="${
-              task.status === 'Выполнено'
-                ? 'Вернуть в работу'
-                : 'Отметить выполненной'
-            }"
-          >
-            <svg class="icon"><use href="#icon-check"></use></svg>
-          </button>
-
-
 
           <button
             type="button"
@@ -882,11 +869,6 @@ function plannerShipmentCard(
 
     </article>
   `;
-}
-
-
-function plannerSameId(a, b) {
-  return String(a) === String(b);
 }
 
 
@@ -1222,12 +1204,10 @@ function setupPlanner() {
 
   document.addEventListener('click', event => {
     const button = event.target.closest(
-      '#plannerRetryLoad, #plannerTodayButton, #plannerPrevMonth, #plannerNextMonth, [data-planner-date], #plannerAddShipment, #plannerAddTask, [data-edit-shipment], [data-delete-shipment], [data-favorite-task], [data-edit-task], [data-delete-task], [data-complete-task]'
+      '#plannerRetryLoad, #plannerTodayButton, #plannerPrevMonth, #plannerNextMonth, [data-planner-date], #plannerAddShipment, #plannerAddTask, [data-edit-shipment], [data-delete-shipment], [data-favorite-task], [data-edit-task], [data-delete-task]'
     );
 
-    if (!button) {
-      return;
-    }
+    if (!button) return;
 
     if (button.id === 'plannerRetryLoad') {
       plannerState.initialized = false;
@@ -1267,19 +1247,15 @@ function setupPlanner() {
     if (button.matches('[data-planner-date]')) {
       const value = button.dataset.plannerDate;
       if (!value) return;
-
       const date = plannerParseDate(value);
       if (Number.isNaN(date.getTime())) return;
-
       plannerState.selectedDate = date;
-
       if (
         date.getMonth() !== plannerState.currentDate.getMonth() ||
         date.getFullYear() !== plannerState.currentDate.getFullYear()
       ) {
         plannerState.currentDate = new Date(date);
       }
-
       render();
       return;
     }
@@ -1297,13 +1273,8 @@ function setupPlanner() {
     if (button.matches('[data-edit-shipment]')) {
       event.preventDefault();
       event.stopPropagation();
-
       const id = button.dataset.editShipment;
-      if (!id) {
-        console.error('Planner: отсутствует data-edit-shipment');
-        return;
-      }
-
+      if (!id) return;
       plannerOpenShipmentModal(id);
       return;
     }
@@ -1311,13 +1282,8 @@ function setupPlanner() {
     if (button.matches('[data-delete-shipment]')) {
       event.preventDefault();
       event.stopPropagation();
-
       const id = button.dataset.deleteShipment;
-      if (!id) {
-        console.error('Planner: отсутствует data-delete-shipment');
-        return;
-      }
-
+      if (!id) return;
       plannerDeleteShipment(id);
       return;
     }
@@ -1325,13 +1291,8 @@ function setupPlanner() {
     if (button.matches('[data-favorite-task]')) {
       event.preventDefault();
       event.stopPropagation();
-
       const id = button.dataset.favoriteTask;
-      if (!id) {
-        console.error('Planner: отсутствует data-favorite-task');
-        return;
-      }
-
+      if (!id) return;
       plannerToggleTaskFavorite(id);
       return;
     }
@@ -1339,41 +1300,17 @@ function setupPlanner() {
     if (button.matches('[data-edit-task]')) {
       event.preventDefault();
       event.stopPropagation();
-
       const id = button.dataset.editTask;
-      if (!id) {
-        console.error('Planner: отсутствует data-edit-task');
-        return;
-      }
-
+      if (!id) return;
       plannerOpenTaskModal(id);
-      return;
-    }
-
-    if (button.matches('[data-complete-task]')) {
-      event.preventDefault();
-      event.stopPropagation();
-
-      const id = button.dataset.completeTask;
-      if (!id) {
-        console.error('Planner: отсутствует data-complete-task');
-        return;
-      }
-
-      plannerToggleTaskDone(id);
       return;
     }
 
     if (button.matches('[data-delete-task]')) {
       event.preventDefault();
       event.stopPropagation();
-
       const id = button.dataset.deleteTask;
-      if (!id) {
-        console.error('Planner: отсутствует data-delete-task');
-        return;
-      }
-
+      if (!id) return;
       plannerDeleteTask(id);
     }
   });
@@ -1399,18 +1336,8 @@ function plannerOpenShipmentModal(
       : null;
 
   if (id && !shipment) {
-    console.error(
-      'Planner: отгрузка для редактирования не найдена:',
-      id
-    );
-
-    if (typeof toast === 'function') {
-      toast(
-        'Отгрузка не найдена',
-        'error'
-      );
-    }
-
+    console.error('Planner: отгрузка для редактирования не найдена:', id);
+    if (typeof toast === 'function') toast('Отгрузка не найдена', 'error');
     plannerState.editingShipmentId = null;
     return;
   }
@@ -1596,19 +1523,6 @@ function plannerOpenShipmentModal(
             rows="4"
             placeholder="Дополнительная информация"
           >${plannerEscape(comment)}</textarea>
-        </label>
-
-
-        <label class="planner-check">
-
-          <input
-            type="checkbox"
-            name="favorite"
-            ${favorite ? 'checked' : ''}
-          >
-
-          <span>Избранная задача</span>
-
         </label>
 
 
@@ -1899,7 +1813,7 @@ async function plannerDeleteShipment(
   plannerState.shipments =
     plannerState.shipments.filter(
       item =>
-        !(plannerSameId(item.id, id))
+        !plannerSameId(item.id, id)
     );
 
   render();
@@ -1926,18 +1840,8 @@ function plannerOpenTaskModal(
       : null;
 
   if (id && !task) {
-    console.error(
-      'Planner: задача для редактирования не найдена:',
-      id
-    );
-
-    if (typeof toast === 'function') {
-      toast(
-        'Задача не найдена',
-        'error'
-      );
-    }
-
+    console.error('Planner: задача для редактирования не найдена:', id);
+    if (typeof toast === 'function') toast('Задача не найдена', 'error');
     plannerState.editingTaskId = null;
     return;
   }
@@ -2341,72 +2245,6 @@ async function plannerSaveTask(
    DELETE TASK
    ============================================================ */
 
-async function plannerToggleTaskDone(id) {
-  const task = plannerState.tasks.find(
-    item => plannerSameId(item.id, id)
-  );
-
-  if (!task) {
-    console.error(
-      'Planner: задача для завершения не найдена:',
-      id
-    );
-
-    if (typeof toast === 'function') {
-      toast('Задача не найдена', 'error');
-    }
-
-    return;
-  }
-
-  const nextStatus =
-    task.status === 'Выполнено'
-      ? 'К выполнению'
-      : 'Выполнено';
-
-  const { data, error } =
-    await supabaseClient
-      .from('planner_tasks')
-      .update({
-        status: nextStatus
-      })
-      .eq('id', id)
-      .select()
-      .single();
-
-  if (error) {
-    console.error(
-      'Planner toggle task done error:',
-      error
-    );
-
-    if (typeof toast === 'function') {
-      toast(
-        error.message ||
-        'Не удалось изменить статус задачи',
-        'error'
-      );
-    }
-
-    return;
-  }
-
-  const index =
-    plannerState.tasks.findIndex(
-      item => plannerSameId(item.id, id)
-    );
-
-  if (index !== -1) {
-    plannerState.tasks[index] =
-      data || {
-        ...plannerState.tasks[index],
-        status: nextStatus
-      };
-  }
-
-  render();
-}
-
 async function plannerDeleteTask(
   id
 ) {
@@ -2468,7 +2306,7 @@ async function plannerDeleteTask(
   plannerState.tasks =
     plannerState.tasks.filter(
       item =>
-        !(plannerSameId(item.id, id))
+        !plannerSameId(item.id, id)
     );
 
   render();
