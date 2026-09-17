@@ -93,8 +93,8 @@
 
 
 .planner-button-primary:hover {
-  background: #222;
-  border-color: #222;
+  background: var(--primary-hover, #1D4ED8);
+  border-color: var(--primary-hover, #1D4ED8);
 }
 
 
