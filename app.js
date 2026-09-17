@@ -5,10 +5,7 @@
 
 'use strict';
 
-
-/* =========================================================
-   SUPABASE
-   ========================================================= */
+   // SUPABASE
 
 const SUPABASE_URL =
   'https://ithhecprdosvjiddoalq.supabase.co';
@@ -22,10 +19,7 @@ const supabaseClient =
     SUPABASE_KEY
   );
 
-
-/* =========================================================
-   CONFIG
-   ========================================================= */
+ // CONFIG
 
 const PAGE_SIZE = 100;
 
