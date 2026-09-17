@@ -828,7 +828,8 @@ const partnersState = {
   editingPartnerId: null,
   editingContactId: null,
   contactPartnerId: null,
-  expandedPartnerId: null
+  expandedPartnerId: null,
+  eventsBound: false
 };
 
 function partnersSameId(a, b) {
@@ -1329,41 +1330,38 @@ function setupPartners() {
     });
   }
 
-  $('#addPartnerBtn')?.addEventListener('click', () => {
-    partnersState.editingPartnerId = 'new';
-    render();
-  });
+  // Все динамические элементы блока контрагентов/контактов
+  // обрабатываем через одну делегацию. После render() DOM пересоздаётся,
+  // поэтому прямые listeners на кнопках ненадёжны.
+  if (partnersState.eventsBound) return;
+  partnersState.eventsBound = true;
 
-  $('#partnerSearchInput')?.addEventListener('input', event => {
-    partnersState.search = event.target.value || '';
+  document.addEventListener('click', async event => {
+    const target = event.target.closest?.('button, [data-edit-contact], [data-delete-contact]');
+    if (!target) return;
 
-    const cursor = event.target.selectionStart ?? partnersState.search.length;
-    render();
-
-    requestAnimationFrame(() => {
-      const input = document.getElementById('partnerSearchInput');
-      if (!input) return;
-      input.focus();
-      const nextCursor = Math.min(cursor, input.value.length);
-      input.setSelectionRange(nextCursor, nextCursor);
-    });
-  });
-
-  $('#partnerCategoryFilter')?.addEventListener('change', event => {
-    partnersState.category = event.target.value || 'all';
-    render();
-  });
-
-  $all('[data-cancel-partner]').forEach(button => {
-    button.addEventListener('click', () => {
-      partnersState.editingPartnerId = null;
+    const addPartnerButton = target.closest('#addPartnerBtn');
+    if (addPartnerButton) {
+      if (!document.getElementById('addPartnerBtn')) return;
+      partnersState.editingPartnerId = 'new';
+      partnersState.editingContactId = null;
+      partnersState.contactPartnerId = null;
       render();
-    });
-  });
+      return;
+    }
 
-  $all('[data-save-partner]').forEach(button => {
-    button.addEventListener('click', async () => {
-      const form = button.closest('.partner-form');
+    const cancelPartner = target.closest('[data-cancel-partner]');
+    if (cancelPartner) {
+      partnersState.editingPartnerId = null;
+      partnersState.editingContactId = null;
+      partnersState.contactPartnerId = null;
+      render();
+      return;
+    }
+
+    const savePartnerButton = target.closest('[data-save-partner]');
+    if (savePartnerButton) {
+      const form = savePartnerButton.closest('.partner-form');
       if (!form) return;
 
       const saved = await savePartner({
@@ -1385,29 +1383,31 @@ function setupPartners() {
         render();
         toast('Контрагент сохранён');
       }
-    });
-  });
+      return;
+    }
 
-  $all('[data-edit-partner]').forEach(button => {
-    button.addEventListener('click', () => {
-      partnersState.editingPartnerId = button.dataset.editPartner;
+    const editPartnerButton = target.closest('[data-edit-partner]');
+    if (editPartnerButton) {
+      partnersState.editingPartnerId = editPartnerButton.dataset.editPartner;
+      partnersState.editingContactId = null;
+      partnersState.contactPartnerId = null;
       render();
-    });
-  });
+      return;
+    }
 
-  $all('[data-delete-partner]').forEach(button => {
-    button.addEventListener('click', async () => {
-      const deleted = await deletePartner(button.dataset.deletePartner);
+    const deletePartnerButton = target.closest('[data-delete-partner]');
+    if (deletePartnerButton) {
+      const deleted = await deletePartner(deletePartnerButton.dataset.deletePartner);
       if (deleted) {
         render();
         toast('Контрагент удалён');
       }
-    });
-  });
+      return;
+    }
 
-  $all('[data-toggle-partner-favorite]').forEach(button => {
-    button.addEventListener('click', async () => {
-      const partner = partnerById(button.dataset.togglePartnerFavorite);
+    const favoriteButton = target.closest('[data-toggle-partner-favorite]');
+    if (favoriteButton) {
+      const partner = partnerById(favoriteButton.dataset.togglePartnerFavorite);
       if (!partner) return;
 
       try {
@@ -1424,48 +1424,69 @@ function setupPartners() {
         console.error('SKLADAPLAN PARTNERS favorite error:', error);
         toast('Не удалось изменить избранное: ' + (error.message || 'ошибка Supabase'), 'error');
       }
-    });
-  });
+      return;
+    }
 
-  $all('[data-toggle-partner]').forEach(button => {
-    button.addEventListener('click', () => {
-      const id = button.dataset.togglePartner;
+    const togglePartnerButton = target.closest('[data-toggle-partner]');
+    if (togglePartnerButton) {
+      const id = togglePartnerButton.dataset.togglePartner;
       partnersState.expandedPartnerId = partnersSameId(partnersState.expandedPartnerId, id) ? null : id;
       render();
-    });
-  });
+      return;
+    }
 
-  $all('[data-add-contact]').forEach(button => {
-    button.addEventListener('click', () => {
-      partnersState.contactPartnerId = button.dataset.addContact;
+    const addContactButton = target.closest('[data-add-contact]');
+    if (addContactButton) {
+      const partnerId = addContactButton.dataset.addContact;
+      if (!partnerById(partnerId)) {
+        toast('Контрагент не найден', 'error');
+        return;
+      }
+      partnersState.contactPartnerId = partnerId;
       partnersState.editingContactId = null;
       render();
-    });
-  });
+      return;
+    }
 
-  $all('[data-cancel-contact]').forEach(button => {
-    button.addEventListener('click', () => {
+    const cancelContact = target.closest('[data-cancel-contact]');
+    if (cancelContact) {
       partnersState.editingContactId = null;
       partnersState.contactPartnerId = null;
       render();
-    });
-  });
+      return;
+    }
 
-  $all('[data-edit-contact]').forEach(button => {
-    button.addEventListener('click', () => {
-      partnersState.editingContactId = button.dataset.editContact;
-      partnersState.contactPartnerId = button.dataset.contactPartner;
+    const editContactButton = target.closest('[data-edit-contact]');
+    if (editContactButton) {
+      const contactId = editContactButton.dataset.editContact;
+      const partnerId = editContactButton.dataset.contactPartner;
+      const partner = partnerById(partnerId);
+      const contact = partner?.contacts?.find(item => partnersSameId(item.id, contactId));
+
+      if (!partner || !contact) {
+        toast('Контакт не найден', 'error');
+        return;
+      }
+
+      partnersState.editingContactId = contactId;
+      partnersState.contactPartnerId = partnerId;
       render();
-    });
-  });
+      return;
+    }
 
-  $all('[data-save-contact]').forEach(button => {
-    button.addEventListener('click', async () => {
-      const form = button.closest('.contact-form');
+    const saveContactButton = target.closest('[data-save-contact]');
+    if (saveContactButton) {
+      const form = saveContactButton.closest('.contact-form');
       if (!form) return;
 
+      const partnerId = saveContactButton.dataset.saveContact;
+      if (!partnerById(partnerId)) {
+        toast('Контрагент не найден', 'error');
+        return;
+      }
+
       const saved = await saveContact({
-        partner_id: button.dataset.saveContact,
+        partner_id: partnerId,
         name: form.querySelector('.contact-edit-name')?.value,
         position: form.querySelector('.contact-edit-position')?.value,
         phone: form.querySelector('.contact-edit-phone')?.value,
@@ -1480,23 +1501,48 @@ function setupPartners() {
         render();
         toast('Контакт сохранён');
       }
-    });
-  });
+      return;
+    }
 
-  $all('[data-delete-contact]').forEach(button => {
-    button.addEventListener('click', async () => {
+    const deleteContactButton = target.closest('[data-delete-contact]');
+    if (deleteContactButton) {
       if (!window.confirm('Удалить этот контакт?')) return;
 
       const deleted = await deleteContact(
-        button.dataset.deleteContact,
-        button.dataset.contactPartner
+        deleteContactButton.dataset.deleteContact,
+        deleteContactButton.dataset.contactPartner
       );
 
       if (deleted) {
         render();
         toast('Контакт удалён');
       }
+    }
+  });
+
+  // Поиск и фильтр не конфликтуют с динамической отрисовкой.
+  document.addEventListener('input', event => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || input.id !== 'partnerSearchInput') return;
+
+    partnersState.search = input.value || '';
+    const cursor = input.selectionStart ?? partnersState.search.length;
+    render();
+
+    requestAnimationFrame(() => {
+      const nextInput = document.getElementById('partnerSearchInput');
+      if (!nextInput) return;
+      nextInput.focus();
+      const nextCursor = Math.min(cursor, nextInput.value.length);
+      nextInput.setSelectionRange(nextCursor, nextCursor);
     });
+  });
+
+  document.addEventListener('change', event => {
+    const select = event.target;
+    if (!(select instanceof HTMLSelectElement) || select.id !== 'partnerCategoryFilter') return;
+    partnersState.category = select.value || 'all';
+    render();
   });
 }
 
