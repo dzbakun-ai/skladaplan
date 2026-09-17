@@ -3252,84 +3252,58 @@ box-shadow: inset 0 -3px 0 #e2e8f0;
 }
 
 /* =========================================================
-   SKLADAPLAN — MOBILE BRAND UI
-   Брендовая верхняя и нижняя навигация.
-   Desktop не затрагивается.
+   SKLADAPLAN — MOBILE NAV ICON VISIBILITY
+   Иконка должна занимать верхнюю часть кнопки,
+   подпись — находиться под ней.
    ========================================================= */
 
 @media (max-width: 700px) {
-  .topbar {
-    background: var(--primary) !important;
-    color: #fff !important;
-    border-bottom-color: rgba(255, 255, 255, .18) !important;
-    box-shadow: 0 2px 12px rgba(15, 23, 42, .12);
+  .mobile-nav-btn > span {
+    flex: 0 0 24px !important;
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    color: inherit !important;
+    line-height: 0 !important;
   }
 
-  .topbar h1,
-  .topbar-title,
-  .crumb,
-  .crumb span {
-    color: #fff !important;
+  .mobile-nav-btn > span > svg.icon {
+    display: block !important;
+    width: 22px !important;
+    height: 22px !important;
+    min-width: 22px !important;
+    min-height: 22px !important;
+    max-width: 22px !important;
+    max-height: 22px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    fill: none !important;
+    stroke: currentColor !important;
+    stroke-width: 1.9 !important;
+    stroke-linecap: round !important;
+    stroke-linejoin: round !important;
+
+    color: inherit !important;
+    overflow: visible !important;
+    pointer-events: none !important;
   }
 
-  .crumb {
-    opacity: .78;
+  .mobile-nav-btn > span > svg.icon use {
+    stroke: currentColor !important;
+    fill: none !important;
   }
 
-  .mobile-menu {
-    background: rgba(255, 255, 255, .10) !important;
-    color: #fff !important;
-  }
-
-  .mobile-menu:hover,
-  .mobile-menu:active {
-    background: rgba(255, 255, 255, .18) !important;
-    color: #fff !important;
-  }
-
-  .mobile-nav {
-    background: var(--sidebar-bg) !important;
-    border-top-color: rgba(255, 255, 255, .10) !important;
-    box-shadow: 0 -6px 24px rgba(15, 23, 42, .20) !important;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-
-  .mobile-nav-btn {
-    color: #94a3b8 !important;
-    background: transparent !important;
-  }
-
-  .mobile-nav-btn:hover {
-    background: rgba(255, 255, 255, .06) !important;
-    color: #e2e8f0 !important;
-  }
-
-  .mobile-nav-btn.active {
-    background: var(--primary) !important;
-    color: #fff !important;
-  }
-
-  .mobile-nav-btn.active > span,
-  .mobile-nav-btn.active > small,
-  .mobile-nav-btn.active .icon,
-  .mobile-nav-btn.active .icon use {
-    color: #fff !important;
+  .mobile-nav-btn.active > span > svg.icon,
+  .mobile-nav-btn.active > span > svg.icon use {
     stroke: #fff !important;
-  }
-
-  .mobile-nav-btn.active .icon,
-  .mobile-nav-btn.active .icon use {
-    stroke-width: 2 !important;
-  }
-
-  .mobile-nav-btn > em {
-    background: var(--primary) !important;
     color: #fff !important;
-  }
-
-  .mobile-nav-btn.active > em {
-    background: #fff !important;
-    color: var(--primary) !important;
   }
 }
