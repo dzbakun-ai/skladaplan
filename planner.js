@@ -1389,7 +1389,25 @@ function setupPlanner() {
         );
       }
     );
+   
+document
+  .querySelectorAll(
+    '[data-edit-task]'
+  )
+  .forEach(
+    button => {
 
+      button.addEventListener(
+        'click',
+        () => {
+
+          plannerOpenTaskModal(
+            button.dataset.editTask
+          );
+        }
+      );
+    }
+  );
 
 document.addEventListener(
   'click',
