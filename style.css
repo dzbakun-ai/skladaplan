@@ -3252,163 +3252,27 @@ box-shadow: inset 0 -3px 0 #e2e8f0;
 }
 
 /* =========================================================
-   SKLADAPLAN — FINAL MOBILE NAVIGATION
-   Бренд + иконки. Единый финальный блок.
-   Desktop не затрагивается.
+   SKLADAPLAN — MOBILE NAV FULL WIDTH FIX
+   Каждый пункт нижнего бара занимает равную долю всей ширины.
    ========================================================= */
 
 @media (max-width: 700px) {
-
-  /* ---------- TOP BAR ---------- */
-
-  .topbar {
-    background: var(--primary) !important;
-    color: #fff !important;
-    border-bottom-color: rgba(255,255,255,.18) !important;
-    box-shadow: 0 2px 12px rgba(15,23,42,.12) !important;
-  }
-
-  .topbar h1,
-  .topbar-title,
-  .crumb,
-  .crumb span {
-    color: #fff !important;
-  }
-
-  .crumb {
-    opacity: .78;
-  }
-
-  .mobile-menu {
-    background: rgba(255,255,255,.10) !important;
-    color: #fff !important;
-  }
-
-  .mobile-menu:hover,
-  .mobile-menu:active {
-    background: rgba(255,255,255,.18) !important;
-    color: #fff !important;
-  }
-
-
-  /* ---------- BOTTOM BAR ---------- */
-
   .mobile-nav {
-    background: var(--sidebar-bg) !important;
-    border-top: 1px solid rgba(255,255,255,.10) !important;
-    box-shadow: 0 -6px 24px rgba(15,23,42,.20) !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-
+    width: 100% !important;
     display: flex !important;
+    flex-direction: row !important;
     align-items: stretch !important;
+    justify-content: stretch !important;
   }
 
-  .mobile-nav-btn {
-    background: transparent !important;
-    color: #94a3b8 !important;
-
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
-
-    gap: 3px !important;
-
-    min-height: 58px !important;
-    padding: 6px 4px !important;
-
-    line-height: 1 !important;
-  }
-
-  .mobile-nav-btn:hover,
-  .mobile-nav-btn:active {
-    background: rgba(255,255,255,.06) !important;
-    color: #e2e8f0 !important;
-  }
-
-
-  /* ---------- ICON ---------- */
-
-  .mobile-nav-btn .icon,
-  .mobile-nav-btn svg {
-    display: block !important;
-
-    width: 22px !important;
-    height: 22px !important;
-
-    min-width: 22px !important;
-    min-height: 22px !important;
-
-    max-width: 22px !important;
-    max-height: 22px !important;
-
-    flex: 0 0 22px !important;
+  .mobile-nav .mobile-nav-btn {
+    flex: 1 1 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: none !important;
 
     margin: 0 !important;
-    padding: 0 !important;
-
-    color: currentColor !important;
-    stroke: currentColor !important;
-
-    fill: none !important;
-
-    vertical-align: middle !important;
-  }
-
-  .mobile-nav-btn .icon use,
-  .mobile-nav-btn svg use {
-    color: currentColor !important;
-    stroke: currentColor !important;
-  }
-
-
-  /* ---------- LABEL ---------- */
-
-  .mobile-nav-btn > span,
-  .mobile-nav-btn > small {
-    color: inherit !important;
-
-    display: block !important;
-
-    margin: 0 !important;
-    padding: 0 !important;
-
-    line-height: 1.15 !important;
-    font-size: 10px !important;
-
-    text-align: center !important;
-  }
-
-
-  /* ---------- ACTIVE ---------- */
-
-  .mobile-nav-btn.active {
-    background: var(--primary) !important;
-    color: #fff !important;
-  }
-
-  .mobile-nav-btn.active > span,
-  .mobile-nav-btn.active > small,
-  .mobile-nav-btn.active .icon,
-  .mobile-nav-btn.active .icon use,
-  .mobile-nav-btn.active svg,
-  .mobile-nav-btn.active svg use {
-    color: #fff !important;
-    stroke: #fff !important;
-  }
-
-
-  /* ---------- BADGE ---------- */
-
-  .mobile-nav-btn > em {
-    background: var(--primary) !important;
-    color: #fff !important;
-  }
-
-  .mobile-nav-btn.active > em {
-    background: #fff !important;
-    color: var(--primary) !important;
+    box-sizing: border-box !important;
   }
 }
 
