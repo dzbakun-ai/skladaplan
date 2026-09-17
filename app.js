@@ -619,7 +619,7 @@ const state = {
     KPI «Ошибки/расхождения» на Главной (dashboardView).
 
     Источник — реальные сессии «Проверки скомплектованного»
-    (collected_verification_sessions), а не выдуманное
+    (verification_sessions), а не выдуманное
     число: сколько несовпадений (missing+extra) нашлось
     сегодня. Грузится лениво при открытии Главной
     (см. loadDashboardErrorStats в setupDashboard), не
@@ -858,7 +858,7 @@ inventory: {
      инвентаризацией склада.
      ======================================================= */
 
-  collectedVerification: {
+  verification_sessions: {
 
     active: false,
 
