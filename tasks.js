@@ -1203,7 +1203,7 @@ function partnerCardHtml(partner) {
 
       <div class="partner-contacts-head">
         <b>Контакты <span>${contacts.length}</span></b>
-        <button type="button" class="sp-btn secondary partner-add-contact" data-add-contact="${escapeHtml(partner.id)}">
+        <button type="button" class="sp-btn secondary partner-add-contact" data-add-contact="${escapeHtml(partner.id)}" data-partner-action="add-contact">
           <svg class="icon"><use href="#icon-plus"></use></svg>
           Контакт
         </button>
@@ -1337,8 +1337,24 @@ function setupPartners() {
   partnersState.eventsBound = true;
 
   document.addEventListener('click', async event => {
-    const target = event.target.closest?.('button, [data-edit-contact], [data-delete-contact]');
+    const element = event.target instanceof Element ? event.target : event.target?.parentElement;
+    const target = element?.closest('button, [data-edit-contact], [data-delete-contact]');
     if (!target) return;
+
+    // Контакты — динамический DOM. Обрабатываем action напрямую,
+    // чтобы кнопка работала независимо от вложенного SVG/use.
+    const partnerAction = target.dataset?.partnerAction;
+    if (partnerAction === 'add-contact') {
+      const partnerId = target.dataset.addContact;
+      if (!partnerById(partnerId)) {
+        toast('Контрагент не найден', 'error');
+        return;
+      }
+      partnersState.contactPartnerId = partnerId;
+      partnersState.editingContactId = null;
+      render();
+      return;
+    }
 
     const addPartnerButton = target.closest('#addPartnerBtn');
     if (addPartnerButton) {
@@ -1431,19 +1447,6 @@ function setupPartners() {
     if (togglePartnerButton) {
       const id = togglePartnerButton.dataset.togglePartner;
       partnersState.expandedPartnerId = partnersSameId(partnersState.expandedPartnerId, id) ? null : id;
-      render();
-      return;
-    }
-
-    const addContactButton = target.closest('[data-add-contact]');
-    if (addContactButton) {
-      const partnerId = addContactButton.dataset.addContact;
-      if (!partnerById(partnerId)) {
-        toast('Контрагент не найден', 'error');
-        return;
-      }
-      partnersState.contactPartnerId = partnerId;
-      partnersState.editingContactId = null;
       render();
       return;
     }
