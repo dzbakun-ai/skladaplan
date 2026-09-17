@@ -1391,24 +1391,37 @@ function setupPlanner() {
     );
 
 
-  document
-    .querySelectorAll(
-      '[data-edit-task]'
-    )
-    .forEach(
-      button => {
+document.addEventListener(
+  'click',
+  event => {
 
-        button.addEventListener(
-          'click',
-          () => {
+    const button =
+      event.target.closest(
+        '[data-edit-task]'
+      );
 
-            plannerOpenTaskModal(
-              button.dataset.editTask
-            );
-          }
-        );
-      }
+    if (!button) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const taskId =
+      button.dataset.editTask;
+
+    if (!taskId) {
+      console.error(
+        'Planner: отсутствует data-edit-task'
+      );
+      return;
+    }
+
+    plannerOpenTaskModal(
+      taskId
     );
+  }
+);
 
 
   document
