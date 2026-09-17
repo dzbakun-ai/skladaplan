@@ -33537,7 +33537,7 @@ function applyNavIconColor(
     isActive
       ? (
           isMobile
-            ? '#0f766e'
+            ? '#2563EB'
             : '#fff'
         )
       : '';
