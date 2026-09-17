@@ -28547,7 +28547,7 @@ async function loadDashboardErrorStats() {
 
     /*
       «Сегодня» — по времени завершения проверки.
-      Берём только завершённые сессии (finished_at
+      Берём только завершённые сессии (completed_at
       не пусто), незавершённая проверка ещё не
       результат, а процесс.
     */
@@ -28562,10 +28562,10 @@ async function loadDashboardErrorStats() {
       error
     } =
       await supabaseClient
-        .from('collected_verification_sessions')
+        .from('verification_sessions')
         .select('missing_count, extra_count, status')
-        .gte('finished_at', startOfDay.toISOString())
-        .not('finished_at', 'is', null);
+        .gte('completed_at', startOfDay.toISOString())
+        .not('completed_at', 'is', null);
 
     if (error) {
       throw error;
@@ -28608,8 +28608,7 @@ async function loadDashboardErrorStats() {
     state.dashboardErrorStats.loading = false;
 
   }
-
-  return();
+  return;
 
 }
 
