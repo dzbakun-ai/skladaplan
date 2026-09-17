@@ -3252,27 +3252,159 @@ box-shadow: inset 0 -3px 0 #e2e8f0;
 }
 
 /* =========================================================
-   SKLADAPLAN — MOBILE NAV FULL WIDTH FIX
-   Каждый пункт нижнего бара занимает равную долю всей ширины.
+   SKLADAPLAN — FINAL MOBILE NAV FIX
+   Полоса: 100% ширины / 5 равных пунктов / видимые SVG.
    ========================================================= */
 
 @media (max-width: 700px) {
-  .mobile-nav {
-    width: 100% !important;
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: stretch !important;
-    justify-content: stretch !important;
+
+  /* Верхняя панель */
+  .topbar {
+    background: var(--primary) !important;
+    color: #fff !important;
+    border-bottom-color: rgba(255,255,255,.18) !important;
   }
 
+  .topbar h1,
+  .topbar-title,
+  .crumb,
+  .crumb span {
+    color: #fff !important;
+  }
+
+  .mobile-menu {
+    background: rgba(255,255,255,.10) !important;
+    color: #fff !important;
+  }
+
+
+  /* Нижняя панель — оставляем GRID, который уже есть в проекте */
+  .mobile-nav {
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+
+    gap: 2px !important;
+    box-sizing: border-box !important;
+
+    background: var(--sidebar-bg) !important;
+    border-top: 1px solid rgba(255,255,255,.10) !important;
+  }
+
+
+  /* Каждый пункт занимает всю свою 1/5 ячейку */
   .mobile-nav .mobile-nav-btn {
-    flex: 1 1 0 !important;
-    width: 0 !important;
+    position: relative !important;
+
+    width: 100% !important;
     min-width: 0 !important;
     max-width: none !important;
 
     margin: 0 !important;
     box-sizing: border-box !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 6px 3px !important;
+    gap: 4px !important;
+
+    background: transparent !important;
+    color: #94a3b8 !important;
+  }
+
+
+  /* Контейнер иконки */
+  .mobile-nav .mobile-nav-btn > span {
+    flex: 0 0 24px !important;
+
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+
+    display: grid !important;
+    place-items: center !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    background: transparent !important;
+    color: inherit !important;
+  }
+
+
+  /* Сама SVG — явно задаём размер и stroke */
+  .mobile-nav .mobile-nav-btn > span > svg.icon {
+    display: block !important;
+
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+
+    fill: none !important;
+    stroke: currentColor !important;
+    stroke-width: 1.75 !important;
+
+    color: currentColor !important;
+    overflow: visible !important;
+  }
+
+  .mobile-nav .mobile-nav-btn > span > svg.icon use {
+    stroke: currentColor !important;
+    color: currentColor !important;
+  }
+
+
+  /* Подпись */
+  .mobile-nav .mobile-nav-btn > small {
+    display: block !important;
+
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+
+    color: inherit !important;
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+    text-align: center !important;
+  }
+
+
+  /* Активный пункт */
+  .mobile-nav .mobile-nav-btn.active {
+    background: var(--primary) !important;
+    color: #fff !important;
+  }
+
+  .mobile-nav .mobile-nav-btn.active > span,
+  .mobile-nav .mobile-nav-btn.active > small,
+  .mobile-nav .mobile-nav-btn.active .icon,
+  .mobile-nav .mobile-nav-btn.active .icon use {
+    color: #fff !important;
+    stroke: #fff !important;
+  }
+
+
+  /* Счётчик */
+  .mobile-nav .mobile-nav-btn > em {
+    background: var(--primary) !important;
+    color: #fff !important;
+  }
+
+  .mobile-nav .mobile-nav-btn.active > em {
+    background: #fff !important;
+    color: var(--primary) !important;
   }
 }
 
