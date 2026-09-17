@@ -4,25 +4,62 @@ GLOBAL UI
 ========================================================= */
 
 :root {
---bg: #f5f5f7;
+
+/*
+  ДИЗАЙН-ТОКЕНЫ SKLADAPLAN
+
+  Единый источник цвета/скруглений/теней для всего
+  приложения. Большинство компонентов (.sp-card, .sp-btn,
+  .nav, таблицы, модалки) уже читают эти переменные, а не
+  хранят цвет внутри себя — поэтому смена значений здесь
+  перекрашивает интерфейс сразу везде, без правки каждого
+  правила по отдельности.
+
+  Палитра — по референсу интерфейса: тёмно-бирюзовый
+  бренд-акцент вместо прежнего монохромного чёрного,
+  янтарный — для «грузовых»/требующих внимания действий,
+  изумрудный — как акцентный успех/прогресс.
+
+  Функциональный смысл цвета (см. также .kpi-icon-* ниже):
+    emerald/accent — приёмка, положительная динамика;
+    amber          — сборка, «требует действия»;
+    primary(teal)  — основной бренд-цвет, обычные кнопки;
+    success        — подтверждённые/завершённые операции;
+    danger         — ошибки, удаление.
+*/
+
+--bg: #f8fafc;
 --surface: #ffffff;
---surface-soft: #fafafa;
+--surface-soft: #f8fafc;
 
---text: #111111;
---muted: #737373;
+--text: #0f172a;
+--muted: #64748b;
 
---line: #e6e6e6;
+--line: #e2e8f0;
 
---primary: #7c1d2e;
---primary-hover: #5f1622;
+--primary: #0f766e;
+--primary-hover: #115e59;
+
+--accent: #10b981;
+--accent-light: #ecfdf5;
+
+--amber: #f59e0b;
+--amber-light: #fffbeb;
+--amber-border: #fcd34d;
 
 --success: #18794e;
---danger: #6b3226;
+--danger: #b42318;
 
+--sidebar-bg: #0f172a;
 --sidebar-width: 250px;
 
---radius: 14px;
---radius-lg: 18px;
+--radius: 16px;
+--radius-lg: 20px;
+--radius-btn: 10px;
+
+--shadow-card:
+  0 10px 25px -5px rgba(15, 23, 42, .06),
+  0 4px 6px -4px rgba(15, 23, 42, .03);
 }
 
 /* =========================================================
@@ -90,9 +127,16 @@ min-width: var(--sidebar-width);
 min-height: 100vh;
 height: 100vh;
 
-background: #fff;
+/*
+  Тёмный sidebar — по референсу интерфейса. Внутренние
+  элементы (.nav, .brand-text, .sidebar-foot) ниже имеют
+  СВОИ явные цвета текста, а не наследуют var(--text) —
+  var(--text) теперь тёмный (для светлого фона main),
+  на тёмном фоне сайдбара он был бы нечитаем.
+*/
+background: var(--sidebar-bg);
 
-border-right: 1px solid var(--line);
+border-right: 1px solid rgba(255,255,255,.06);
 
 display: flex;
 flex-direction: column;
@@ -126,7 +170,7 @@ border-radius: 11px;
 display: grid;
 place-items: center;
 
-background: #111;
+background: var(--primary);
 color: #fff;
 
 font-weight: 800;
@@ -143,13 +187,16 @@ min-width: 0;
 .brand-text b {
 font-size: 14px;
 letter-spacing: .02em;
+
+/* явный светлый цвет — фон сайдбара тёмный */
+color: #fff;
 }
 
 .brand-text span {
 margin-top: 3px;
 
 font-size: 8px;
-color: #999;
+color: #64748b;
 
 letter-spacing: .08em;
 }
@@ -173,7 +220,8 @@ margin-bottom: 22px;
 .nav-section-title {
 padding: 0 10px 8px;
 
-color: #999;
+/* явный светлый (приглушённый) цвет — фон сайдбара тёмный */
+color: #64748b;
 
 font-size: 9px;
 font-weight: 700;
@@ -261,7 +309,9 @@ border: 0;
 border-radius: 10px;
 
 background: transparent;
-color: #111;
+
+/* неактивный пункт на тёмном сайдбаре — приглушённый серый */
+color: #94a3b8;
 
 font-family: inherit;
 text-align: left;
@@ -346,7 +396,7 @@ place-items: center;
 
 border-radius: 999px;
 
-background: #111;
+background: var(--primary);
 color: #fff;
 
 font-size: 10px;
@@ -367,12 +417,12 @@ display: none;
    --------------------------------------------------------- */
 
 .nav:hover {
-background: #f0f0f0;
-color: #111;
+background: rgba(255, 255, 255, .06);
+color: #fff;
 }
 
 .nav.active {
-background: #111;
+background: var(--primary);
 color: #fff;
 }
 
@@ -418,7 +468,7 @@ stroke-width: 1.95;
 
 .nav.active em {
 background: #fff;
-color: #111;
+color: var(--primary, #0f766e);
 }
 
 
@@ -545,19 +595,19 @@ color: #555;
 }
 
 .mobile-nav-btn.active {
-background: #f2f2f2;
-color: #111;
+background: var(--accent-light);
+color: var(--primary);
 }
 
 .mobile-nav-btn.active > span,
 .mobile-nav-btn.active > small {
-color: #111;
+color: var(--primary);
 }
 
 .mobile-nav-btn.active .icon,
 .mobile-nav-btn.active .icon use {
-color: #111;
-stroke: #111;
+color: var(--primary);
+stroke: var(--primary);
 stroke-width: 2;
 }
 
@@ -577,7 +627,7 @@ place-items: center;
 
 border-radius: 999px;
 
-background: #111;
+background: var(--primary, #0f766e);
 color: #fff;
 
 font-size: 9px;
@@ -607,7 +657,8 @@ SIDEBAR FOOT
 .sidebar-foot {
 padding: 14px 8px 2px;
 
-border-top: 1px solid var(--line);
+/* var(--line) теперь светлый — на тёмном фоне взяли rgba */
+border-top: 1px solid rgba(255, 255, 255, .08);
 }
 
 .offline {
@@ -619,7 +670,7 @@ gap: 7px;
 margin-bottom: 12px;
 
 font-size: 11px;
-color: #555;
+color: #94a3b8;
 }
 
 .offline i {
@@ -628,11 +679,11 @@ height: 7px;
 
 border-radius: 50%;
 
-background: #25a55f;
+background: var(--accent);
 }
 
 .sidebar-foot small {
-color: #aaa;
+color: #64748b;
 
 font-size: 9px;
 line-height: 1.5;
@@ -753,23 +804,23 @@ transform .15s ease;
 .primary {
 border: 0;
 
-background: #111;
+background: var(--primary);
 color: #fff;
 }
 
 .primary:hover {
-background: #2a2a2a;
+background: var(--primary-hover);
 }
 
 .ghost {
 border: 1px solid var(--line);
 
 background: #fff;
-color: #111;
+color: var(--text);
 }
 
 .ghost:hover {
-background: #f5f5f5;
+background: var(--bg);
 }
 
 /* =========================================================
@@ -803,20 +854,19 @@ margin-bottom: 20px;
 }
 
 .sp-card {
-background: #fff;
+background: var(--surface);
 
-border: 1px solid #e8e8e8;
+border: 1px solid var(--line);
 
-border-radius: 16px;
+border-radius: var(--radius);
 
 padding: 18px;
 
-box-shadow:
-0 4px 18px rgba(0, 0, 0, .04);
+box-shadow: var(--shadow-card);
 }
 
 .sp-card-label {
-color: #777;
+color: var(--muted);
 
 font-size: 13px;
 
@@ -873,7 +923,7 @@ GENERIC BUTTONS
 .sp-btn {
 border: 0;
 
-border-radius: 9px;
+border-radius: var(--radius-btn);
 
 padding: 10px 15px;
 
@@ -881,13 +931,24 @@ cursor: pointer;
 
 font-weight: 600;
 
-background: #111;
+background: var(--primary);
 color: #fff;
+
+transition: background .15s ease;
+}
+
+.sp-btn:hover {
+background: var(--primary-hover);
 }
 
 .sp-btn.secondary {
-background: #f2f2f2;
-color: #111;
+background: var(--bg);
+color: var(--text);
+border: 1px solid var(--line);
+}
+
+.sp-btn.secondary:hover {
+background: var(--line);
 }
 
 .sp-btn.danger {
@@ -1223,7 +1284,7 @@ outline: none;
 }
 
 .scan-input:focus {
-border-color: #111;
+border-color: var(--primary, #0f766e);
 }
 
 .scan-status {
@@ -1606,7 +1667,7 @@ height: 17px;
 
 margin: 0;
 
-accent-color: #111;
+accent-color: var(--primary, #0f766e);
 
 cursor: pointer;
 }
@@ -2162,7 +2223,7 @@ grid-template-columns: 1fr !important;
 }
 
 .search:focus {
-  border-color: #111;
+  border-color: var(--primary, #0f766e);
 }
 
 
@@ -2654,13 +2715,13 @@ grid-template-columns: 1fr !important;
    ========================================================= */
 
 .sp-toolbar button.sp-btn {
-  background: #111;
+  background: var(--primary, #0f766e);
   color: #fff;
   border: 0;
 }
 
 .sp-toolbar button.sp-btn:hover {
-  background: #2a2a2a;
+  background: var(--primary-hover);
 }
 
 .sp-toolbar button.sp-btn.success {
@@ -2697,7 +2758,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
   outline:
-    2px solid #111;
+    2px solid var(--primary, #0f766e);
 
   outline-offset:
     2px;
@@ -2791,7 +2852,7 @@ outline: none;
 
 .cpb-field input:focus,
 .cpb-field select:focus {
-border-color: #111;
+border-color: var(--primary, #0f766e);
 }
 
 #cpbScan {
@@ -2903,7 +2964,7 @@ align-items: center;
 gap: 5px;
 padding: 4px 9px;
 border-radius: 999px;
-background: #111;
+background: var(--primary, #0f766e);
 color: #fff;
 font-weight: 600;
 font-size: 12px;
@@ -2981,8 +3042,8 @@ background: #f5f5f5;
 }
 
 .cpb-existing-btn.is-current {
-background: #111;
-border-color: #111;
+background: var(--primary, #0f766e);
+border-color: var(--primary, #0f766e);
 color: #fff;
 }
 
@@ -3008,7 +3069,7 @@ resize: vertical;
 }
 
 .cpb-field textarea:focus {
-border-color: #111;
+border-color: var(--primary, #0f766e);
 }
 
 .cpb-note-save {
@@ -3110,308 +3171,4 @@ box-shadow: inset 0 -3px 0 #f59e0b;
 
 .map-place-btn.map-place-free {
 box-shadow: inset 0 -3px 0 #e2e8f0;
-}
-
-/* =========================================================
-   SKLADAPLAN — MODERN WMS THEME
-   Visual layer based on Skladaplan_otchet/skladaplan.md.
-   No layout/business selectors are removed; this section
-   only overrides the existing design tokens and components.
-   ========================================================= */
-
-:root {
-  --bg: #f8fafc;
-  --surface: #ffffff;
-  --surface-soft: #f1f5f9;
-  --text: #0f172a;
-  --muted: #64748b;
-  --line: #e2e8f0;
-  --primary: #0f766e;
-  --primary-hover: #115e59;
-  --success: #10b981;
-  --danger: #b42318;
-  --accent: #f59e0b;
-  --sidebar-width: 250px;
-  --radius: 14px;
-  --radius-lg: 16px;
-}
-
-body {
-  background: var(--bg);
-  color: var(--text);
-}
-
-.sidebar {
-  background: #0f172a;
-  border-right-color: #1e293b;
-  color: #fff;
-}
-
-.brand {
-  padding-bottom: 24px;
-}
-
-.logo {
-  background: var(--primary);
-  border-radius: 10px;
-  box-shadow: 0 8px 20px rgba(15, 118, 110, .24);
-}
-
-.brand-text b {
-  color: #fff;
-}
-
-.brand-text span,
-.nav-section-title {
-  color: #64748b;
-}
-
-.nav {
-  color: #94a3b8;
-  border-radius: 10px;
-}
-
-.nav:hover {
-  background: rgba(255, 255, 255, .055);
-  color: #fff;
-}
-
-.nav.active {
-  background: var(--primary);
-  color: #fff;
-  box-shadow: 0 8px 18px rgba(15, 118, 110, .20);
-}
-
-.nav em {
-  background: #334155;
-}
-
-.nav.active em {
-  background: #fff;
-  color: var(--primary);
-}
-
-.topbar {
-  background: rgba(255, 255, 255, .90);
-  border-bottom-color: var(--line);
-}
-
-.crumb {
-  color: var(--muted);
-}
-
-.topbar h1 {
-  color: var(--text);
-  font-weight: 750;
-}
-
-.primary,
-.sp-btn {
-  background: var(--primary);
-}
-
-.primary:hover,
-.sp-btn:hover:not(:disabled) {
-  background: var(--primary-hover);
-}
-
-.ghost {
-  border-color: var(--line);
-  color: var(--text);
-}
-
-.ghost:hover {
-  background: var(--surface-soft);
-  border-color: #cbd5e1;
-}
-
-.sp-card {
-  border-color: var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 10px 25px -5px rgba(15, 23, 42, .04),
-              0 4px 6px -4px rgba(15, 23, 42, .025);
-}
-
-.sp-card-label {
-  color: var(--muted);
-}
-
-.sp-toolbar input,
-.sp-toolbar select,
-.sp-form input,
-.sp-form select,
-.sp-form textarea {
-  border-color: var(--line);
-  background: #fff;
-}
-
-.sp-toolbar input:focus,
-.sp-toolbar select:focus,
-.sp-form input:focus,
-.sp-form select:focus,
-.sp-form textarea:focus,
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: #14b8a6;
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, .10);
-}
-
-.sp-btn.success {
-  background: var(--success);
-}
-
-.sp-btn.danger {
-  background: var(--danger);
-}
-
-.mobile-nav {
-  background: rgba(15, 23, 42, .96);
-  border-top-color: #1e293b;
-}
-
-.mobile-nav-btn {
-  color: #94a3b8;
-}
-
-.mobile-nav-btn.active {
-  background: var(--primary);
-  color: #fff;
-}
-
-.viewer-disabled {
-  opacity: .52;
-}
-
-/* Make the main workspace breathe on large screens without
-   changing the application's existing responsive breakpoints. */
-@media (min-width: 1100px) {
-  #content {
-    padding: 30px 32px 40px;
-  }
-}
-
-
-/* =========================================================
-   SKLADAPLAN 2026 DESIGN SYSTEM — FINAL POLISH
-   Reference: Skladaplan_otchet/skladaplan.md
-   Layered intentionally on top of the existing WMS styles.
-   ========================================================= */
-:root {
-  --sp-brand: #0f766e;
-  --sp-brand-strong: #115e59;
-  --sp-brand-soft: #e6fffb;
-  --sp-accent: #d97706;
-  --sp-accent-soft: #fff7e6;
-  --sp-bg: #f4f7f7;
-  --sp-card: rgba(255,255,255,.94);
-  --sp-border: #dfe7e6;
-  --sp-shadow: 0 8px 28px rgba(15, 23, 42, .06);
-  --sp-shadow-lg: 0 18px 48px rgba(15, 23, 42, .10);
-}
-
-body { background: var(--sp-bg); }
-
-.sidebar {
-  background: #102a2a;
-  border-right-color: rgba(255,255,255,.08);
-  box-shadow: 8px 0 28px rgba(15,23,42,.08);
-}
-
-.logo {
-  background: var(--sp-brand);
-  box-shadow: 0 8px 18px rgba(15,118,110,.28);
-}
-
-.brand-text b { color: #f8fffe; }
-.brand-text span { color: rgba(255,255,255,.52); }
-.nav-section-title { color: rgba(255,255,255,.42); }
-
-.nav {
-  color: rgba(255,255,255,.76);
-}
-
-.nav:hover {
-  color: #fff;
-  background: rgba(255,255,255,.07);
-}
-
-.nav.active {
-  color: #fff;
-  background: rgba(20,184,166,.16);
-  box-shadow: inset 3px 0 0 var(--sp-brand);
-}
-
-.nav em {
-  background: rgba(255,255,255,.10);
-  color: rgba(255,255,255,.82);
-}
-
-.content,
-.main-content,
-.workspace {
-  background: transparent;
-}
-
-.card,
-.panel,
-.stat-card,
-.table-card,
-.modal,
-.toolbar,
-.dashboard-card {
-  border-color: var(--sp-border);
-  box-shadow: var(--sp-shadow);
-}
-
-button.primary,
-.btn-primary,
-button[data-action="primary"] {
-  background: var(--sp-brand);
-  border-color: var(--sp-brand);
-}
-
-button.primary:hover,
-.btn-primary:hover,
-button[data-action="primary"]:hover {
-  background: var(--sp-brand-strong);
-  border-color: var(--sp-brand-strong);
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-  border-color: rgba(15,118,110,.65) !important;
-  box-shadow: 0 0 0 3px rgba(15,118,110,.11) !important;
-  outline: none;
-}
-
-.nav-icon { color: inherit; }
-
-.viewer-mode .viewer-disabled {
-  opacity: .52;
-  cursor: not-allowed !important;
-}
-
-.viewer-mode .viewer-disabled:hover {
-  transform: none !important;
-}
-
-@media (max-width: 700px) {
-  .sidebar {
-    box-shadow: 0 -8px 28px rgba(15,23,42,.12);
-  }
-
-  .mobile-nav-btn.active {
-    color: var(--sp-brand);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    scroll-behavior: auto !important;
-    transition-duration: .01ms !important;
-    animation-duration: .01ms !important;
-  }
 }

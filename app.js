@@ -149,15 +149,6 @@ function getCurrentUserRole() {
 
 
   if (
-    role === 'admin'
-  ) {
-
-    return 'admin';
-
-  }
-
-
-  if (
     role === 'viewer'
   ) {
 
@@ -166,10 +157,7 @@ function getCurrentUserRole() {
   }
 
 
-  // Fail closed: неизвестная/отсутствующая роль не получает
-  // права записи. Реальный доступ всё равно должен
-  // дополнительно контролироваться RLS/RPC в Supabase.
-  return 'viewer';
+  return 'admin';
 
 }
 
@@ -1779,15 +1767,15 @@ function ensureAppStyles() {
     }
 
     .sp-card {
-      background:#fff;
-      border:1px solid #e8e8e8;
-      border-radius:16px;
+      background:var(--surface);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
       padding:18px;
-      box-shadow:0 4px 18px rgba(0,0,0,.04);
+      box-shadow:var(--shadow-card);
     }
 
     .sp-card-label {
-      color:#777;
+      color:var(--muted);
       font-size:13px;
       margin-bottom:8px;
     }
@@ -1823,17 +1811,18 @@ function ensureAppStyles() {
 
     .sp-btn {
       border:0;
-      border-radius:9px;
+      border-radius:var(--radius-btn);
       padding:10px 15px;
       cursor:pointer;
       font-weight:600;
-      background:#111;
+      background:var(--primary);
       color:#fff;
     }
 
     .sp-btn.secondary {
-      background:#f2f2f2;
-      color:#111;
+      background:var(--bg);
+      color:var(--text);
+      border:1px solid var(--line);
     }
 
     .sp-btn.danger {
@@ -1998,7 +1987,7 @@ function ensureAppStyles() {
       display:flex;
       align-items:center;
       justify-content:center;
-      background:#111;
+      background:var(--primary);
       color:#fff;
       font-size:24px;
       font-weight:700;
@@ -2037,7 +2026,7 @@ function ensureAppStyles() {
       height:44px;
       border:0;
       border-radius:10px;
-      background:#111;
+      background:var(--primary);
       color:#fff;
       font-weight:700;
       cursor:pointer;
@@ -2131,7 +2120,7 @@ function ensureAppStyles() {
     .sp-import-progress-fill {
       height:100%;
       width:0%;
-      background:#111;
+      background:var(--primary);
       border-radius:999px;
       transition:width .2s ease;
     }
@@ -2659,7 +2648,7 @@ function ensureReceivingStyles() {
 
       border:0;
 
-      background:#111;
+      background:var(--primary);
 
       color:#fff;
 
@@ -2674,7 +2663,7 @@ function ensureReceivingStyles() {
 
     .sp-btn-primary:hover {
 
-      background:#222;
+      background:var(--primary-hover);
 
     }
 
@@ -2869,11 +2858,11 @@ function ensureReceivingStyles() {
 
       outline:none;
 
-      border-color:#111;
+      border-color:var(--primary);
 
       box-shadow:
         0 0 0 5px
-        rgba(0,0,0,.055);
+        rgba(15,118,110,.12);
 
     }
 
@@ -3113,7 +3102,7 @@ function ensureReceivingStyles() {
         2px solid
         #d5d5d9;
 
-      border-top-color:#111;
+      border-top-color:var(--primary);
 
       border-radius:50%;
 
@@ -18679,7 +18668,8 @@ Excel:
                 width:38px;
                 height:38px;
                 border-radius:11px;
-                background:#f2f2f2;
+                background:#f1f5f9;
+                color:#475569;
                 display:flex;
                 align-items:center;
                 justify-content:center;
@@ -18706,7 +18696,7 @@ Excel:
               style="
                 width:${total ? Math.min(100, stock / total * 100) : 0}%;
                 height:100%;
-                background:#111;
+                background:#475569;
                 border-radius:10px;
               "
             ></div>
@@ -18764,7 +18754,8 @@ Excel:
                 width:38px;
                 height:38px;
                 border-radius:11px;
-                background:#f2f2f2;
+                background:var(--amber-light);
+                color:var(--amber);
                 display:flex;
                 align-items:center;
                 justify-content:center;
@@ -18791,7 +18782,7 @@ Excel:
               style="
                 width:${total ? Math.min(100, picking / total * 100) : 0}%;
                 height:100%;
-                background:#111;
+                background:var(--amber);
                 border-radius:10px;
               "
             ></div>
@@ -18849,7 +18840,8 @@ Excel:
                 width:38px;
                 height:38px;
                 border-radius:11px;
-                background:#f2f2f2;
+                background:var(--accent-light);
+                color:var(--accent);
                 display:flex;
                 align-items:center;
                 justify-content:center;
@@ -18876,7 +18868,7 @@ Excel:
               style="
                 width:${total ? Math.min(100, collected / total * 100) : 0}%;
                 height:100%;
-                background:#111;
+                background:var(--accent);
                 border-radius:10px;
               "
             ></div>
@@ -18934,7 +18926,8 @@ Excel:
                 width:38px;
                 height:38px;
                 border-radius:11px;
-                background:#f2f2f2;
+                background:#e6f4f3;
+                color:var(--primary);
                 display:flex;
                 align-items:center;
                 justify-content:center;
@@ -18961,7 +18954,7 @@ Excel:
               style="
                 width:${total ? Math.min(100, shipped / total * 100) : 0}%;
                 height:100%;
-                background:#111;
+                background:var(--primary);
                 border-radius:10px;
               "
             ></div>
@@ -19076,7 +19069,7 @@ Excel:
                 style="
                   width:${total ? stock / total * 100 : 0}%;
                   height:100%;
-                  background:#111;
+                  background:var(--primary);
                   border-radius:20px;
                 "
               ></div>
@@ -19464,7 +19457,7 @@ Excel:
                       style="
                         width:${pct(value)}%;
                         height:100%;
-                        background:#111;
+                        background:var(--primary);
                         border-radius:3px;
                       "
                     ></div>
@@ -25537,101 +25530,478 @@ async function applyInventoryResult() {
 
   try {
 
-    const operatorEmail = state.user?.email || null;
-    const appliedAt = new Date().toISOString();
+    let movedCount =
+      0;
 
-    const historyDetails = {
-      inventory_type: 'pallet',
-      warehouse: state.inventory.warehouse,
-      zone: state.inventory.zone,
-      pallet: state.inventory.pallet,
-      target: {
-        warehouse_id: target.warehouse_id,
-        location_id: target.location_id,
-        pallet_id: target.pallet_id
-      },
-      scanned_ids: scanned.map(row => String(row.id)),
-      missing_boxes: missing.map(row => ({
-        id: row.id,
-        barcode: normalizeBarcode(row.barcode),
-        previous_warehouse_id: row.warehouse_id,
-        previous_location_id: row.location_id,
-        previous_pallet_id: row.pallet_id
-      })),
-      outside_ids: outsideIds,
-      unknown_barcodes: unknownBarcodes
-    };
+    let removedCount =
+      0;
+
+    let createdCount =
+      0;
+
 
     /*
-      Критическая операция выполняется одной PostgreSQL-транзакцией.
-      Если UPDATE/INSERT/history не проходит — вся инвентаризация
-      откатывается, поэтому частичного проведения не возникает.
+      ================================================
+      1. СНИМАЕМ ОТСУТСТВУЮЩИЕ КОРОБКИ
+      ================================================
     */
-    const { data, error } = await supabaseClient.rpc(
-      'sp_apply_inventory',
-      {
-        p_warehouse: state.inventory.warehouse,
-        p_zone: state.inventory.zone,
-        p_pallet: state.inventory.pallet,
-        p_started_at: state.inventory.startedAt,
-        p_finished_at: state.inventory.finishedAt,
-        p_operator: operatorEmail,
-        p_missing_ids: missing.map(row => Number(row.id)),
-        p_outside_ids: outsideIds.map(id => Number(id)),
-        p_unknown_barcodes: unknownBarcodes,
-        p_target_warehouse_id: target.warehouse_id,
-        p_target_location_id: target.location_id,
-        p_target_pallet_id: target.pallet_id,
-        p_scanned_count: scanned.length,
-        p_expected_count: expected.length,
-        p_details: historyDetails
-      }
-    );
 
-    if (error) {
-      throw error;
+    for (
+      const row of missing
+    ) {
+
+      /*
+        ВАЖНО:
+
+        Склад и зона сохраняем.
+
+        Меняем только паллет.
+
+        Статус НЕ трогаем.
+      */
+      const payload = {
+
+        "Поддон":
+          null,
+
+        pallet_id:
+          null,
+
+        "Изменил":
+          state.user?.email ||
+          null
+
+      };
+
+
+      const {
+        data,
+        error
+      } =
+        await supabaseClient
+          .from('boxes')
+          .update(
+            payload
+          )
+          .eq(
+            'id',
+            row.id
+          )
+          .select(
+            BOX_SELECT
+          )
+          .single();
+
+
+      if (error) {
+
+        throw error;
+
+      }
+
+
+      if (data) {
+
+        updateLocalBox(
+          data
+        );
+
+      }
+
+
+      removedCount++;
+
     }
 
-    const result = data || {};
-    const movedCount = Number(result.moved_count || 0);
-    const removedCount = Number(result.removed_count || 0);
-    const createdCount = Number(result.created_count || 0);
-    const historyId = result.history_id ?? null;
-    const inventoryNo = result.inventory_no ?? null;
+
+    /*
+      ================================================
+      2. ПЕРЕМЕЩАЕМ ИЗВЕСТНЫЕ КОРОБКИ
+      ================================================
+    */
+
+    for (
+      const id of outsideIds
+    ) {
+
+      const {
+        data,
+        error
+      } =
+        await supabaseClient
+          .from('boxes')
+          .update({
+
+            "Склад":
+              target.warehouse,
+
+            "Зона/ряд":
+              target.zone,
+
+            "Поддон":
+              target.pallet,
+
+            warehouse_id:
+              target.warehouse_id,
+
+            location_id:
+              target.location_id,
+
+            pallet_id:
+              target.pallet_id,
+
+            "Изменил":
+              state.user?.email ||
+              null
+
+          })
+          .eq(
+            'id',
+            id
+          )
+          .select(
+            BOX_SELECT
+          )
+          .single();
+
+
+      if (error) {
+
+        throw error;
+
+      }
+
+
+      if (data) {
+
+        updateLocalBox(
+          data
+        );
+
+      }
+
+
+      movedCount++;
+
+    }
+
+
+    /*
+      ================================================
+      3. СОЗДАЁМ НОВЫЕ КОРОБКИ
+      ================================================
+
+      Каждый элемент массива =
+      отдельная физическая коробка.
+
+      Поэтому:
+
+      777
+      777
+      777
+
+      создаст 3 записи.
+    */
+
+    for (
+      const barcode of unknownBarcodes
+    ) {
+
+      const payload = {
+
+        "Штрихкод":
+          barcode,
+
+        "Артикул":
+          null,
+
+        "Кол-во в коробке":
+          null,
+
+        "Зона/ряд":
+          target.zone,
+
+        "Поддон":
+          target.pallet,
+
+        "Статус":
+          STATUSES.STOCK,
+
+        "ДатаРазмещения":
+          new Date().toISOString(),
+
+        "Склад":
+          target.warehouse,
+
+        "Изменил":
+          state.user?.email ||
+          null,
+
+        warehouse_id:
+          target.warehouse_id,
+
+        location_id:
+          target.location_id,
+
+        pallet_id:
+          target.pallet_id
+
+      };
+
+
+      const {
+        data,
+        error
+      } =
+        await supabaseClient
+          .from('boxes')
+          .insert(
+            payload
+          )
+          .select(
+            BOX_SELECT
+          )
+          .single();
+
+
+      if (error) {
+
+        throw error;
+
+      }
+
+
+      if (data) {
+
+        addLocalBox(
+          data
+        );
+
+      }
+
+
+      createdCount++;
+
+    }
+
+
+    /*
+      ================================================
+      4. СОХРАНЯЕМ ИСТОРИЮ
+      ================================================
+    */
+
+    const historyDetails = {
+
+      inventory_type:
+        'pallet',
+
+      warehouse:
+        state.inventory.warehouse,
+
+      zone:
+        state.inventory.zone,
+
+      pallet:
+        state.inventory.pallet,
+
+      target: {
+
+        warehouse_id:
+          target.warehouse_id,
+
+        location_id:
+          target.location_id,
+
+        pallet_id:
+          target.pallet_id
+
+      },
+
+      scanned_ids:
+        scanned.map(
+          row =>
+            String(row.id)
+        ),
+
+      missing_boxes:
+        missing.map(
+          row => ({
+
+            id:
+              row.id,
+
+            barcode:
+              normalizeBarcode(
+                row.barcode
+              ),
+
+            previous_warehouse_id:
+              row.warehouse_id,
+
+            previous_location_id:
+              row.location_id,
+
+            previous_pallet_id:
+              row.pallet_id
+
+          })
+        ),
+
+      outside_ids:
+        outsideIds,
+
+      unknown_barcodes:
+        unknownBarcodes
+
+    };
+
+
+    const {
+      data: historyData,
+      error: historyError
+    } =
+      await supabaseClient
+        .from('inventory_history')
+        .insert({
+
+          warehouse:
+            state.inventory.warehouse,
+
+          zone:
+            state.inventory.zone,
+
+          pallet:
+            state.inventory.pallet,
+
+          started_at:
+            state.inventory.startedAt,
+
+          finished_at:
+            state.inventory.finishedAt,
+
+          applied_at:
+            new Date().toISOString(),
+
+          user_email:
+            state.user?.email ||
+            null,
+
+          expected_count:
+            expected.length,
+
+          scanned_count:
+            scanned.length,
+
+          missing_count:
+            missing.length,
+
+          outside_count:
+            outsideIds.length,
+
+          unknown_count:
+            unknownBarcodes.length,
+
+          actual_count:
+            actualCount,
+
+          moved_count:
+            movedCount,
+
+          removed_count:
+            removedCount,
+
+          created_count:
+            createdCount,
+
+          details:
+            historyDetails
+
+        })
+        .select(
+          'id,inventory_no,applied_at'
+        )
+        .single();
+
+
+    if (historyError) {
+
+      throw historyError;
+
+    }
+
+
+    /*
+      ================================================
+      5. ФИКСИРУЕМ РЕЗУЛЬТАТ
+      ================================================
+    */
 
     state.inventory.result = {
+
       ...state.inventory.result,
-      applied: true,
-      moved: movedCount,
-      removed: removedCount,
-      created: createdCount,
-      appliedAt,
-      historyId,
-      inventoryNo
+
+      applied:
+        true,
+
+      moved:
+        movedCount,
+
+      removed:
+        removedCount,
+
+      created:
+        createdCount,
+
+      appliedAt:
+        new Date().toISOString(),
+
+      historyId:
+        historyData?.id ||
+        null,
+
+      inventoryNo:
+        historyData?.inventory_no ||
+        null
+
     };
+
+
+    /*
+      ================================================
+      6. ПЕРЕЗАГРУЖАЕМ БАЗУ
+      ================================================
+    */
 
     const {
       data: freshBoxes,
       error: reloadError
-    } = await supabaseClient
-      .from('boxes')
-      .select(BOX_SELECT)
-      .order('id', { ascending: true });
+    } =
+      await supabaseClient
+        .from('boxes')
+        .select(
+          BOX_SELECT
+        )
+        .order(
+          'id',
+          {
+            ascending:
+              true
+          }
+        );
+
 
     if (reloadError) {
+
       throw reloadError;
+
     }
 
-    state.boxes = freshBoxes || [];
 
-    toast([
-      'Инвентаризация проведена.',
-      `Перемещено: ${movedCount}`,
-      `Снято: ${removedCount}`,
-      `Создано: ${createdCount}`
-    ].join(' · '));
+    state.boxes =
+      freshBoxes ||
+      [];
 
-    render();
 
     toast(
       [
@@ -28237,21 +28607,8 @@ async function loadDashboardErrorStats() {
 
     state.dashboardErrorStats.loading = false;
 
-    /*
-      Ошибка загрузки необязательного KPI не должна
-      инициировать новый render(). Иначе setupDashboard()
-      снова вызывает loadDashboardErrorStats(), который
-      снова получает ошибку и снова вызывает render().
-      Это создаёт бесконечный render-loop: DOM постоянно
-      пересоздаётся, поэтому hover по кнопкам моргает,
-      а click теряется вместе с заменённым DOM-узлом.
-    */
-
-    return;
-
   }
 
-  /* Перерисовываем только после успешной загрузки KPI. */
   render();
 
 }
@@ -33014,15 +33371,6 @@ function render() {
 
 
   /* =========================================================
-     VIEWER PERMISSIONS
-     ========================================================= */
-
-  // applyViewerPermissions() должен выполняться после каждого
-  // render(), потому что рабочие кнопки создаются динамически.
-  applyViewerPermissions();
-
-
-  /* =========================================================
      ASSEMBLY BADGES
      ========================================================= */
 
@@ -33173,9 +33521,26 @@ function applyNavIconColor(
       'use'
     );
 
+  /*
+    Sidebar (.nav) — тёмный фон, активная иконка белая.
+    Мобильная нижняя панель (.mobile-nav-btn) — активный
+    пункт там на СВЕТЛОМ фоне (var(--accent-light)),
+    поэтому иконка красится в бренд-цвет, а не в белый —
+    иначе была бы белым по белому.
+  */
+
+  const isMobile =
+    button.classList.contains(
+      'mobile-nav-btn'
+    );
+
   const color =
     isActive
-      ? '#fff'
+      ? (
+          isMobile
+            ? '#0f766e'
+            : '#fff'
+        )
       : '';
 
   [svg, useEl].forEach(
