@@ -28609,7 +28609,7 @@ async function loadDashboardErrorStats() {
 
   }
 
-  render();
+  return();
 
 }
 
