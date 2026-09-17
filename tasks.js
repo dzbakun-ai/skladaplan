@@ -1351,9 +1351,17 @@ function setupPartners() {
         toast('Контрагент не найден', 'error');
         return;
       }
-      partnersState.contactPartnerId = partnerId;
-      partnersState.editingContactId = null;
-      render();
+  partnersState.contactPartnerId = partnerId;
+  partnersState.editingContactId = null;
+
+  console.log(
+  'CONTACT STATE BEFORE RENDER',
+  partnersState.contactPartnerId,
+  partnersState.editingContactId
+);
+
+render();
+       
       return;
     }
 
