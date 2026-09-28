@@ -404,7 +404,7 @@
     const items = [
       { label: 'Принято сегодня',  value: k.receivedToday, color: '#10b981', icon: '📥' },
       { label: 'Отгружено сегодня', value: k.shippedToday,  color: '#2563EB', icon: '🚚' },
-      { label: 'В подбору',         value: k.picking,       color: '#8b5cf6', icon: '🎯' },
+      { label: 'К подбору',         value: k.picking,       color: '#8b5cf6', icon: '🎯' },
       { label: 'Скомплектовано',    value: k.collected,     color: '#f59e0b', icon: '✅' },
       { label: 'Просрочено',        value: k.overdue,       color: k.overdue > 0 ? '#b42318' : '#94a3b8', icon: '⚠️' }
     ];
