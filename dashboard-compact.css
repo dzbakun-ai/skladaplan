@@ -1,0 +1,253 @@
+/* =========================================================
+   SKLADAPLAN — КОМПАКТНАЯ ГЛАВНАЯ
+   Не трогает app.js/dashboard.js — только переопределяет вид.
+   Подключать ПОСЛЕ style.css и tasks.css.
+   ========================================================= */
+
+/* ---------- 1. KPI-строка: делаем ниже и плотнее ---------- */
+#spDashboardHeader .sp-dash-kpis {
+  gap: 8px !important;
+  margin-bottom: 10px !important;
+}
+#spDashboardHeader .sp-dash-kpi {
+  padding: 10px 12px !important;
+  border-radius: 12px !important;
+}
+#spDashboardHeader .sp-dash-kpi-icon {
+  width: 26px !important;
+  height: 26px !important;
+  font-size: 13px !important;
+  margin-bottom: 4px !important;
+  border-radius: 7px !important;
+}
+#spDashboardHeader .sp-dash-kpi-label {
+  font-size: 10px !important;
+  margin-bottom: 2px !important;
+}
+#spDashboardHeader .sp-dash-kpi-value {
+  font-size: 20px !important;
+}
+
+/* ---------- 2. Блоки «Что требует внимания» / «Мои задачи» ---------- */
+#spDashboardHeader .sp-dash-cols {
+  gap: 10px !important;
+  margin-bottom: 10px !important;
+}
+#spDashboardHeader .sp-dash-block {
+  padding: 12px 14px !important;
+  margin-bottom: 10px !important;
+  border-radius: 12px !important;
+}
+#spDashboardHeader .sp-dash-block-head {
+  margin-bottom: 8px !important;
+  font-size: 13px !important;
+}
+#spDashboardHeader .sp-dash-attention-item {
+  padding: 7px 9px !important;
+  margin-bottom: 4px !important;
+}
+#spDashboardHeader .sp-dash-task-item {
+  padding: 6px 4px !important;
+}
+
+/* ---------- 3. Виджет «Смена» — компактнее ---------- */
+#spShiftWidget {
+  padding: 10px 14px !important;
+  margin-bottom: 10px !important;
+  border-radius: 12px !important;
+}
+#spShiftWidget .sp-sh-head { margin-bottom: 6px !important; }
+#spShiftWidget .sp-sh-counter { font-size: 16px !important; }
+#spShiftWidget .sp-sh-btn { padding: 8px 14px !important; font-size: 12px !important; }
+
+/* ---------- 4. «Новая заявка» — сворачиваем в компактную карточку ---------- */
+#spCompactNewRequest {
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  box-shadow: var(--shadow-card);
+}
+#spCompactNewRequest .sp-cnr-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+#spCompactNewRequest .sp-cnr-sub {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+#spCompactNewRequest .sp-cnr-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+#spCompactNewRequest .sp-cnr-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  border: 0;
+}
+#spCompactNewRequest .sp-cnr-btn-primary {
+  background: var(--primary, #2563EB);
+  color: #fff;
+}
+#spCompactNewRequest .sp-cnr-btn-primary:hover { background: var(--primary-hover, #1D4ED8); }
+#spCompactNewRequest .sp-cnr-btn-secondary {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+
+/* Скрываем гигантскую оригинальную карточку «Новая заявка» на главной */
+body.sp-compact-dash #content > .sp-card:has(#requestBarcodes) {
+  display: none !important;
+}
+
+/* ---------- 5. Дубли «Рабочие процессы» / «Инструменты» → в один стрип ---------- */
+#spCompactQuickStrip {
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-card);
+}
+#spCompactQuickStrip .sp-cqs-head {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 8px;
+}
+#spCompactQuickStrip .sp-cqs-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+#spCompactQuickStrip .sp-quick-item {
+  padding: 9px 12px !important;
+  font-size: 12px !important;
+  border-radius: 10px !important;
+}
+
+/* Скрываем оригинальные блоки «Рабочие процессы» и «Инструменты» */
+body.sp-compact-dash .sp-dashboard-block:has(.sp-dashboard-block-head h2) {
+  /* отфильтруем ниже через JS — CSS :has не везде стабилен, оставим как fallback */
+}
+
+/* ---------- 6. Калькуляторы — сворачиваем в одну строку ---------- */
+#spCompactCalc {
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-card);
+}
+#spCompactCalc summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#spCompactCalc summary::-webkit-details-marker { display: none; }
+#spCompactCalc summary::after {
+  content: '▾';
+  margin-left: auto;
+  color: #94a3b8;
+  transition: transform .15s ease;
+}
+#spCompactCalc[open] summary::after { transform: rotate(180deg); }
+#spCompactCalc .sp-calc-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+@media (max-width: 700px) {
+  #spCompactCalc .sp-calc-grid { grid-template-columns: 1fr; }
+}
+
+/* Скрываем оригинальные большие карточки калькуляторов на главной */
+body.sp-compact-dash #content > .sp-grid:has(#calcBoxesQty),
+body.sp-compact-dash #content > .sp-grid:has(#calcQuickInput) {
+  display: none !important;
+}
+
+/* ---------- 7. «Состояние склада» + KPI + «Состояние коробок» — компактнее ---------- */
+body.sp-compact-dash .sp-dashboard-kpi-grid {
+  gap: 8px !important;
+  margin-bottom: 8px !important;
+}
+body.sp-compact-dash .sp-dashboard-kpi-grid > .sp-card {
+  padding: 12px !important;
+}
+body.sp-compact-dash .sp-dashboard-columns {
+  gap: 10px !important;
+}
+
+/* ---------- 8. Последние события / операции — в один блок с табами ---------- */
+#spCompactLogs {
+  background: var(--surface, #fff);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 14px;
+  padding: 0;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+#spCompactLogs .sp-cl-nav {
+  display: flex;
+  gap: 4px;
+  padding: 6px 6px 0;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+#spCompactLogs .sp-cl-nav::-webkit-scrollbar { display: none; }
+#spCompactLogs .sp-cl-tab {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 9px 14px;
+  border-radius: 9px 9px 0 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+#spCompactLogs .sp-cl-tab.is-active {
+  background: #fff;
+  color: #0f172a;
+  box-shadow: -1px 0 0 #e2e8f0 inset, 1px 0 0 #e2e8f0 inset, 0 -1px 0 #e2e8f0 inset;
+}
+#spCompactLogs .sp-cl-body { padding: 12px 16px; }
+#spCompactLogs .sp-cl-panel { display: none; }
+#spCompactLogs .sp-cl-panel.is-active { display: block; }
+
+/* Скрываем оригинальный блок «Последние события» (он перемещён в табы) */
+body.sp-compact-dash #spDashboardHeader .sp-dash-block:has(#spDashEvents) {
+  display: none !important;
+}
