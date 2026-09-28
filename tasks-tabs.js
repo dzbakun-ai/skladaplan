@@ -180,19 +180,18 @@
     old.remove();
   }
 
-  function buildTabs() {
+    function buildTabs() {
     const content = document.getElementById('content');
     if (!content) return;
 
-    /* На странице Задач? Проверяем по наличию поля новой задачи */
+    /* На странице Задач? */
     const isTasksPage = !!document.getElementById('taskTitleInput');
     if (!isTasksPage) {
-      /* На другой странице — сносим обёртку, если висит */
       cleanupOldWrapper();
       return;
     }
 
-    /* Уже собрано? Тогда просто обновляем активный таб */
+    /* Уже собрано? Тогда просто обновим активный таб */
     if (document.getElementById(WRAPPER_ID)) {
       applyActiveTab(activeTab);
       return;
@@ -208,8 +207,11 @@
     /* Нужны как минимум список и новая задача */
     if (!cards.list || !cards.new) return;
 
-    /* Где вставить: перед первой карточкой списка */
+    /* ВАЖНО: запоминаем родителя и «следующий» узел
+       ДО того, как будем перемещать карточки */
     const anchor = cards.list;
+    const anchorParent = anchor.parentNode;
+    const anchorNext = anchor.nextSibling;
 
     /* Создаём обёртку */
     const wrapper = document.createElement('div');
@@ -236,7 +238,7 @@
     const body = document.createElement('div');
     body.className = 'sp-tt-body';
 
-    /* Панели */
+    /* Панели — перемещаем карточки внутрь */
     TABS.forEach(t => {
       const card = cards[t.key];
 
@@ -245,10 +247,8 @@
       panel.setAttribute('data-tt-panel', t.key);
 
       if (card) {
-        /* Перемещаем карточку внутрь панели */
         panel.appendChild(card);
       } else {
-        /* Заглушка */
         panel.innerHTML = '<div style="padding:24px;text-align:center;color:#94a3b8;font-size:13px;">Пусто</div>';
       }
 
@@ -258,14 +258,13 @@
     wrapper.appendChild(nav);
     wrapper.appendChild(body);
 
-    /* Вставляем в DOM — перед anchor или в начало #content */
-    if (anchor && anchor.parentNode) {
-      anchor.parentNode.insertBefore(wrapper, anchor);
+    /* Вставляем в СОХРАНЁННОГО родителя перед СОХРАНЁННЫМ nextSibling */
+    if (anchorParent) {
+      anchorParent.insertBefore(wrapper, anchorNext);
     } else {
       content.insertBefore(wrapper, content.firstChild);
     }
 
-    /* Сразу применяем активный таб */
     applyActiveTab(activeTab);
 
     console.log('[TasksTabs] Табы собраны. Карточек:',
