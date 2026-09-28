@@ -2,18 +2,15 @@
    SKLADAPLAN — DASHBOARD (KPI + Что требует внимания)
    =========================================================
 
-   Что делает:
-   - Оборачивает window.dashboardView — добавляет блок
-     с KPI, "Что требует внимания", "Мои задачи" и
-     "Последние события" в начало главной страницы.
-   - Оборачивает window.setupDashboard — навешивает
-     обработчики на новые элементы.
+   v1.1: добавлены helper'ы getAppState / getTasksState /
+   getPlannerState. В app.js state объявлен через `const`,
+   поэтому через window.state не доступен — читаем как
+   обычные переменные с fallback на window.
 
    Изоляция:
    - Не трогает app.js.
    - Если что-то падает — оригинальный dashboardView
      всё равно отработает и вернёт исходный HTML.
-   - Данные берутся из уже загруженного state.
    ========================================================= */
 
 (function () {
@@ -24,6 +21,26 @@
   const HEADER_ID = 'spDashboardHeader';
 
   let lastEventsFetch = 0;
+
+  /* ============== БЕЗОПАСНЫЙ ДОСТУП К ГЛОБАЛЬНОМУ СОСТОЯНИЮ ============== */
+
+  function getAppState() {
+    try { if (typeof state !== 'undefined' && state) return state; } catch (e) {}
+    if (window.state) return window.state;
+    return null;
+  }
+
+  function getTasksState() {
+    try { if (typeof tasksState !== 'undefined' && tasksState) return tasksState; } catch (e) {}
+    if (window.tasksState) return window.tasksState;
+    return null;
+  }
+
+  function getPlannerState() {
+    try { if (typeof plannerState !== 'undefined' && plannerState) return plannerState; } catch (e) {}
+    if (window.plannerState) return window.plannerState;
+    return null;
+  }
 
   /* ============== УТИЛИТЫ ============== */
 
@@ -70,7 +87,6 @@
     style.textContent = `
       #${HEADER_ID} { margin-bottom: 20px; }
 
-      /* --- KPI --- */
       #${HEADER_ID} .sp-dash-kpis {
         display: grid;
         grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -83,7 +99,6 @@
         border-radius: 14px;
         padding: 14px 16px;
         box-shadow: var(--shadow-card, 0 2px 6px rgba(15,23,42,.04));
-        position: relative;
       }
       #${HEADER_ID} .sp-dash-kpi-icon {
         width: 34px; height: 34px;
@@ -107,7 +122,6 @@
         font-variant-numeric: tabular-nums;
       }
 
-      /* --- Две колонки --- */
       #${HEADER_ID} .sp-dash-cols {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -142,7 +156,6 @@
       }
       #${HEADER_ID} .sp-dash-link:hover { background: #eff6ff; }
 
-      /* --- "Что требует внимания" --- */
       #${HEADER_ID} .sp-dash-attention-item {
         display: flex; align-items: flex-start; gap: 10px;
         padding: 10px 12px;
@@ -173,7 +186,6 @@
         display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
       }
 
-      /* --- "Мои задачи" --- */
       #${HEADER_ID} .sp-dash-task-item {
         display: flex; align-items: flex-start; gap: 10px;
         padding: 8px 4px;
@@ -196,7 +208,6 @@
         font-size: 11px; color: #94a3b8; margin-top: 2px;
       }
 
-      /* --- Последние события --- */
       #${HEADER_ID} .sp-dash-events {
         display: flex; flex-direction: column; gap: 4px;
         max-height: 200px; overflow-y: auto;
@@ -214,10 +225,7 @@
         flex-shrink: 0;
         min-width: 40px;
       }
-      #${HEADER_ID} .sp-dash-event-icon {
-        font-size: 13px;
-        flex-shrink: 0;
-      }
+      #${HEADER_ID} .sp-dash-event-icon { font-size: 13px; flex-shrink: 0; }
       #${HEADER_ID} .sp-dash-event-text {
         flex: 1; min-width: 0;
         color: #334155;
@@ -226,30 +234,20 @@
       #${HEADER_ID} .sp-dash-event-text b { color: #0f172a; font-weight: 600; }
 
       #${HEADER_ID} .sp-dash-empty {
-        padding: 16px 4px;
-        text-align: center;
-        color: #94a3b8;
-        font-size: 12px;
+        padding: 16px 4px; text-align: center;
+        color: #94a3b8; font-size: 12px;
       }
       #${HEADER_ID} .sp-dash-loading {
-        padding: 12px 4px;
-        text-align: center;
-        color: #94a3b8;
-        font-size: 12px;
+        padding: 12px 4px; text-align: center;
+        color: #94a3b8; font-size: 12px;
       }
 
       @media (max-width: 900px) {
-        #${HEADER_ID} .sp-dash-kpis {
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-        }
-        #${HEADER_ID} .sp-dash-cols {
-          grid-template-columns: 1fr;
-        }
+        #${HEADER_ID} .sp-dash-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        #${HEADER_ID} .sp-dash-cols { grid-template-columns: 1fr; }
       }
       @media (max-width: 560px) {
-        #${HEADER_ID} .sp-dash-kpis {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
+        #${HEADER_ID} .sp-dash-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         #${HEADER_ID} .sp-dash-kpi { padding: 12px; }
         #${HEADER_ID} .sp-dash-kpi-value { font-size: 20px; }
       }
@@ -260,9 +258,13 @@
   /* ============== ДАННЫЕ ============== */
 
   function getKpis() {
-    const boxes = Array.isArray(window.state?.boxes) ? state.boxes : [];
-    const tasks = Array.isArray(window.tasksState?.items) ? tasksState.items : [];
-    const plannerTasks = Array.isArray(window.plannerState?.tasks) ? plannerState.tasks : [];
+    const st = getAppState();
+    const ts = getTasksState();
+    const ps = getPlannerState();
+
+    const boxes = Array.isArray(st?.boxes) ? st.boxes : [];
+    const tasks = Array.isArray(ts?.items) ? ts.items : [];
+    const plannerTasks = Array.isArray(ps?.tasks) ? ps.tasks : [];
     const today = todayKey();
 
     let receivedToday = 0, shippedToday = 0, picking = 0, collected = 0;
@@ -288,15 +290,18 @@
   }
 
   function getAttention() {
-    const boxes = Array.isArray(window.state?.boxes) ? state.boxes : [];
-    const tasks = Array.isArray(window.tasksState?.items) ? tasksState.items : [];
-    const plannerTasks = Array.isArray(window.plannerState?.tasks) ? plannerState.tasks : [];
-    const shipments = Array.isArray(window.plannerState?.shipments) ? plannerState.shipments : [];
+    const st = getAppState();
+    const ts = getTasksState();
+    const ps = getPlannerState();
+
+    const boxes = Array.isArray(st?.boxes) ? st.boxes : [];
+    const tasks = Array.isArray(ts?.items) ? ts.items : [];
+    const plannerTasks = Array.isArray(ps?.tasks) ? ps.tasks : [];
+    const shipments = Array.isArray(ps?.shipments) ? ps.shipments : [];
     const today = todayKey();
 
     const items = [];
 
-    /* Просроченные задачи */
     const overdueList = [];
     plannerTasks.forEach(t => {
       if (t.status === 'Выполнено' || t.status === 'Отменено') return;
@@ -311,11 +316,12 @@
         icon: '⚠️', level: 'danger',
         label: `Просрочено задач: ${overdueList.length}`,
         hint: overdueList.slice(0, 3).join(' · '),
-        onClick: () => window.goToPage && window.goToPage('tasks')
+        onClick: () => {
+          if (typeof window.goToPage === 'function') window.goToPage('tasks');
+        }
       });
     }
 
-    /* Просроченные отгрузки */
     const pendingShip = shipments.filter(s =>
       s.date < today && s.status !== 'Отгружена' && s.status !== 'Отменена'
     );
@@ -324,11 +330,12 @@
         icon: '🚚', level: 'warning',
         label: `Просрочено отгрузок: ${pendingShip.length}`,
         hint: pendingShip.slice(0, 3).map(s => s.title).join(' · '),
-        onClick: () => window.goToPage && window.goToPage('planner')
+        onClick: () => {
+          if (typeof window.goToPage === 'function') window.goToPage('planner');
+        }
       });
     }
 
-    /* Коробки без поддона */
     const noPallet = boxes.filter(b =>
       b.status !== 'Отгружено' && (!b.pallet || !String(b.pallet).trim())
     ).length;
@@ -338,13 +345,14 @@
         label: `Коробок без поддона: ${noPallet}`,
         hint: 'Проверьте, что у всех коробок указан поддон',
         onClick: () => {
-          if (window.state) {
-            state.baseSearch = '';
-            state.basePallet = '';
-            state.baseStatus = '';
-            state.basePage = 1;
+          const st2 = getAppState();
+          if (st2) {
+            st2.baseSearch = '';
+            st2.basePallet = '';
+            st2.baseStatus = '';
+            st2.basePage = 1;
           }
-          window.goToPage && window.goToPage('base');
+          if (typeof window.goToPage === 'function') window.goToPage('base');
         }
       });
     }
@@ -353,14 +361,17 @@
   }
 
   function getMyTasks() {
-    const email = (window.state?.user?.email || '').toLowerCase();
-    const tasks = Array.isArray(window.tasksState?.items) ? tasksState.items : [];
-    const plannerTasks = Array.isArray(window.plannerState?.tasks) ? plannerState.tasks : [];
+    const st = getAppState();
+    const ts = getTasksState();
+    const ps = getPlannerState();
+
+    const email = (st?.user?.email || '').toLowerCase();
+    const tasks = Array.isArray(ts?.items) ? ts.items : [];
+    const plannerTasks = Array.isArray(ps?.tasks) ? ps.tasks : [];
     const today = todayKey();
 
     const out = [];
 
-    /* 1. Назначенные мне через /assign */
     if (email) {
       tasks.forEach(t => {
         if (t.completed || !t.assigned_to) return;
@@ -369,7 +380,6 @@
       });
     }
 
-    /* 2. Общие задачи без исполнителя с датой ≤ сегодня */
     tasks.forEach(t => {
       if (t.completed || t.assigned_to) return;
       if (!t.due_date) return;
@@ -377,7 +387,6 @@
       out.push({ id: t.id, title: t.title, date: t.due_date, time: '' });
     });
 
-    /* 3. Планировщик — сегодня и просроченные */
     plannerTasks.forEach(t => {
       if (t.status === 'Выполнено' || t.status === 'Отменено') return;
       if (!t.date) return;
@@ -385,7 +394,6 @@
       out.push({ id: t.id, title: t.title, date: t.date, time: t.time || '' });
     });
 
-    /* Уникализируем и ограничиваем */
     const seen = new Set();
     const unique = out.filter(t => {
       const k = t.title + '|' + (t.date || '');
@@ -544,10 +552,7 @@
   /* ============== ХУКИ ============== */
 
   function install() {
-    if (typeof window.dashboardView !== 'function') {
-      console.warn('[Dashboard] dashboardView ещё не готова');
-      return false;
-    }
+    if (typeof window.dashboardView !== 'function') return false;
     if (window.dashboardView.__dashWrapped) return true;
 
     const originalView = window.dashboardView;
@@ -571,15 +576,13 @@
 
         setTimeout(() => {
           try {
-            /* Кнопка "Все задачи →" */
             const allTasksBtn = document.getElementById('spDashAllTasks');
             if (allTasksBtn) {
               allTasksBtn.addEventListener('click', () => {
-                window.goToPage && window.goToPage('tasks');
+                if (typeof window.goToPage === 'function') window.goToPage('tasks');
               });
             }
 
-            /* Обработчики кликов на "требует внимания" */
             const items = getAttention();
             document.querySelectorAll('[data-attention-idx]').forEach(el => {
               const i = Number(el.getAttribute('data-attention-idx'));
@@ -590,7 +593,6 @@
               });
             });
 
-            /* Лента событий */
             loadRecentEvents();
           } catch (e) {
             console.warn('[Dashboard] setup error:', e);
@@ -603,21 +605,17 @@
     return true;
   }
 
-  /* ============== ИНИЦИАЛИЗАЦИЯ ============== */
-
   function init() {
     injectStyles();
-
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', install, { once: true });
     } else {
       install();
     }
-
-    /* Пара попыток — на случай медленной загрузки app.js */
     setTimeout(install, 300);
     setTimeout(install, 1500);
     setTimeout(install, 4000);
+    console.log('[Dashboard] Модуль инициализирован');
   }
 
   init();
@@ -627,7 +625,7 @@
       const kpis = document.querySelector(`#${HEADER_ID} .sp-dash-kpis`);
       if (kpis) kpis.innerHTML = buildKpisHtml();
     },
-    version: '1.0.0'
+    version: '1.1.0'
   };
 
 })();
