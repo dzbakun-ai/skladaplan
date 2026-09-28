@@ -10,6 +10,10 @@
    2. Целевые поддоны — из boxes."Поддон" целевой зоны.
    3. Коробки без поддона не отбрасываются.
    4. Артикулы не влияют ни на что.
+   5. Штрихкоды в раскрывающейся строке группируются:
+      одинаковые коды показываются как «код × количество».
+   6. «Паллет после» показывает «было → станет» корректно,
+      без двойного прибавления.
    ========================================================= */
 
 'use strict';
@@ -31,6 +35,7 @@ if (!state.optimization) {
     targetPallets: [],
     plan: [],
     excludedMoves: new Set(),
+    expandedMoves: new Set(),
     calculatedAt: null,
     loading: false,
     applying: false,
@@ -55,6 +60,30 @@ function optimizationUnique(values) {
     .sort((a, b) => a.localeCompare(b, 'ru', { numeric: true, sensitivity: 'base' }));
 }
 
+/* ---------------------------------------------------------
+   Группировка одинаковых штрихкодов в пары { barcode, count }.
+   --------------------------------------------------------- */
+
+function optimizationGroupBarcodes(barcodes) {
+  const map = new Map();
+
+  (barcodes || []).forEach(code => {
+    const key = String(code ?? '').trim();
+    if (!key) return;
+    map.set(key, (map.get(key) || 0) + 1);
+  });
+
+  return [...map.entries()]
+    .map(([barcode, count]) => ({ barcode, count }))
+    .sort((a, b) =>
+      a.barcode.localeCompare(b.barcode, 'ru', { numeric: true, sensitivity: 'base' })
+    );
+}
+
+/* ---------------------------------------------------------
+   Списки складов и зон — из state.boxes.
+   --------------------------------------------------------- */
+
 function optimizationWarehouseList() {
   return optimizationUnique(
     (state.boxes || [])
@@ -65,6 +94,7 @@ function optimizationWarehouseList() {
 
 function optimizationZoneList(warehouse) {
   if (!warehouse) return [];
+
   return optimizationUnique(
     (state.boxes || [])
       .filter(b => (b.warehouse || '').trim() === warehouse)
@@ -72,6 +102,10 @@ function optimizationZoneList(warehouse) {
       .filter(Boolean)
   );
 }
+
+/* ---------------------------------------------------------
+   Свежая выгрузка коробок выбранного склада из Supabase.
+   --------------------------------------------------------- */
 
 async function optimizationFetchAllBoxes(warehouse) {
   const rows = [];
@@ -95,6 +129,10 @@ async function optimizationFetchAllBoxes(warehouse) {
   return rows;
 }
 
+/* ---------------------------------------------------------
+   Bootstrap — синхронный, берёт списки из state.boxes.
+   --------------------------------------------------------- */
+
 function optimizationBootstrap() {
   const opt = state.optimization;
   opt.error = '';
@@ -110,17 +148,22 @@ function optimizationBootstrap() {
   opt.availableZones = zones;
 
   if (!opt.targetZone || !zones.includes(opt.targetZone)) {
-    opt.targetZone = zones.find(z => !opt.sourceZones.has(z)) || zones[0] || '';
+    opt.targetZone =
+      zones.find(z => !opt.sourceZones.has(z)) ||
+      zones[0] ||
+      '';
   }
 
   const zoneSet = new Set(zones);
-  opt.sourceZones = new Set([...opt.sourceZones].filter(z => zoneSet.has(z)));
+  opt.sourceZones = new Set(
+    [...opt.sourceZones].filter(z => zoneSet.has(z))
+  );
 
   opt.loaded = true;
 }
 
 /* ---------------------------------------------------------
-   Группировка коробок по (склад + зона + поддон).
+   Группировка исходных коробок по (склад + зона + поддон).
    Одна коробка = одна запись, ничего не суммируем.
    --------------------------------------------------------- */
 
@@ -169,7 +212,11 @@ function optimizationBuildTargetPallets(boxes, targetZone, capacity) {
       const pallet = (box.pallet || '').trim();
 
       if (!groups.has(pallet)) {
-        groups.set(pallet, { pallet, count: 0, boxes: [] });
+        groups.set(pallet, {
+          pallet,
+          count: 0,
+          boxes: []
+        });
       }
 
       const group = groups.get(pallet);
@@ -195,7 +242,7 @@ function optimizationBuildTargetPallets(boxes, targetZone, capacity) {
 /* ---------------------------------------------------------
    Подбор перемещений.
 
-   Логика простыми словами:
+   Логика:
    - перебираем исходные поддоны (те, где < capacity),
      начиная с самых заполненных;
    - для каждого берём целевой поддон с наибольшим
@@ -243,6 +290,7 @@ function optimizationChooseMoves(sourceGroups, targetPallets, capacity) {
         targetZone: state.optimization.targetZone,
         targetPallet: target.pallet,
         boxIds: selected.map(box => box.id),
+        barcodes: selected.map(box => normalizeBarcode(box.barcode)),
         boxCount: selected.length,
         sourceBefore: source.count,
         sourceAfter: null,
@@ -256,6 +304,7 @@ function optimizationChooseMoves(sourceGroups, targetPallets, capacity) {
   });
 
   const movedBySource = new Map();
+
   moves.forEach(move => {
     const key = optimizationPalletKey(move.sourceWarehouse, move.sourceZone, move.sourcePallet);
     movedBySource.set(key, (movedBySource.get(key) || 0) + move.boxCount);
@@ -275,6 +324,10 @@ function optimizationSelectedSourceGroups(groups) {
   if (opt.mode === 'all') return groups;
   return groups.filter(group => opt.selectedPalletKeys.has(group.key));
 }
+
+/* ---------------------------------------------------------
+   РАСЧЁТ
+   --------------------------------------------------------- */
 
 async function optimizationCalculate() {
   const opt = state.optimization;
@@ -309,6 +362,7 @@ async function optimizationCalculate() {
   opt.error = '';
   opt.plan = [];
   opt.excludedMoves = new Set();
+  opt.expandedMoves = new Set();
   opt.result = null;
   render();
 
@@ -348,6 +402,10 @@ async function optimizationCalculate() {
   }
 }
 
+/* ---------------------------------------------------------
+   Сводка
+   --------------------------------------------------------- */
+
 function optimizationActiveMoves() {
   const opt = state.optimization;
   return opt.plan.filter(move => !opt.excludedMoves.has(move.id));
@@ -373,7 +431,9 @@ function optimizationSummary() {
     if (source && moved >= source.count) freedKeys.add(key);
   });
 
-  const plannedSourceBoxes = state.optimization.sourceData.reduce((sum, g) => sum + g.count, 0);
+  const plannedSourceBoxes = state.optimization.sourceData
+    .reduce((sum, g) => sum + g.count, 0);
+
   const movedBoxes = moves.reduce((sum, m) => sum + m.boxCount, 0);
 
   return {
@@ -386,6 +446,10 @@ function optimizationSummary() {
     moves: moves.length
   };
 }
+
+/* ---------------------------------------------------------
+   Рендер левой панели
+   --------------------------------------------------------- */
 
 function optimizationRenderZones() {
   const opt = state.optimization;
@@ -439,20 +503,86 @@ function optimizationRenderSourcePallets() {
   }).join('');
 }
 
+/* ---------------------------------------------------------
+   Рендер отчёта.
+   В раскрывающейся строке одинаковые штрихкоды собраны
+   в один чип: «код × количество».
+   --------------------------------------------------------- */
+
 function optimizationRenderReport() {
-  const moves = state.optimization.plan;
+  const opt = state.optimization;
+  const moves = opt.plan;
+
+  if (!(opt.expandedMoves instanceof Set)) {
+    opt.expandedMoves = new Set();
+  }
 
   if (!moves.length) {
     return '<div class="optimization-empty">Подходящих перемещений не найдено.</div>';
   }
 
-  const cumulative = new Map();
-
   return `
+    <style>
+      .opt-expand-btn {
+        background: transparent;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 2px 7px;
+        cursor: pointer;
+        font-size: 10px;
+        color: #666;
+        line-height: 1;
+        min-width: 22px;
+      }
+      .opt-expand-btn:hover { background: #f0f0f0; color: #111; }
+      .opt-details-row td {
+        padding: 0 !important;
+        background: #fafafa;
+        border-bottom: 1px solid #eee;
+      }
+      .opt-barcodes-wrap { padding: 10px 14px; }
+      .opt-barcodes-header {
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+      .opt-barcodes-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        max-height: 220px;
+        overflow-y: auto;
+      }
+      .opt-barcode-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 9px;
+        border-radius: 5px;
+        background: #fff;
+        border: 1px solid #ddd;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 11px;
+        color: #222;
+        white-space: nowrap;
+      }
+      .opt-barcode-chip small {
+        color: var(--primary, #2563EB);
+        font-weight: 700;
+        font-size: 10px;
+        padding: 1px 5px;
+        background: #eef2ff;
+        border-radius: 3px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+    </style>
+
     <div class="optimization-report-wrap">
       <table class="optimization-report">
         <thead>
           <tr>
+            <th style="width:34px;"></th>
             <th>Выполнить</th>
             <th>№</th>
             <th>Откуда</th>
@@ -465,15 +595,30 @@ function optimizationRenderReport() {
         </thead>
         <tbody>
           ${moves.map((move, index) => {
-            const excluded = state.optimization.excludedMoves.has(move.id);
-            const previous = cumulative.get(move.targetPallet) || 0;
-            const isActive = !excluded;
-            const after = move.targetBefore + previous + (isActive ? move.boxCount : 0);
+            const excluded = opt.excludedMoves.has(move.id);
+            const isExpanded = opt.expandedMoves.has(move.id);
+            const barcodes = Array.isArray(move.barcodes) ? move.barcodes : [];
+            const grouped = optimizationGroupBarcodes(barcodes);
 
-            if (isActive) cumulative.set(move.targetPallet, previous + move.boxCount);
+            const barcodeChips = grouped.length
+              ? grouped.map(g => `
+                  <span class="opt-barcode-chip">
+                    ${optimizationEscape(g.barcode)}
+                    ${g.count > 1 ? `<small>× ${g.count}</small>` : ''}
+                  </span>
+                `).join('')
+              : '<span class="sp-muted">Нет данных</span>';
 
             return `
               <tr style="${excluded ? 'opacity:.45;' : ''}">
+                <td>
+                  <button
+                    type="button"
+                    class="opt-expand-btn"
+                    data-opt-expand="${optimizationEscape(move.id)}"
+                    title="${isExpanded ? 'Скрыть штрихкоды' : 'Показать штрихкоды'}"
+                  >${isExpanded ? '▼' : '▶'}</button>
+                </td>
                 <td>
                   <input type="checkbox" data-opt-move="${optimizationEscape(move.id)}" ${excluded ? '' : 'checked'}>
                 </td>
@@ -483,8 +628,24 @@ function optimizationRenderReport() {
                 <td>${move.boxCount}</td>
                 <td>${optimizationEscape(move.targetZone)}</td>
                 <td>${optimizationEscape(move.targetPallet)}</td>
-                <td>${move.targetBefore} → ${after}</td>
+                <td>${move.targetBefore} → ${move.targetAfter}</td>
               </tr>
+              ${isExpanded ? `
+                <tr class="opt-details-row">
+                  <td colspan="9">
+                    <div class="opt-barcodes-wrap">
+                      <div class="opt-barcodes-header">
+                        Штрихкоды на перемещение:
+                        ${grouped.length} уникальных,
+                        всего ${barcodes.length} коробок
+                      </div>
+                      <div class="opt-barcodes-list">
+                        ${barcodeChips}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ` : ''}
             `;
           }).join('')}
         </tbody>
@@ -492,6 +653,10 @@ function optimizationRenderReport() {
     </div>
   `;
 }
+
+/* ---------------------------------------------------------
+   Экспорт CSV
+   --------------------------------------------------------- */
 
 function optimizationExportCsv() {
   const moves = optimizationActiveMoves();
@@ -501,17 +666,37 @@ function optimizationExportCsv() {
     return;
   }
 
-  const header = ['№','Откуда','Исходный паллет','Коробок','Куда','Целевой паллет','Было на целевом','Станет на целевом'];
-  const rows = moves.map((move, index) => [
-    index + 1,
-    move.sourceZone,
-    move.sourcePallet || '',
-    move.boxCount,
-    move.targetZone,
-    move.targetPallet,
-    move.targetBefore,
-    move.targetAfter
-  ]);
+  const header = [
+    '№',
+    'Откуда',
+    'Исходный паллет',
+    'Коробок',
+    'Куда',
+    'Целевой паллет',
+    'Было на целевом',
+    'Станет на целевом',
+    'Штрихкоды'
+  ];
+
+  const rows = moves.map((move, index) => {
+    const grouped = optimizationGroupBarcodes(move.barcodes || []);
+
+    const barcodeText = grouped
+      .map(g => g.count > 1 ? `${g.barcode}×${g.count}` : g.barcode)
+      .join(', ');
+
+    return [
+      index + 1,
+      move.sourceZone,
+      move.sourcePallet || '',
+      move.boxCount,
+      move.targetZone,
+      move.targetPallet,
+      move.targetBefore,
+      move.targetAfter,
+      barcodeText
+    ];
+  });
 
   const csv = [header, ...rows]
     .map(row => row.map(value => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';'))
@@ -525,6 +710,10 @@ function optimizationExportCsv() {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+/* ---------------------------------------------------------
+   ПРИМЕНЕНИЕ
+   --------------------------------------------------------- */
 
 async function optimizationApply() {
   const opt = state.optimization;
@@ -585,6 +774,7 @@ async function optimizationApply() {
     opt.targetPallets = [];
     opt.selectedPalletKeys = new Set();
     opt.excludedMoves = new Set();
+    opt.expandedMoves = new Set();
     opt.calculatedAt = null;
 
     toast(`Оптимизация закрыта. Перемещено коробок: ${data?.box_count ?? summary.movedBoxes}`);
@@ -597,6 +787,10 @@ async function optimizationApply() {
     render();
   }
 }
+
+/* ---------------------------------------------------------
+   ВЬЮ
+   --------------------------------------------------------- */
 
 function warehouseOptimizationView() {
   optimizationBootstrap();
@@ -729,6 +923,10 @@ function warehouseOptimizationView() {
   `;
 }
 
+/* ---------------------------------------------------------
+   Обновление списка исходных паллет
+   --------------------------------------------------------- */
+
 async function optimizationRefreshSourcePallets() {
   const opt = state.optimization;
   if (!opt.warehouse || !opt.sourceZones.size) {
@@ -753,8 +951,16 @@ async function optimizationRefreshSourcePallets() {
   }
 }
 
+/* ---------------------------------------------------------
+   SETUP
+   --------------------------------------------------------- */
+
 function setupWarehouseOptimization() {
   const opt = state.optimization;
+
+  if (!(opt.expandedMoves instanceof Set)) {
+    opt.expandedMoves = new Set();
+  }
 
   $('#optimizationWarehouse')?.addEventListener('change', async event => {
     opt.warehouse = event.target.value;
@@ -764,6 +970,7 @@ function setupWarehouseOptimization() {
     opt.plan = [];
     opt.selectedPalletKeys = new Set();
     opt.excludedMoves = new Set();
+    opt.expandedMoves = new Set();
     opt.loaded = false;
     render();
   });
@@ -773,6 +980,7 @@ function setupWarehouseOptimization() {
     opt.sourceZones.delete(opt.targetZone);
     opt.plan = [];
     opt.excludedMoves = new Set();
+    opt.expandedMoves = new Set();
     render();
   });
 
@@ -780,6 +988,7 @@ function setupWarehouseOptimization() {
     opt.capacity = Math.max(1, Math.min(1000, Number(event.target.value) || OPTIMIZATION_DEFAULT_CAPACITY));
     opt.plan = [];
     opt.excludedMoves = new Set();
+    opt.expandedMoves = new Set();
 
     if (opt.mode === 'selected') {
       await optimizationRefreshSourcePallets();
@@ -792,6 +1001,7 @@ function setupWarehouseOptimization() {
     opt.mode = event.target.value;
     opt.plan = [];
     opt.excludedMoves = new Set();
+    opt.expandedMoves = new Set();
 
     if (opt.mode === 'selected') {
       await optimizationRefreshSourcePallets();
@@ -817,6 +1027,7 @@ function setupWarehouseOptimization() {
 
       opt.plan = [];
       opt.excludedMoves = new Set();
+      opt.expandedMoves = new Set();
 
       if (opt.mode === 'selected') {
         await optimizationRefreshSourcePallets();
@@ -838,6 +1049,7 @@ function setupWarehouseOptimization() {
 
       opt.plan = [];
       opt.excludedMoves = new Set();
+      opt.expandedMoves = new Set();
       render();
     });
   });
@@ -864,6 +1076,27 @@ function setupWarehouseOptimization() {
         opt.excludedMoves.delete(id);
       } else {
         opt.excludedMoves.add(id);
+      }
+
+      render();
+    });
+  });
+
+  $all('[data-opt-expand]').forEach(btn => {
+    btn.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const id = btn.getAttribute('data-opt-expand');
+
+      if (!(opt.expandedMoves instanceof Set)) {
+        opt.expandedMoves = new Set();
+      }
+
+      if (opt.expandedMoves.has(id)) {
+        opt.expandedMoves.delete(id);
+      } else {
+        opt.expandedMoves.add(id);
       }
 
       render();
