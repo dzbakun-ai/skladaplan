@@ -952,6 +952,56 @@
   src="planner.js?v=20260917e"
 ></script>
 
+  <!-- =====================================================
+     PWA — регистрация service worker
+     ===================================================== -->
+
+<script>
+(function () {
+  if (!('serviceWorker' in navigator)) return;
+
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then(registration => {
+        console.log('[PWA] Service worker зарегистрирован:', registration.scope);
+
+        /* Если у пользователя есть старая версия SW —
+           проверяем, не появилась ли новая. */
+        registration.update();
+
+        /* Слушаем обновление SW: если появилась новая версия —
+           говорим ей активироваться сразу. */
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          if (!newWorker) return;
+
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              /* Новая версия готова. Просто применяем. */
+              newWorker.postMessage('SKIP_WAITING');
+            }
+          });
+        });
+      })
+      .catch(error => {
+        /* Не критично — приложение продолжит работать
+           как обычный сайт. */
+        console.warn('[PWA] Service worker не зарегистрирован:', error);
+      });
+  });
+
+  /* Когда service worker обновился и контролирует страницу —
+     один раз перезагружаем, чтобы подхватить свежие JS/CSS. */
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+})();
+</script>
+
 
 </body>
 
