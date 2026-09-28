@@ -2,18 +2,16 @@
    SKLADAPLAN — ПОВТОРЯЮЩИЕСЯ ЗАДАЧИ (РИТУАЛЫ)
    =========================================================
 
-   Что делает:
-   - Карточка «🔁 Ритуалы» в разделе «Задачи».
-   - CRUD шаблонов: название, описание, приоритет,
-     тип повторения (daily / weekly / interval).
-   - Генератор: при входе в приложение проходит по активным
-     шаблонам и создаёт задачи на сегодня (если ещё нет).
+   v1.1:
+   - Вместо обёртки window.tasksView — MutationObserver
+     на #content. Карточка вставляется, когда на странице
+     появляется #taskTitleInput (страница «Задачи»).
+   - Работает так же надёжно, как labels/box-history.
 
-   Изоляция:
-   - Не трогает app.js и tasks.js.
-   - Оборачивает tasksView — добавляет свою карточку сверху.
-   - Если что-то падает — оригинальный вид всё равно
-     отработает.
+   Что делает:
+   - Карточка «🔁 Ежедневные ритуалы» на странице Задач.
+   - CRUD шаблонов: daily / weekly / interval.
+   - Генератор: при входе создаёт задачи на сегодня.
    ========================================================= */
 
 (function () {
@@ -24,12 +22,13 @@
   const CARD_ID = 'spRecurringCard';
   const MODAL_ID = 'spRecurringModal';
   const DAYS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-  const GENERATE_COOLDOWN_MS = 60 * 60 * 1000; // не чаще раза в час
+  const GENERATE_COOLDOWN_MS = 60 * 60 * 1000;
 
   let templates = [];
   let loading = false;
   let lastGenerateAt = 0;
   let scheduled = false;
+  let contentObserver = null;
 
   /* ============== БЕЗОПАСНЫЙ ДОСТУП ============== */
 
@@ -76,11 +75,8 @@
 
   function formatWeekdays(arr) {
     if (!Array.isArray(arr) || !arr.length) return '—';
-    return arr
-      .slice()
-      .sort((a, b) => a - b)
-      .map(n => DAYS_RU[n - 1] || '?')
-      .join(' · ');
+    return arr.slice().sort((a, b) => a - b)
+      .map(n => DAYS_RU[n - 1] || '?').join(' · ');
   }
 
   function repeatLabel(t) {
@@ -90,21 +86,17 @@
     return '—';
   }
 
-  /* ============== ЛОГИКА: НУЖНА ЛИ ГЕНЕРАЦИЯ НА ДАТУ ============== */
+  /* ============== ЛОГИКА ============== */
 
   function shouldRunOn(template, dateKey) {
     const t = String(template.repeat_type || '').toLowerCase();
 
-    /* Раньше даты старта — не генерируем */
-    if (template.starts_on && dateKey < String(template.starts_on).slice(0, 10)) {
-      return false;
-    }
-
+    if (template.starts_on && dateKey < String(template.starts_on).slice(0, 10)) return false;
     if (t === 'daily') return true;
 
     if (t === 'weekly') {
-      const dow = new Date(dateKey + 'T00:00:00').getDay(); // 0=Вс..6=Сб
-      const ru = dow === 0 ? 7 : dow; // 1..7 = Пн..Вс
+      const dow = new Date(dateKey + 'T00:00:00').getDay();
+      const ru = dow === 0 ? 7 : dow;
       return Array.isArray(template.weekdays) && template.weekdays.includes(ru);
     }
 
@@ -122,29 +114,22 @@
     return false;
   }
 
-  /* ============== ЗАГРУЗКА / CRUD ШАБЛОНОВ ============== */
+  /* ============== CRUD ============== */
 
   async function loadTemplates() {
     const client = getSupabase();
     if (!client) return [];
-
     const { data, error } = await client
-      .from('task_templates')
-      .select('*')
+      .from('task_templates').select('*')
       .order('active', { ascending: false })
       .order('created_at', { ascending: false });
-
-    if (error) {
-      console.warn('[Recurring] load error:', error);
-      return [];
-    }
+    if (error) { console.warn('[Recurring] load error:', error); return []; }
     return data || [];
   }
 
   async function saveTemplate(payload, id) {
     const client = getSupabase();
     if (!client) throw new Error('Supabase-клиент недоступен');
-
     const op = getAppState()?.user?.email || null;
     const now = new Date().toISOString();
 
@@ -184,24 +169,18 @@
   async function generateForDate(dateKey) {
     const client = getSupabase();
     if (!client) return { created: 0 };
-
-    if (!templates.length) {
-      templates = await loadTemplates();
-    }
+    if (!templates.length) templates = await loadTemplates();
 
     const activeTemplates = templates.filter(t => t.active);
     if (!activeTemplates.length) return { created: 0 };
 
-    /* Что уже есть на эту дату — чтобы не создавать дубли */
     const { data: existing } = await client
-      .from('tasks')
-      .select('template_id')
+      .from('tasks').select('template_id')
       .eq('due_date', dateKey)
       .not('template_id', 'is', null);
 
     const already = new Set((existing || []).map(r => String(r.template_id)));
 
-    /* Какие шаблоны должны сработать на эту дату */
     const toCreate = activeTemplates.filter(t =>
       shouldRunOn(t, dateKey) && !already.has(String(t.id))
     );
@@ -209,7 +188,6 @@
     if (!toCreate.length) return { created: 0 };
 
     const op = getAppState()?.user?.email || null;
-
     const payload = toCreate.map(t => ({
       title: t.title,
       description: t.description || '',
@@ -223,18 +201,13 @@
     }));
 
     const { data: inserted, error } = await client
-      .from('tasks')
-      .insert(payload)
-      .select('*');
+      .from('tasks').insert(payload).select('*');
 
     if (error) {
-      /* Если конфликт по уникальному индексу — значит гонка,
-         просто игнорируем, ничего критичного */
       console.warn('[Recurring] generate error:', error);
       return { created: 0, error: error.message };
     }
 
-    /* Подкладываем новые задачи в tasksState, если он доступен */
     const ts = getTasksState();
     if (ts && Array.isArray(ts.items) && Array.isArray(inserted)) {
       ts.items.unshift(...inserted);
@@ -245,21 +218,13 @@
 
   async function runGeneration(silent) {
     const now = Date.now();
-    if (now - lastGenerateAt < GENERATE_COOLDOWN_MS) {
-      /* Слишком частый вызов — пропускаем */
-      return { created: 0, skipped: true };
-    }
+    if (now - lastGenerateAt < GENERATE_COOLDOWN_MS) return { created: 0, skipped: true };
     lastGenerateAt = now;
 
     try {
       const res = await generateForDate(todayKey());
-      if (!silent && res.created > 0) {
-        toast(`Создано ритуальных задач: ${res.created}`);
-      }
-      if (res.created > 0) {
-        /* Перерисовываем текущую страницу, чтобы задачи сразу появились */
-        if (typeof window.render === 'function') window.render();
-      }
+      if (!silent && res.created > 0) toast(`Создано ритуальных задач: ${res.created}`);
+      if (res.created > 0 && typeof window.render === 'function') window.render();
       return res;
     } catch (e) {
       console.warn('[Recurring] generation error:', e);
@@ -267,31 +232,18 @@
     }
   }
 
-  /* ============== UI: КАРТОЧКА В РАЗДЕЛЕ «ЗАДАЧИ» ============== */
+  /* ============== СТИЛИ ============== */
 
   function injectStyles() {
     if (document.getElementById(STYLES_ID)) return;
-
     const style = document.createElement('style');
     style.id = STYLES_ID;
     style.textContent = `
-      #${CARD_ID} h3 {
-        margin: 0 0 4px;
-        font-size: 16px;
-        font-weight: 700;
-        color: #0f172a;
-      }
-      #${CARD_ID} .sp-rec-sub {
-        margin: 0 0 14px;
-        font-size: 13px;
-        color: #64748b;
-        line-height: 1.4;
-      }
+      #${CARD_ID} h3 { margin: 0 0 4px; font-size: 16px; font-weight: 700; color: #0f172a; }
+      #${CARD_ID} .sp-rec-sub { margin: 0 0 14px; font-size: 13px; color: #64748b; line-height: 1.4; }
       #${CARD_ID} .sp-rec-toolbar {
         display: flex; gap: 8px; flex-wrap: wrap;
-        margin-bottom: 12px;
-        justify-content: space-between;
-        align-items: center;
+        margin-bottom: 12px; justify-content: space-between; align-items: center;
       }
       #${CARD_ID} .sp-rec-btn {
         border: 0; border-radius: 9px;
@@ -309,42 +261,29 @@
         display: flex; align-items: center; gap: 12px;
         padding: 11px 14px;
         border: 1px solid #e2e8f0;
-        border-radius: 11px;
-        background: #fff;
+        border-radius: 11px; background: #fff;
       }
       #${CARD_ID} .sp-rec-item.is-inactive { opacity: .55; }
       #${CARD_ID} .sp-rec-item-body { flex: 1; min-width: 0; }
-      #${CARD_ID} .sp-rec-title {
-        font-size: 14px; font-weight: 600; color: #0f172a;
-        word-break: break-word;
-      }
+      #${CARD_ID} .sp-rec-title { font-size: 14px; font-weight: 600; color: #0f172a; word-break: break-word; }
       #${CARD_ID} .sp-rec-meta {
-        margin-top: 3px;
-        display: flex; gap: 8px; flex-wrap: wrap;
+        margin-top: 3px; display: flex; gap: 8px; flex-wrap: wrap;
         font-size: 11px; color: #64748b;
       }
       #${CARD_ID} .sp-rec-badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 999px;
-        font-size: 10px; font-weight: 700;
+        display: inline-block; padding: 2px 8px;
+        border-radius: 999px; font-size: 10px; font-weight: 700;
       }
       #${CARD_ID} .sp-rec-badge-on  { background: #dcfce7; color: #166534; }
       #${CARD_ID} .sp-rec-badge-off { background: #f1f5f9; color: #64748b; }
       #${CARD_ID} .sp-rec-badge-pri-low  { background: #dbeafe; color: #1e40af; }
       #${CARD_ID} .sp-rec-badge-pri-med  { background: #fef3c7; color: #92400e; }
       #${CARD_ID} .sp-rec-badge-pri-high { background: #fee2e2; color: #991b1b; }
-      #${CARD_ID} .sp-rec-actions {
-        display: flex; gap: 4px; flex-shrink: 0;
-      }
+      #${CARD_ID} .sp-rec-actions { display: flex; gap: 4px; flex-shrink: 0; }
       #${CARD_ID} .sp-rec-icon-btn {
         width: 30px; height: 30px;
-        border: 1px solid #e2e8f0;
-        border-radius: 8px;
-        background: #fff;
-        color: #475569;
-        cursor: pointer;
-        font-size: 13px;
+        border: 1px solid #e2e8f0; border-radius: 8px;
+        background: #fff; color: #475569; cursor: pointer; font-size: 13px;
         display: inline-flex; align-items: center; justify-content: center;
       }
       #${CARD_ID} .sp-rec-icon-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
@@ -352,42 +291,26 @@
         background: #fef2f2; color: #b42318; border-color: #fecaca;
       }
       #${CARD_ID} .sp-rec-empty {
-        padding: 20px;
-        text-align: center;
-        color: #94a3b8;
-        font-size: 13px;
-        background: #f8fafc;
-        border-radius: 11px;
+        padding: 20px; text-align: center; color: #94a3b8; font-size: 13px;
+        background: #f8fafc; border-radius: 11px;
       }
-      #${CARD_ID} .sp-rec-loading {
-        padding: 16px;
-        text-align: center;
-        color: #64748b;
-        font-size: 13px;
-      }
+      #${CARD_ID} .sp-rec-loading { padding: 16px; text-align: center; color: #64748b; font-size: 13px; }
 
-      /* Модалка */
       #${MODAL_ID} {
         position: fixed; inset: 0;
         background: rgba(15, 23, 42, .55);
         z-index: 100014;
         display: flex; align-items: center; justify-content: center;
-        padding: 20px;
-        backdrop-filter: blur(3px);
+        padding: 20px; backdrop-filter: blur(3px);
       }
       #${MODAL_ID} .sp-rec-modal {
-        background: #fff;
-        border-radius: 16px;
+        background: #fff; border-radius: 16px;
         width: 100%; max-width: 520px;
-        max-height: 92vh;
-        overflow-y: auto;
-        padding: 22px;
-        box-shadow: 0 25px 80px rgba(0,0,0,.35);
+        max-height: 92vh; overflow-y: auto;
+        padding: 22px; box-shadow: 0 25px 80px rgba(0,0,0,.35);
       }
       #${MODAL_ID} h3 { margin: 0 0 4px; font-size: 17px; font-weight: 700; }
-      #${MODAL_ID} .sp-rec-modal-sub {
-        margin: 0 0 18px; font-size: 13px; color: #64748b;
-      }
+      #${MODAL_ID} .sp-rec-modal-sub { margin: 0 0 18px; font-size: 13px; color: #64748b; }
       #${MODAL_ID} .sp-rec-field { display: block; margin-bottom: 12px; }
       #${MODAL_ID} .sp-rec-field > span {
         display: block; font-size: 12px; font-weight: 600;
@@ -398,8 +321,8 @@
       #${MODAL_ID} .sp-rec-field textarea {
         width: 100%; box-sizing: border-box;
         border: 1px solid #dfe3e8; border-radius: 9px;
-        padding: 10px 12px; font-size: 13px; outline: none; background: #fff;
-        font-family: inherit;
+        padding: 10px 12px; font-size: 13px; outline: none;
+        background: #fff; font-family: inherit;
       }
       #${MODAL_ID} .sp-rec-field textarea { min-height: 60px; resize: vertical; }
       #${MODAL_ID} .sp-rec-field input:focus,
@@ -408,32 +331,18 @@
         border-color: var(--primary, #2563EB);
         box-shadow: 0 0 0 3px rgba(37,99,235,.1);
       }
-      #${MODAL_ID} .sp-rec-days {
-        display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;
-      }
+      #${MODAL_ID} .sp-rec-days { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
       #${MODAL_ID} .sp-rec-day {
-        display: inline-flex; align-items: center;
-        gap: 6px;
-        padding: 6px 11px;
-        border: 1px solid #dfe3e8;
-        border-radius: 999px;
-        cursor: pointer;
-        font-size: 12px;
-        background: #fff;
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 6px 11px; border: 1px solid #dfe3e8;
+        border-radius: 999px; cursor: pointer; font-size: 12px; background: #fff;
       }
       #${MODAL_ID} .sp-rec-day input { margin: 0; accent-color: var(--primary, #2563EB); cursor: pointer; }
-      #${MODAL_ID} .sp-rec-day.is-checked {
-        background: #eff6ff; border-color: #93c5fd;
-      }
-      #${MODAL_ID} .sp-rec-hint {
-        font-size: 11px; color: #94a3b8;
-        margin-top: -4px; margin-bottom: 10px;
-      }
+      #${MODAL_ID} .sp-rec-day.is-checked { background: #eff6ff; border-color: #93c5fd; }
+      #${MODAL_ID} .sp-rec-hint { font-size: 11px; color: #94a3b8; margin-top: -4px; margin-bottom: 10px; }
       #${MODAL_ID} .sp-rec-foot {
         display: flex; gap: 8px; justify-content: flex-end;
-        margin-top: 16px;
-        padding-top: 14px;
-        border-top: 1px solid #eef1f4;
+        margin-top: 16px; padding-top: 14px; border-top: 1px solid #eef1f4;
       }
       #${MODAL_ID} .sp-rec-fbtn {
         border: 0; border-radius: 9px; padding: 11px 18px;
@@ -441,13 +350,10 @@
       }
       #${MODAL_ID} .sp-rec-fbtn-primary { background: var(--primary, #2563EB); color: #fff; }
       #${MODAL_ID} .sp-rec-fbtn-primary:hover { background: var(--primary-hover, #1D4ED8); }
-      #${MODAL_ID} .sp-rec-fbtn-secondary {
-        background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0;
-      }
+      #${MODAL_ID} .sp-rec-fbtn-secondary { background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; }
       #${MODAL_ID} .sp-rec-fbtn-secondary:hover { background: #e2e8f0; }
       #${MODAL_ID} .sp-rec-err {
-        margin: 6px 0 0;
-        padding: 10px 12px;
+        margin: 6px 0 0; padding: 10px 12px;
         background: #fef2f2; color: #991b1b;
         border-radius: 8px; font-size: 12px;
       }
@@ -455,31 +361,40 @@
       @media (max-width: 640px) {
         #${MODAL_ID} { padding: 0; }
         #${MODAL_ID} .sp-rec-modal {
-          max-width: none; height: 100vh; max-height: 100vh;
-          border-radius: 0;
+          max-width: none; height: 100vh; max-height: 100vh; border-radius: 0;
         }
       }
     `;
     document.head.appendChild(style);
   }
 
-  function renderCard() {
-    if (document.getElementById(CARD_ID)) {
-      /* если карточка уже есть — просто обновим список */
-      renderList();
-      return;
-    }
+  /* ============== КАРТОЧКА — вставка через Observer ============== */
 
-    /* Вставляем карточку сверху в разделе «Задачи» —
-       перед первой .sp-card в этом разделе */
+  function scheduleCard() {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      try { renderCardOnTasksPage(); }
+      catch (e) { console.warn('[Recurring] scheduleCard error:', e); }
+    });
+  }
+
+  function renderCardOnTasksPage() {
     const content = document.getElementById('content');
     if (!content) return;
 
-    /* Признак: страница «Задачи» — есть форма «Новая задача» с id taskTitleInput */
-    if (!document.getElementById('taskTitleInput')) {
-      /* не на странице задач — не вставляем */
+    const onTasksPage = !!document.getElementById('taskTitleInput');
+
+    /* Не на странице Задач — убираем карточку, если висит */
+    if (!onTasksPage) {
+      const existing = document.getElementById(CARD_ID);
+      if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
       return;
     }
+
+    /* Уже вставлена */
+    if (document.getElementById(CARD_ID)) return;
 
     const card = document.createElement('div');
     card.id = CARD_ID;
@@ -502,7 +417,6 @@
       <div id="spRecList"><div class="sp-rec-loading">Загрузка…</div></div>
     `;
 
-    /* Куда вставить: перед первой карточкой в #content */
     const firstCard = content.querySelector('.sp-card');
     if (firstCard && firstCard.parentNode === content) {
       content.insertBefore(card, firstCard);
@@ -512,23 +426,23 @@
 
     document.getElementById('spRecAddBtn')?.addEventListener('click', () => openModal(null));
     document.getElementById('spRecGenerateBtn')?.addEventListener('click', async () => {
-      lastGenerateAt = 0; /* сбрасываем кулдаун для ручного нажатия */
+      lastGenerateAt = 0;
       const res = await runGeneration(false);
       if (res.created === 0) toast('Новых ритуальных задач на сегодня нет');
       renderList();
     });
 
     renderList();
+    console.log('[Recurring] Карточка вставлена на страницу «Задачи»');
   }
 
   async function renderList() {
     const container = document.getElementById('spRecList');
     if (!container) return;
 
-    container.innerHTML = '<div class="sp-rec-loading">Загрузка…</div>';
-
     if (loading) return;
     loading = true;
+    container.innerHTML = '<div class="sp-rec-loading">Загрузка…</div>';
 
     try {
       templates = await loadTemplates();
@@ -547,12 +461,10 @@
         <div class="sp-rec-list">
           ${templates.map(t => {
             const isActive = !!t.active;
-
             const priClass =
               t.priority === 'high' ? 'sp-rec-badge-pri-high' :
               t.priority === 'low'  ? 'sp-rec-badge-pri-low'  :
               'sp-rec-badge-pri-med';
-
             const priLabel =
               t.priority === 'high' ? 'Высокий' :
               t.priority === 'low'  ? 'Низкий'  : 'Средний';
@@ -590,7 +502,6 @@
         </div>
       `;
 
-      /* Обработчики */
       container.querySelectorAll('[data-rec-toggle]').forEach(btn => {
         btn.addEventListener('click', async () => {
           const id = btn.getAttribute('data-rec-toggle');
@@ -599,9 +510,7 @@
           try {
             await toggleTemplateActive(id, !t.active);
             await renderList();
-          } catch (e) {
-            toast('Ошибка: ' + (e.message || ''), 'error');
-          }
+          } catch (e) { toast('Ошибка: ' + (e.message || ''), 'error'); }
         });
       });
 
@@ -623,9 +532,7 @@
             await deleteTemplate(id);
             toast('Ритуал удалён');
             await renderList();
-          } catch (e) {
-            toast('Ошибка: ' + (e.message || ''), 'error');
-          }
+          } catch (e) { toast('Ошибка: ' + (e.message || ''), 'error'); }
         });
       });
 
@@ -637,22 +544,16 @@
     }
   }
 
-  /* ============== МОДАЛКА РЕДАКТИРОВАНИЯ ============== */
+  /* ============== МОДАЛКА ============== */
 
   function openModal(existing) {
     if (document.getElementById(MODAL_ID)) return;
 
     const isEdit = !!existing;
     const t = existing || {
-      title: '',
-      description: '',
-      priority: 'medium',
-      favorite: false,
-      repeat_type: 'daily',
-      weekdays: [],
-      interval_days: 3,
-      starts_on: todayKey(),
-      active: true
+      title: '', description: '', priority: 'medium', favorite: false,
+      repeat_type: 'daily', weekdays: [], interval_days: 3,
+      starts_on: todayKey(), active: true
     };
 
     const selectedWeekdays = new Set(Array.isArray(t.weekdays) ? t.weekdays : []);
@@ -758,7 +659,6 @@
     overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
     document.getElementById('spRecCancel').addEventListener('click', close);
 
-    /* Переключение блоков в зависимости от типа */
     const repeatSel = document.getElementById('spRecRepeat');
     const weeklyBlock = document.getElementById('spRecWeeklyBlock');
     const intervalBlock = document.getElementById('spRecIntervalBlock');
@@ -769,7 +669,6 @@
       intervalBlock.style.display = v === 'interval' ? 'block' : 'none';
     });
 
-    /* Подсветка выбранных дней */
     overlay.querySelectorAll('[data-rec-day]').forEach(cb => {
       cb.addEventListener('change', () => {
         cb.closest('.sp-rec-day').classList.toggle('is-checked', cb.checked);
@@ -781,7 +680,6 @@
     };
     document.addEventListener('keydown', escHandler);
 
-    /* Сохранение */
     document.getElementById('spRecSave').addEventListener('click', async () => {
       const btn = document.getElementById('spRecSave');
       const errEl = document.getElementById('spRecErr');
@@ -797,19 +695,12 @@
       const favorite = !!document.getElementById('spRecFavorite')?.checked;
       const active = !!document.getElementById('spRecActive')?.checked;
 
-      if (!title) {
-        errEl.innerHTML = '<div class="sp-rec-err">Укажите название задачи</div>';
-        return;
-      }
-
+      if (!title) { errEl.innerHTML = '<div class="sp-rec-err">Укажите название задачи</div>'; return; }
       if (repeat_type === 'weekly' && !weekdays.length) {
-        errEl.innerHTML = '<div class="sp-rec-err">Выберите хотя бы один день недели</div>';
-        return;
+        errEl.innerHTML = '<div class="sp-rec-err">Выберите хотя бы один день недели</div>'; return;
       }
-
       if (repeat_type === 'interval' && (!interval_days || interval_days < 1)) {
-        errEl.innerHTML = '<div class="sp-rec-err">Укажите интервал в днях (≥ 1)</div>';
-        return;
+        errEl.innerHTML = '<div class="sp-rec-err">Укажите интервал в днях (≥ 1)</div>'; return;
       }
 
       btn.disabled = true;
@@ -817,11 +708,7 @@
       errEl.innerHTML = '';
 
       const payload = {
-        title,
-        description,
-        priority,
-        favorite,
-        active,
+        title, description, priority, favorite, active,
         repeat_type,
         weekdays: repeat_type === 'weekly' ? weekdays : [],
         interval_days: repeat_type === 'interval' ? interval_days : null,
@@ -841,41 +728,22 @@
       }
     });
 
-    /* Фокус на первое поле */
     setTimeout(() => document.getElementById('spRecTitle')?.focus(), 30);
   }
 
-  /* ============== ХУКИ В TASKS.JS ============== */
+  /* ============== НАБЛЮДЕНИЕ ЗА #content ============== */
 
-  function installHooks() {
-    if (typeof window.tasksView !== 'function') return false;
-    if (window.tasksView.__recWrapped) return true;
+  function startContentObserver() {
+    if (contentObserver) return;
 
-    const originalView = window.tasksView;
-    const originalSetup = window.setupTasks;
+    const content = document.getElementById('content');
+    if (!content) { setTimeout(startContentObserver, 300); return; }
 
-    const wrappedView = function () {
-      /* Не вставляем ничего в HTML — вставим DOM-элемент
-         после отрисовки, из setup() */
-      return originalView.apply(this, arguments);
-    };
-    wrappedView.__recWrapped = true;
-    window.tasksView = wrappedView;
+    contentObserver = new MutationObserver(() => scheduleCard());
+    contentObserver.observe(content, { childList: true });
 
-    if (typeof originalSetup === 'function') {
-      window.setupTasks = function () {
-        originalSetup.apply(this, arguments);
-
-        /* После setup — вставляем карточку (или только список
-           если она уже есть) */
-        setTimeout(() => {
-          try { renderCard(); } catch (e) { console.warn('[Recurring] renderCard:', e); }
-        }, 40);
-      };
-    }
-
-    console.log('[Recurring] Хуки установлены');
-    return true;
+    scheduleCard();
+    console.log('[Recurring] Наблюдение за #content запущено');
   }
 
   /* ============== ИНИЦИАЛИЗАЦИЯ ============== */
@@ -884,19 +752,16 @@
     injectStyles();
 
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', installHooks, { once: true });
+      document.addEventListener('DOMContentLoaded', startContentObserver, { once: true });
     } else {
-      installHooks();
+      startContentObserver();
     }
 
-    setTimeout(installHooks, 300);
-    setTimeout(installHooks, 1500);
-    setTimeout(installHooks, 4000);
+    setTimeout(startContentObserver, 500);
+    setTimeout(startContentObserver, 2000);
+    setTimeout(startContentObserver, 5000);
 
-    /* Генерация — с задержкой, чтобы app.js успел загрузить задачи */
-    setTimeout(() => {
-      runGeneration(true).catch(() => {});
-    }, 6000);
+    setTimeout(() => { runGeneration(true).catch(() => {}); }, 6000);
 
     console.log('[Recurring] Модуль инициализирован');
   }
@@ -904,15 +769,9 @@
   init();
 
   window.spRecurring = {
-    reload: async () => {
-      templates = await loadTemplates();
-      renderList();
-    },
-    generate: () => {
-      lastGenerateAt = 0;
-      return runGeneration(false);
-    },
-    version: '1.0.0'
+    reload: async () => { templates = await loadTemplates(); renderList(); },
+    generate: () => { lastGenerateAt = 0; return runGeneration(false); },
+    version: '1.1.0'
   };
 
 })();
