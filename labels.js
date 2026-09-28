@@ -1,22 +1,16 @@
 /* =========================================================
-   SKLADAPLAN — ПЕЧАТЬ ЭТИКЕТОК
+   SKLADAPLAN — ПЕЧАТЬ ЭТИКЕТОК (v1.1)
    =========================================================
 
    Что делает:
    - В Базе: кнопка 🏷 у каждой коробки → печать одной этикетки.
    - В Базе: пакетная печать выбранных (по чекбоксам).
-   - В Собрано: печать этикеток для группы.
-   - Модалка настроек: размер, состав, количество копий.
 
-   Как печатает:
-   - Формирует HTML-страницу с этикетками (JsBarcode для
-     штрихкода) → открывает в новом окне → window.print().
-   - Работает с любым принтером: термопринтер, А4, PDF.
-   - Не требует внешних библиотек PDF.
-
-   Изоляция:
-   - Не трогает app.js.
-   - Если JsBarcode не загрузится, печатает просто цифры.
+   Что нового в v1.1:
+   - Безопасный доступ к state (в app.js это const,
+     а не window.state).
+   - A4 печатает этикетки в ряд, а не по одной на страницу.
+   - Toast после печати показывает правильное количество.
    ========================================================= */
 
 (function () {
@@ -25,15 +19,21 @@
 
   const STYLES_ID  = 'spLabelsStyles';
   const MODAL_ID   = 'spLabelsModal';
-  const BTN_CLASS  = 'sp-label-btn';
   const ATTACH_ATTR = 'data-label-attached';
 
   let jscodeLoadPromise = null;
   let observer = null;
   let scheduled = false;
 
-  /* Хранилище текущего задания печати */
   let pendingBoxes = [];
+
+  /* ============== БЕЗОПАСНЫЙ ДОСТУП К STATE ============== */
+
+  function getAppState() {
+    try { if (typeof state !== 'undefined' && state) return state; } catch (e) {}
+    if (window.state) return window.state;
+    return null;
+  }
 
   /* ============== УТИЛИТЫ ============== */
 
@@ -45,20 +45,11 @@
       .replace(/'/g, '&#039;');
   }
 
-  function getSupabase() {
-    try {
-      if (typeof supabaseClient !== 'undefined' && supabaseClient) return supabaseClient;
-    } catch (e) {}
-    if (window.supabaseClient) return window.supabaseClient;
-    return null;
-  }
-
   function toast(msg, type) {
     if (typeof window.toast === 'function') window.toast(msg, type || 'success');
     else console.log('[Labels]', msg);
   }
 
-  /* Загружаем JsBarcode по требованию */
   function loadJsBarcode() {
     if (window.JsBarcode) return Promise.resolve();
     if (jscodeLoadPromise) return jscodeLoadPromise;
@@ -68,14 +59,14 @@
       s.src = 'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js';
       s.async = true;
       s.onload = () => resolve();
-      s.onerror = () => reject(new Error('Не удалось загрузить JsBarcode. Проверьте интернет.'));
+      s.onerror = () => reject(new Error('Не удалось загрузить JsBarcode'));
       document.head.appendChild(s);
     });
 
     return jscodeLoadPromise;
   }
 
-  /* ============== СТИЛИ (для кнопок в интерфейсе) ============== */
+  /* ============== СТИЛИ ============== */
 
   function injectStyles() {
     if (document.getElementById(STYLES_ID)) return;
@@ -107,7 +98,6 @@
       }
       .sp-label-btn:active { transform: scale(.97); }
 
-      /* Верхняя кнопка "Печать этикеток (N)" */
       .sp-labels-batch-btn {
         display: inline-flex;
         align-items: center;
@@ -124,15 +114,9 @@
         cursor: pointer;
         font-family: inherit;
       }
-      .sp-labels-batch-btn:hover {
-        background: var(--primary-hover, #1D4ED8);
-      }
-      .sp-labels-batch-btn:disabled {
-        opacity: .45;
-        cursor: not-allowed;
-      }
+      .sp-labels-batch-btn:hover { background: var(--primary-hover, #1D4ED8); }
+      .sp-labels-batch-btn:disabled { opacity: .45; cursor: not-allowed; }
 
-      /* ============== МОДАЛКА ============== */
       #${MODAL_ID} {
         position: fixed; inset: 0;
         background: rgba(15, 23, 42, .55);
@@ -155,46 +139,24 @@
         border-bottom: 1px solid #eef1f4;
         display: flex; align-items: center; justify-content: space-between;
       }
-      #${MODAL_ID} .sp-lbl-head h3 {
-        margin: 0;
-        font-size: 17px;
-        font-weight: 700;
-      }
+      #${MODAL_ID} .sp-lbl-head h3 { margin: 0; font-size: 17px; font-weight: 700; }
       #${MODAL_ID} .sp-lbl-close {
-        border: 0;
-        background: #f3f3f3;
+        border: 0; background: #f3f3f3;
         width: 34px; height: 34px;
-        border-radius: 50%;
-        cursor: pointer;
-        font-size: 20px;
-        line-height: 1;
-        color: #444;
+        border-radius: 50%; cursor: pointer;
+        font-size: 20px; line-height: 1; color: #444;
       }
       #${MODAL_ID} .sp-lbl-close:hover { background: #e5e5e5; }
 
-      #${MODAL_ID} .sp-lbl-body {
-        padding: 16px 20px;
-        overflow-y: auto;
-        flex: 1;
-      }
+      #${MODAL_ID} .sp-lbl-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
       #${MODAL_ID} .sp-lbl-info {
-        padding: 10px 14px;
-        background: #eff6ff;
-        color: #1e40af;
-        border-radius: 10px;
-        font-size: 13px;
-        margin-bottom: 16px;
+        padding: 10px 14px; background: #eff6ff; color: #1e40af;
+        border-radius: 10px; font-size: 13px; margin-bottom: 16px;
       }
-      #${MODAL_ID} .sp-lbl-field {
-        display: block;
-        margin-bottom: 14px;
-      }
+      #${MODAL_ID} .sp-lbl-field { display: block; margin-bottom: 14px; }
       #${MODAL_ID} .sp-lbl-field > span {
-        display: block;
-        font-size: 12px;
-        font-weight: 600;
-        color: #475569;
-        margin-bottom: 6px;
+        display: block; font-size: 12px; font-weight: 600;
+        color: #475569; margin-bottom: 6px;
       }
       #${MODAL_ID} .sp-lbl-field select,
       #${MODAL_ID} .sp-lbl-field input {
@@ -208,13 +170,9 @@
         box-shadow: 0 0 0 3px rgba(37,99,235,.1);
       }
       #${MODAL_ID} .sp-lbl-checks {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-        margin: 12px 0 16px;
-        padding: 12px 14px;
-        background: #f8fafc;
-        border-radius: 10px;
+        display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+        margin: 12px 0 16px; padding: 12px 14px;
+        background: #f8fafc; border-radius: 10px;
       }
       #${MODAL_ID} .sp-lbl-check {
         display: flex; align-items: center; gap: 8px;
@@ -222,27 +180,18 @@
       }
       #${MODAL_ID} .sp-lbl-check input {
         width: 16px; height: 16px;
-        accent-color: var(--primary, #2563EB);
-        cursor: pointer;
+        accent-color: var(--primary, #2563EB); cursor: pointer;
       }
       #${MODAL_ID} .sp-lbl-foot {
         padding: 12px 20px 16px;
         display: flex; gap: 8px; justify-content: flex-end;
-        border-top: 1px solid #eef1f4;
-        background: #fafbfc;
+        border-top: 1px solid #eef1f4; background: #fafbfc;
       }
       #${MODAL_ID} .sp-lbl-btn {
-        border: 0;
-        border-radius: 9px;
-        padding: 11px 18px;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        font-family: inherit;
+        border: 0; border-radius: 9px; padding: 11px 18px;
+        font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
       }
-      #${MODAL_ID} .sp-lbl-btn-primary {
-        background: var(--primary, #2563EB); color: #fff;
-      }
+      #${MODAL_ID} .sp-lbl-btn-primary { background: var(--primary, #2563EB); color: #fff; }
       #${MODAL_ID} .sp-lbl-btn-primary:hover { background: var(--primary-hover, #1D4ED8); }
       #${MODAL_ID} .sp-lbl-btn-primary:disabled { opacity: .5; cursor: not-allowed; }
       #${MODAL_ID} .sp-lbl-btn-secondary {
@@ -261,51 +210,36 @@
 
   /* ============== ФОРМИРОВАНИЕ ЭТИКЕТОК ============== */
 
-  /* Шаблоны CSS @page по размеру */
   function sizeCss(size) {
     const map = {
-      '58x40': {
-        width: '58mm',
-        height: '40mm',
-        padding: '2mm 3mm',
-        page: '@page { size: 58mm 40mm; margin: 0; }'
-      },
-      '40x30': {
-        width: '40mm',
-        height: '30mm',
-        padding: '1.5mm 2mm',
-        page: '@page { size: 40mm 30mm; margin: 0; }'
-      },
-      '70x50': {
-        width: '70mm',
-        height: '50mm',
-        padding: '3mm 4mm',
-        page: '@page { size: 70mm 50mm; margin: 0; }'
-      },
-      'a4': {
-        width: '65mm',
-        height: '38mm',
-        padding: '2mm 3mm',
-        page: '@page { size: A4; margin: 8mm; }'
-      }
+      '58x40': { width: '58mm', height: '40mm', padding: '2mm 3mm', page: '@page { size: 58mm 40mm; margin: 0; }' },
+      '40x30': { width: '40mm', height: '30mm', padding: '1.5mm 2mm', page: '@page { size: 40mm 30mm; margin: 0; }' },
+      '70x50': { width: '70mm', height: '50mm', padding: '3mm 4mm', page: '@page { size: 70mm 50mm; margin: 0; }' },
+      'a4':    { width: '65mm', height: '38mm', padding: '2mm 3mm', page: '@page { size: A4; margin: 8mm; }' }
     };
     return map[size] || map['58x40'];
   }
 
-  /* HTML одной этикетки */
   function labelHtml(box, options) {
     const s = sizeCss(options.size);
+    const isA4 = options.size === 'a4';
 
     const barcodeId = 'bc_' + Math.random().toString(36).slice(2, 10);
 
-    const barcode = String(box.barcode || box['Штрихкод'] || '').trim();
-    const article = String(box.article || box['Артикул'] || '').trim();
-    const warehouse = String(box.warehouse || box['Склад'] || '').trim();
-    const zone = String(box.zone_row || box['Зона/ряд'] || '').trim();
-    const pallet = String(box.pallet || box['Поддон'] || '').trim();
-    const direction = String(box.direction || box['Направление'] || '').trim();
+    const barcode    = String(box.barcode    || box['Штрихкод']   || '').trim();
+    const article    = String(box.article    || box['Артикул']    || '').trim();
+    const warehouse  = String(box.warehouse  || box['Склад']      || '').trim();
+    const zone       = String(box.zone_row   || box['Зона/ряд']   || '').trim();
+    const pallet     = String(box.pallet     || box['Поддон']     || '').trim();
+    const direction  = String(box.direction  || box['Направление'] || '').trim();
 
     const barcodeText = barcode || '—';
+
+    /* Для термо-размеров — каждая этикетка на новой странице.
+       Для A4 — идут подряд в ряд, page-break не нужен. */
+    const pageBreak = isA4
+      ? ''
+      : 'page-break-after: always; break-after: page;';
 
     return `
       <div class="lbl" style="
@@ -313,8 +247,7 @@
         height: ${s.height};
         padding: ${s.padding};
         box-sizing: border-box;
-        page-break-after: always;
-        break-after: page;
+        ${pageBreak}
         overflow: hidden;
         font-family: Arial, Helvetica, sans-serif;
         display: flex;
@@ -348,9 +281,9 @@
     `;
   }
 
-  /* Полная HTML-страница для печати */
   function buildPrintPage(boxes, options) {
     const s = sizeCss(options.size);
+    const isA4 = options.size === 'a4';
 
     const copies = Math.max(1, Number(options.copies) || 1);
     const expandedBoxes = [];
@@ -360,10 +293,8 @@
 
     const labels = expandedBoxes.map(b => labelHtml(b, options)).join('');
 
-    /* На A4 делаем flex-раскладку в 3 колонки */
-    const isA4 = options.size === 'a4';
-    const a4Wrapper = isA4
-      ? `display:flex; flex-wrap:wrap; gap:2mm;`
+    const bodyStyle = isA4
+      ? 'display:flex; flex-wrap:wrap; gap:2mm; align-content:flex-start;'
       : '';
 
     return `<!DOCTYPE html>
@@ -374,7 +305,7 @@
 <style>
   ${s.page}
   html, body { margin:0; padding:0; background:#fff; }
-  body { ${a4Wrapper} }
+  body { ${bodyStyle} }
   .lbl { border: 1px dashed #ddd; }
   @media print {
     .lbl { border: none; }
@@ -399,7 +330,6 @@
               width: 1.6
             });
           } catch (e) {
-            /* Некорректный штрихкод — просто оставим SVG пустым */
             console.warn('JsBarcode error for', code, e);
           }
         });
@@ -407,31 +337,25 @@
         console.warn('print page error', e);
       }
 
-      /* Даём SVG отрисоваться, потом печатаем */
-      setTimeout(function () {
-        window.print();
-      }, 400);
+      setTimeout(function () { window.print(); }, 400);
     });
   </script>
 </body>
 </html>`;
   }
 
-  /* ============== ОТКРЫТИЕ МОДАЛКИ ============== */
+  /* ============== МОДАЛКА ============== */
 
   function openModal(boxes) {
     if (!boxes || !boxes.length) {
       toast('Нет коробок для печати', 'error');
       return;
     }
-
     if (document.getElementById(MODAL_ID)) return;
 
     pendingBoxes = boxes;
 
-    const totalLabel = boxes.length === 1
-      ? '1 коробка'
-      : `${boxes.length} коробок`;
+    const totalLabel = boxes.length === 1 ? '1 коробка' : `${boxes.length} коробок`;
 
     const overlay = document.createElement('div');
     overlay.id = MODAL_ID;
@@ -442,10 +366,7 @@
           <button type="button" class="sp-lbl-close" aria-label="Закрыть">×</button>
         </div>
         <div class="sp-lbl-body">
-
-          <div class="sp-lbl-info">
-            К печати: <b>${escapeHtml(totalLabel)}</b>
-          </div>
+          <div class="sp-lbl-info">К печати: <b>${escapeHtml(totalLabel)}</b></div>
 
           <label class="sp-lbl-field">
             <span>Размер этикетки</span>
@@ -462,39 +383,20 @@
             <input id="spLblCopies" type="number" min="1" max="10" value="1">
           </label>
 
-          <div style="font-size:12px;font-weight:600;color:#475569;margin-top:8px;">
-            Что печатать:
-          </div>
+          <div style="font-size:12px;font-weight:600;color:#475569;margin-top:8px;">Что печатать:</div>
 
           <div class="sp-lbl-checks">
-            <label class="sp-lbl-check">
-              <input type="checkbox" id="spLblShowWarehouse" checked>
-              <span>Склад</span>
-            </label>
-            <label class="sp-lbl-check">
-              <input type="checkbox" id="spLblShowArticle" checked>
-              <span>Артикул</span>
-            </label>
-            <label class="sp-lbl-check">
-              <input type="checkbox" id="spLblShowLocation" checked>
-              <span>Зона / ряд</span>
-            </label>
-            <label class="sp-lbl-check">
-              <input type="checkbox" id="spLblShowPallet" checked>
-              <span>Поддон</span>
-            </label>
-            <label class="sp-lbl-check">
-              <input type="checkbox" id="spLblShowDirection" checked>
-              <span>Направление</span>
-            </label>
+            <label class="sp-lbl-check"><input type="checkbox" id="spLblShowWarehouse" checked><span>Склад</span></label>
+            <label class="sp-lbl-check"><input type="checkbox" id="spLblShowArticle" checked><span>Артикул</span></label>
+            <label class="sp-lbl-check"><input type="checkbox" id="spLblShowLocation" checked><span>Зона / ряд</span></label>
+            <label class="sp-lbl-check"><input type="checkbox" id="spLblShowPallet" checked><span>Поддон</span></label>
+            <label class="sp-lbl-check"><input type="checkbox" id="spLblShowDirection" checked><span>Направление</span></label>
           </div>
 
           <div style="font-size:11px;color:#94a3b8;line-height:1.5;">
-            В открывшемся окне браузера нажмите «Печать». Проверьте, что
-            выбран нужный принтер и размер бумаги (для термопринтера —
-            точный размер этикетки).
+            В открывшемся окне браузера нажмите «Печать». Проверьте,
+            что выбран нужный принтер и размер бумаги.
           </div>
-
         </div>
         <div class="sp-lbl-foot">
           <button type="button" class="sp-lbl-btn sp-lbl-btn-secondary" id="spLblCancel">Отмена</button>
@@ -538,16 +440,13 @@
       showDirection: !!document.getElementById('spLblShowDirection')?.checked
     };
 
-    /* Убедимся, что JsBarcode загружен (для отрисовки в новом окне) */
-    try {
-      await loadJsBarcode();
-    } catch (e) {
-      console.warn('[Labels] JsBarcode не загрузился, штрихкоды не будут отрисованы:', e);
-    }
+    /* Сохраняем количество ДО closeModal — иначе потеряем */
+    const printCount = pendingBoxes.length;
+
+    try { await loadJsBarcode(); } catch (e) { /* ignore */ }
 
     const html = buildPrintPage(pendingBoxes, options);
 
-    /* Открываем новое окно и печатаем */
     const w = window.open('', '_blank', 'width=800,height=900');
     if (!w) {
       toast('Разрешите всплывающие окна, чтобы печатать этикетки', 'error');
@@ -565,16 +464,13 @@
     btn.disabled = false;
     btn.textContent = 'Печать';
 
-    toast(`Подготовлено к печати: ${pendingBoxes.length || '—'} этикеток`);
+    toast(`Подготовлено к печати: ${printCount} этикеток`);
   }
 
   /* ============== ВСТАВКА КНОПОК ============== */
 
   function attachRowButtons() {
-    /* Кнопки 🏷 в таблице Базы рядом с edit-box */
-    const editBtns = document.querySelectorAll('.edit-box');
-
-    editBtns.forEach(editBtn => {
+    document.querySelectorAll('.edit-box').forEach(editBtn => {
       if (editBtn.hasAttribute(ATTACH_ATTR)) return;
       const id = editBtn.getAttribute('data-id');
       if (!id) return;
@@ -594,10 +490,9 @@
         e.preventDefault();
         e.stopPropagation();
 
-        /* Ищем коробку в state */
-        const box = (window.state?.boxes || []).find(
-          b => String(b.id) === String(id)
-        );
+        const st = getAppState();
+        const box = (st?.boxes || []).find(b => String(b.id) === String(id));
+
         if (!box) {
           toast('Коробка не найдена в памяти', 'error');
           return;
@@ -605,7 +500,6 @@
         openModal([box]);
       });
 
-      /* Вставляем после существующей кнопки 🕓 (если есть), иначе после edit */
       const histBtn = parent.querySelector('.sp-history-btn');
       if (histBtn && histBtn.nextSibling) {
         parent.insertBefore(btn, histBtn.nextSibling);
@@ -620,13 +514,11 @@
   }
 
   function ensureBatchButton() {
-    /* Верхняя кнопка "Печать этикеток (N)" — добавляется рядом с
-       тулбаром Базы, если есть выбранные через state.selectedIds */
-
     const toolbar = document.getElementById('deleteSelectedBtn');
     if (!toolbar) return;
 
-    const selectedCount = (window.state?.selectedIds?.size) || 0;
+    const st = getAppState();
+    const selectedCount = (st?.selectedIds?.size) || 0;
     let batchBtn = document.getElementById('spLabelsBatchBtn');
 
     if (!selectedCount) {
@@ -646,9 +538,10 @@
     btn.textContent = `🏷 Печать этикеток (${selectedCount})`;
 
     btn.addEventListener('click', () => {
-      const ids = [...(window.state?.selectedIds || [])];
+      const st2 = getAppState();
+      const ids = [...(st2?.selectedIds || [])];
       const boxes = ids
-        .map(id => (window.state?.boxes || []).find(b => String(b.id) === String(id)))
+        .map(id => (st2?.boxes || []).find(b => String(b.id) === String(id)))
         .filter(Boolean);
 
       if (!boxes.length) {
@@ -682,9 +575,7 @@
 
     const start = () => {
       if (observer) return;
-      observer = new MutationObserver(() => {
-        scheduleAttach();
-      });
+      observer = new MutationObserver(() => scheduleAttach());
       observer.observe(document.body, { childList: true, subtree: true });
       scheduleAttach();
     };
@@ -707,11 +598,12 @@
   window.spLabels = {
     open: (boxes) => openModal(boxes),
     printOne: (boxId) => {
-      const box = (window.state?.boxes || []).find(b => String(b.id) === String(boxId));
+      const st = getAppState();
+      const box = (st?.boxes || []).find(b => String(b.id) === String(boxId));
       if (box) openModal([box]);
       else toast('Коробка не найдена', 'error');
     },
-    version: '1.0.0'
+    version: '1.1.0'
   };
 
 })();
