@@ -6,63 +6,77 @@
    - Читает роль текущего пользователя из БД (user_roles).
    - Подменяет getCurrentUserRole() → весь app.js теперь
      видит реальную роль.
-   - Для viewer отключает все edit-кнопки (через существующий
-     applyViewerPermissions в app.js).
-   - Для picker и viewer скрывает admin-only элементы
-     (карточка ролей, кнопки удаления).
+   - Для viewer отключает все edit-кнопки.
+   - Для picker и viewer скрывает admin-only элементы.
    - Добавляет бейдж роли в сайдбар.
 
-   Что НЕ делает:
-   - Не трогает app.js — только подменяет одну функцию.
-   - Если RPC недоступна — fallback на admin (безопасно).
+   Важно про supabaseClient:
+   В app.js он объявлен как `const supabaseClient`, поэтому
+   НЕ доступен через window.supabaseClient. Но доступен
+   по имени `supabaseClient` напрямую — классические
+   скрипты в одном глобальном лексическом окружении.
+   Этот модуль обращается к нему безопасно — через
+   проверку typeof.
    ========================================================= */
 
 (function () {
   'use strict';
 
-  /* Роль ещё не загружена = null. Все проверки ниже
-     пока возвращают admin, чтобы не блокировать UI до
-     получения ответа от Supabase. */
   let cachedRole = null;
   let loadPromise = null;
   let installed = false;
 
-  /* Копия списка edit-элементов из app.js.
-     Дублируем, чтобы модуль не зависел от внутренней
-     области видимости app.js. */
   const EDITABLE_SELECTORS = [
-    '#createPickingBtn',
-    '#requestImportBtn',
-    '#importRequestBtn',
-    '#requestFile',
-    '#requestExcelInput',
-    '#requestBarcodes',
-    '#addBoxBtn',
-    '#deleteSelectedBtn',
-    '#markPickBtn',
+    '#createPickingBtn', '#requestImportBtn', '#importRequestBtn',
+    '#requestFile', '#requestExcelInput', '#requestBarcodes',
+    '#addBoxBtn', '#deleteSelectedBtn', '#markPickBtn',
     '#setDirectionFromBaseBtn',
-    '#completeSelectedAssembly',
-    '#removeFromAssemblyBtn',
-    '#setCollectedDirectionBtn',
-    '#shipCollectedBtn',
-    '#shipBtn',
-    '#shipSelectedBtn',
-    '#completeShipmentBtn',
-    '#receiveBtn',
-    '#receivePalletBtn',
-    '#saveReceivingBtn',
+    '#completeSelectedAssembly', '#removeFromAssemblyBtn',
+    '#setCollectedDirectionBtn', '#shipCollectedBtn',
+    '#shipBtn', '#shipSelectedBtn', '#completeShipmentBtn',
+    '#receiveBtn', '#receivePalletBtn', '#saveReceivingBtn',
     '#scanReceiveBtn',
-    '#moveBtn',
-    '#moveSelectedBtn',
-    '#saveMoveBtn',
-    '#optimizationApplyBtn'  /* применяет план — изменение БД */
+    '#moveBtn', '#moveSelectedBtn', '#saveMoveBtn',
+    '#optimizationApplyBtn'
   ];
 
-  /* Элементы, которые видны только админам */
   const ADMIN_ONLY_SELECTORS = [
     '#spRolesCard',
     '#deleteSelectedBtn'
   ];
+
+  /* =========================================================
+     ДОСТУП К SUPABASE-КЛИЕНТУ
+     ========================================================= */
+
+  function getSupabase() {
+    /* 1. Попытка через глобальное имя (const в app.js) */
+    try {
+      if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        return supabaseClient;
+      }
+    } catch (e) { /* не определён — игнорируем */ }
+
+    /* 2. Через window (если кто-то явно положил туда) */
+    if (window.supabaseClient) return window.supabaseClient;
+
+    /* 3. Создаём свой клиент с теми же параметрами,
+          что и в app.js. Ключи публичные (sb_publishable_*),
+          их можно безопасно дублировать. */
+    try {
+      if (window.supabase && window.supabase.createClient) {
+        const url = 'https://ithhecprdosvjiddoalq.supabase.co';
+        const key = 'sb_publishable_0dB5DQt2_ysOohx42IN4rA_mnypLeOR';
+        const client = window.supabase.createClient(url, key);
+        console.log('[UIRoles] Создан резервный клиент Supabase');
+        return client;
+      }
+    } catch (e) {
+      console.warn('[UIRoles] Не удалось создать резервный клиент:', e);
+    }
+
+    return null;
+  }
 
   /* =========================================================
      ЗАГРУЗКА РОЛИ
@@ -73,12 +87,31 @@
 
     loadPromise = (async () => {
       try {
-        const { data, error } = await window.supabaseClient.rpc('current_user_role');
+        const client = getSupabase();
+
+        if (!client) {
+          console.warn('[UIRoles] Клиент Supabase недоступен — fallback admin');
+          cachedRole = 'admin';
+          return cachedRole;
+        }
+
+        const { data, error } = await client.rpc('current_user_role');
+
         if (error) throw error;
+
         cachedRole = data || 'admin';
+        console.log('[UIRoles] Роль из БД:', cachedRole);
+
       } catch (e) {
-        console.warn('[UIRoles] Не удалось получить роль, fallback на admin:', e);
+        console.warn('[UIRoles] Не удалось получить роль, fallback admin:', e);
         cachedRole = 'admin';
+
+        /* Тихий тост — чтобы администратор узнал, если роли сломались */
+        if (typeof window.toast === 'function') {
+          try {
+            window.toast('Не удалось применить роль. Работаем в режиме администратора.', 'error');
+          } catch (err) { /* ignore */ }
+        }
       }
       return cachedRole;
     })();
@@ -92,35 +125,46 @@
 
   function installOverrides() {
     if (installed) return;
-    if (typeof window.getCurrentUserRole !== 'function') return;
 
-    const originalGetRole = window.getCurrentUserRole;
+    /* getCurrentUserRole обычно становится свойством window
+       (function declaration в классическом скрипте) —
+       но берём через typeof, чтобы не полагаться на это */
+    const originalGetRole =
+      (typeof window.getCurrentUserRole === 'function' && window.getCurrentUserRole) ||
+      (typeof getCurrentUserRole === 'function' && getCurrentUserRole) ||
+      null;
 
-    /* 1. getCurrentUserRole → возвращает кэшированную роль.
-       app.js использует её в isViewer(), isAdmin(), canEdit(). */
+    if (!originalGetRole) {
+      console.warn('[UIRoles] getCurrentUserRole не найдена — overrides не установлены');
+      return;
+    }
+
+    /* 1. getCurrentUserRole → возвращает кэшированную роль */
     window.getCurrentUserRole = function () {
       if (cachedRole) return cachedRole;
-      /* Пока роль не загружена — берём оригинальную логику */
-      return originalGetRole ? originalGetRole() : 'admin';
+      try {
+        return originalGetRole();
+      } catch (e) {
+        return 'admin';
+      }
     };
 
-    /* 2. applyViewerPermissions → переписываем на свою версию.
-       Умеет три режима: admin / picker / viewer. */
+    /* 2. applyViewerPermissions → своя версия с 3 ролями */
     window.applyViewerPermissions = function () {
       const role = cachedRole || 'admin';
 
-      /* Снимаем все ранее навешанные ограничения */
+      /* Снимаем все прошлые ограничения */
       document.querySelectorAll('.viewer-disabled').forEach(el => {
         el.classList.remove('viewer-disabled');
         el.removeAttribute('aria-disabled');
         if ('disabled' in el) el.disabled = false;
-        if (el.matches('input, textarea, select')) el.readOnly = false;
+        if (el.matches && el.matches('input, textarea, select')) el.readOnly = false;
       });
 
       document.body.classList.remove('viewer-mode', 'role-admin', 'role-picker', 'role-viewer');
       document.body.classList.add('role-' + role);
 
-      /* viewer — блокируем всё редактирование */
+      /* viewer — блокируем редактирование */
       if (role === 'viewer') {
         document.body.classList.add('viewer-mode');
 
@@ -129,7 +173,7 @@
             if ('disabled' in el) el.disabled = true;
             el.classList.add('viewer-disabled');
             el.setAttribute('aria-disabled', 'true');
-            if (el.matches('input[type="file"]')) el.value = '';
+            if (el.matches && el.matches('input[type="file"]')) el.value = '';
           });
         });
 
@@ -232,7 +276,6 @@
     let debounce = null;
 
     const obs = new MutationObserver(() => {
-      /* Debounce 50мс — не дёргать права на каждый мелкий чих */
       if (debounce) clearTimeout(debounce);
       debounce = setTimeout(() => {
         if (typeof window.applyViewerPermissions === 'function') {
@@ -250,12 +293,14 @@
      ========================================================= */
 
   function init() {
-    /* Следим за auth — при входе перезагружаем роль */
-    if (window.supabaseClient) {
-      window.supabaseClient.auth.onAuthStateChange((event, session) => {
+    /* Перезагрузка роли при смене пользователя */
+    const client = getSupabase();
+    if (client && client.auth && client.auth.onAuthStateChange) {
+      client.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' && session) {
           cachedRole = null;
           loadPromise = null;
+          installed = false; /* тоже сбрасываем — переустановим override */
           setTimeout(apply, 800);
         }
         if (event === 'SIGNED_OUT') {
@@ -265,10 +310,12 @@
       });
     }
 
-    /* Первый запуск — если сессия уже была */
+    /* Многоразовая попытка — на случай медленной сети
+       и поздней загрузки app.js */
     setTimeout(apply, 1000);
     setTimeout(apply, 2500);
-    setTimeout(apply, 5000);  /* третий раз — для медленных сетей */
+    setTimeout(apply, 5000);
+    setTimeout(apply, 9000);
 
     watchContent();
 
@@ -281,16 +328,17 @@
     init();
   }
 
-  /* Публичный API — для отладки и ручного вызова */
+  /* Публичный API */
   window.spUIRoles = {
     apply,
     getRole: () => cachedRole,
     reload: async () => {
       cachedRole = null;
       loadPromise = null;
+      installed = false;
       await apply();
     },
-    version: '1.0.0'
+    version: '1.1.0'
   };
 
 })();
