@@ -836,6 +836,141 @@ function optimizationExportCsv() {
 }
 
 /* =========================================================
+   Отправка текущего плана (до применения) в Telegram.
+   Кнопка «📤 В Telegram» на странице оптимизации.
+   ========================================================= */
+async function sendPlanToTelegram() {
+  const opt = state.optimization;
+  const moves = optimizationActiveMoves();
+
+  if (!moves.length) {
+    toast('Сначала рассчитайте оптимизацию', 'error');
+    return;
+  }
+
+  const summary = optimizationSummary();
+
+  /* 1. Получаем настройки бота */
+  const client = getSupabase();
+  if (!client) {
+    toast('Supabase-клиент недоступен', 'error');
+    return;
+  }
+
+  const { data: settings } = await client
+    .from('telegram_settings')
+    .select('bot_token, enabled')
+    .eq('id', 1)
+    .maybeSingle();
+
+  if (!settings || !settings.enabled || !settings.bot_token) {
+    toast('Уведомления Telegram выключены. Включите в разделе Данные → Telegram.', 'error');
+    return;
+  }
+
+  const { data: users } = await client
+    .from('telegram_users')
+    .select('chat_id')
+    .eq('active', true);
+
+  if (!users || !users.length) {
+    toast('Нет активных пользователей бота', 'error');
+    return;
+  }
+
+  /* 2. Формируем текст сообщения */
+  const operatorEmail =
+    (typeof state !== 'undefined' && state?.user?.email) ||
+    (window.state?.user?.email) ||
+    '—';
+
+  const lines = [];
+  lines.push('⚙️ <b>Оптимизация — план расчёта</b>\n');
+  lines.push(`Склад: <b>${escapeHtml(opt.warehouse)}</b>`);
+  lines.push(`Целевая зона: <b>${escapeHtml(opt.targetZone)}</b>`);
+  lines.push(`Вместимость паллета: <b>${opt.capacity}</b> кор.`);
+  lines.push(`Исходных зон: <b>${opt.sourceZones.size}</b>`);
+  lines.push('');
+
+  lines.push(`📦 К перемещению коробок: <b>${summary.movedBoxes}</b>`);
+  lines.push(`🔀 Операций: <b>${summary.moves}</b>`);
+  lines.push(`🆓 Освободится паллет: <b>${summary.freedPallets}</b>`);
+
+  if (summary.unresolvedBoxes > 0) {
+    lines.push(`⚠️ Не размещено: <b>${summary.unresolvedBoxes}</b>`);
+  }
+
+  lines.push('');
+  lines.push('<b>Перемещения:</b>');
+  lines.push('');
+
+  const previewLimit = 15;
+  const preview = moves.slice(0, previewLimit);
+
+  preview.forEach((m, i) => {
+    const uniqBarcodes = new Set((m.barcodes || []).map(String)).size;
+
+    lines.push(`${i + 1}. <code>${escapeHtml(m.sourceZone)}</code> · поддон ${escapeHtml(m.sourcePallet || '—')}`);
+    lines.push(`   → <code>${escapeHtml(m.targetZone)}</code> · поддон ${escapeHtml(m.targetPallet)}`);
+    lines.push(`   📦 ${m.boxCount} кор. · ${uniqBarcodes} уник.`);
+
+    if (i < preview.length - 1) lines.push('');
+  });
+
+  if (moves.length > previewLimit) {
+    lines.push('');
+    lines.push(`<i>…и ещё ${moves.length - previewLimit} перемещений</i>`);
+  }
+
+  lines.push('');
+  lines.push('⚠️ <b>Это только план. В базе пока ничего не изменено.</b>');
+  lines.push('Чтобы применить — откройте SKLADAPLAN → Оптимизация → «Закрыть оптимизацию».');
+  lines.push('');
+  lines.push(`👤 ${escapeHtml(operatorEmail)}`);
+  lines.push(`Время: ${new Date().toLocaleString('ru-RU')}`);
+
+  const text = lines.join('\n');
+
+  /* 3. Отправляем всем активным пользователям */
+  let sent = 0;
+  let failed = 0;
+
+  for (const u of users) {
+    try {
+      const res = await fetch(
+        `https://api.telegram.org/bot${settings.bot_token}/sendMessage`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: u.chat_id,
+            text: text,
+            parse_mode: 'HTML',
+            disable_web_page_preview: true
+          })
+        }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (data && data.ok) sent++;
+      else failed++;
+    } catch (e) {
+      console.warn('[Optimization] send plan error to', u.chat_id, e);
+      failed++;
+    }
+  }
+
+  if (sent > 0) {
+    toast(`План отправлен в Telegram: ${sent} получател${sent === 1 ? 'ь' : 'ей'}`);
+  } else {
+    toast('Не удалось отправить план в Telegram', 'error');
+  }
+
+  if (failed > 0) {
+    console.warn('[Optimization] send plan failed for', failed, 'users');
+  }
+}
+
+/* =========================================================
    Уведомление в Telegram после применения оптимизации
    ========================================================= */
 async function notifyOptimizationApplied(result, opt) {
@@ -1097,6 +1232,7 @@ function warehouseOptimizationView() {
             </div>
             <div class="optimization-toolbar-actions">
               <button class="sp-btn secondary" id="optimizationExportBtn" type="button" ${!optimizationActiveMoves().length ? 'disabled' : ''}>Экспорт отчёта</button>
+              <button class="sp-btn secondary" id="optimizationSendTgBtn" type="button" ${!optimizationActiveMoves().length ? 'disabled' : ''}>📤 В Telegram</button>
               <button class="sp-btn" id="optimizationApplyBtn" type="button" ${!optimizationActiveMoves().length || opt.applying ? 'disabled' : ''}>
                 ${opt.applying ? 'Закрытие…' : 'Закрыть оптимизацию'}
               </button>
@@ -1265,6 +1401,7 @@ function setupWarehouseOptimization() {
 
   $('#optimizationCalculateBtn')?.addEventListener('click', optimizationCalculate);
   $('#optimizationExportBtn')?.addEventListener('click', optimizationExportCsv);
+  $('#optimizationSendTgBtn')?.addEventListener('click', sendPlanToTelegram);
   $('#optimizationApplyBtn')?.addEventListener('click', optimizationApply);
 
   $all('[data-opt-move]').forEach(input => {
