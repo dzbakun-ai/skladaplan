@@ -321,11 +321,9 @@
     if (!content) { setTimeout(startObserver, 300); return; }
 
     contentObserver = new MutationObserver(() => scheduleBuild());
+    /* subtree:true — важно, потому что planner.js
+       перерисовывает внутренности, а не #content целиком */
     contentObserver.observe(content, { childList: true, subtree: true });
-
-    scheduleBuild();
-    console.log('[PlannerTabs] Наблюдение за #content запущено');
-  }
 
   /* ============== ИНИЦИАЛИЗАЦИЯ ============== */
 
