@@ -1,16 +1,13 @@
 /* =========================================================
-   SKLADAPLAN — TELEGRAM-БОТ (полная версия)
+   SKLADAPLAN — TELEGRAM-БОТ (полная версия, v3.1)
    =========================================================
 
    Возможности:
-   - Отправка уведомлений при событиях склада.
-   - Обработка входящих команд (/status, /today, /tasks,
-     /find <штрихкод>, /help, /whoami).
-   - Утренняя сводка раз в день в заданное время.
-
-   Всё работает на стороне клиента (браузера админа).
-   Требуется: открытая вкладка SKLADAPLAN хотя бы у одного
-   администратора.
+   - Уведомления о событиях склада — всем активным
+     пользователям бота.
+   - Утренняя сводка — всем активным пользователям.
+   - Команды и callback через webhook (мгновенный отклик).
+   - Управление пользователями бота прямо из карточки.
 
    Изоляция:
    - Не трогает app.js и другие модули.
@@ -26,12 +23,14 @@
 
   const POLL_INTERVAL_MS = 25000;
   const MAX_EVENTS_PER_TICK = 5;
-  const MAX_UPDATES_PER_TICK = 10;
 
   let settings = null;
   let loading = false;
   let pollTimer = null;
   let polling = false;
+
+  /* Кэш списка активных получателей — перезагружаем при сохранении настроек */
+  let recipientsCache = null;
 
   /* =========================================================
      СТИЛИ
@@ -121,10 +120,72 @@
         margin-top: 8px;
         font-size: 12px;
       }
-      #${CARD_ID} .sp-tg-commands code {
-        font-weight: 700;
-      }
+      #${CARD_ID} .sp-tg-commands code { font-weight: 700; }
       #${CARD_ID} .sp-tg-loading { padding: 20px; text-align: center; color: #64748b; font-size: 13px; }
+
+      #${CARD_ID} .sp-tg-users-table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        overflow: hidden;
+        font-size: 12px;
+      }
+      #${CARD_ID} .sp-tg-users-table th {
+        background: #f1f5f9;
+        text-align: left;
+        padding: 8px 10px;
+        font-size: 10px;
+        font-weight: 700;
+        color: #475569;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        border-bottom: 1px solid #e2e8f0;
+      }
+      #${CARD_ID} .sp-tg-users-table td {
+        padding: 9px 10px;
+        border-bottom: 1px solid #f1f5f9;
+        vertical-align: middle;
+      }
+      #${CARD_ID} .sp-tg-users-table tr:last-child td { border-bottom: 0; }
+      #${CARD_ID} .sp-tg-user-chat {
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 11px;
+        color: #1e40af;
+      }
+      #${CARD_ID} .sp-tg-role {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 10px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+      #${CARD_ID} .sp-tg-role-admin  { background: #dcfce7; color: #166534; }
+      #${CARD_ID} .sp-tg-role-picker { background: #dbeafe; color: #1e40af; }
+      #${CARD_ID} .sp-tg-role-viewer { background: #f1f5f9; color: #475569; }
+      #${CARD_ID} .sp-tg-icon-btn {
+        width: 28px; height: 28px;
+        border: 1px solid #e2e8f0;
+        border-radius: 7px;
+        background: #fff;
+        color: #475569;
+        cursor: pointer;
+        font-size: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 2px;
+      }
+      #${CARD_ID} .sp-tg-icon-btn:hover {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+      }
+      #${CARD_ID} .sp-tg-icon-btn.sp-tg-danger:hover {
+        background: #fef2f2;
+        color: #b42318;
+        border-color: #fecaca;
+      }
 
       @media (max-width: 640px) {
         #${CARD_ID} .sp-tg-checks { grid-template-columns: 1fr; }
@@ -193,7 +254,7 @@
       bot_token: '', chat_id: '', enabled: false,
       notify_tasks: true, notify_planner: true,
       notify_optimization: true, notify_verification: true, notify_inventory: true,
-      command_offset: 0, accept_commands: true,
+      accept_commands: true,
       digest_enabled: true, digest_time: '08:00', last_digest_date: null
     };
   }
@@ -208,6 +269,34 @@
       .eq('id', 1);
 
     if (error) throw error;
+  }
+
+  /* =========================================================
+     ПОЛУЧАТЕЛИ — активные пользователи бота
+     ========================================================= */
+
+  async function loadRecipients() {
+    if (recipientsCache) return recipientsCache;
+
+    const client = getSupabase();
+    if (!client) return [];
+
+    const { data, error } = await client
+      .from('telegram_users')
+      .select('chat_id, display_name, active')
+      .eq('active', true);
+
+    if (error) {
+      console.warn('[Telegram] loadRecipients error:', error);
+      return [];
+    }
+
+    recipientsCache = (data || []).map(u => String(u.chat_id));
+    return recipientsCache;
+  }
+
+  function invalidateRecipientsCache() {
+    recipientsCache = null;
   }
 
   /* =========================================================
@@ -242,17 +331,24 @@
     return result.result;
   }
 
-  async function getUpdates(botToken, offset) {
-    const url = `${API_BASE}/bot${botToken}/getUpdates` +
-      `?offset=${offset}&timeout=0&limit=${MAX_UPDATES_PER_TICK}`;
+  /* Отправить всем активным пользователям бота.
+     Если получателей нет — fallback на settings.chat_id. */
+  async function sendToAll(text, options) {
+    const recipients = await loadRecipients();
+    const list = recipients.length
+      ? recipients
+      : (settings.chat_id ? [String(settings.chat_id)] : []);
 
-    const response = await fetch(url);
-    const result = await response.json().catch(() => ({}));
+    if (!list.length) return;
 
-    if (!response.ok || !result.ok) {
-      throw new Error(result.description || response.statusText || 'Ошибка getUpdates');
+    for (const chatId of list) {
+      try {
+        await sendMessage(settings.bot_token, chatId, text, options);
+      } catch (e) {
+        /* Не ломаем остальных из-за одного отвалившегося чата */
+        console.warn(`[Telegram] send to ${chatId} error:`, e.message);
+      }
     }
-    return result.result || [];
   }
 
   async function logSend(eventType, message, success, error) {
@@ -273,267 +369,8 @@
   }
 
   /* =========================================================
-     КОМАНДЫ — ОБРАБОТЧИКИ
-     ========================================================= */
-
-  function cmdHelp() {
-    return (
-      '🤖 <b>SKLADAPLAN Bot</b>\n\n' +
-      'Доступные команды:\n\n' +
-      '/status — сводка по складу\n' +
-      '/today — что на сегодня\n' +
-      '/tasks — активные задачи\n' +
-      '/find &lt;штрихкод&gt; — найти коробку\n' +
-      '/whoami — ваш профиль\n' +
-      '/help — эта справка\n\n' +
-      '<i>Уведомления приходят автоматически.</i>'
-    );
-  }
-
-  function cmdWhoami() {
-    const email = window.state?.user?.email || '—';
-    const role = window.spUIRoles?.getRole?.() || 'admin';
-    const labels = { admin: 'Администратор', picker: 'Оператор', viewer: 'Наблюдатель' };
-
-    return (
-      '👤 <b>Ваш профиль</b>\n\n' +
-      `Email: <code>${escapeTelegram(email)}</code>\n` +
-      `Роль: <b>${escapeTelegram(labels[role] || role)}</b>\n` +
-      `Отправка: ${settings.enabled ? '✅ включена' : '❌ выключена'}`
-    );
-  }
-
-  function cmdStatus() {
-    const boxes = Array.isArray(window.state?.boxes) ? window.state.boxes : [];
-    const tasks = Array.isArray(window.tasksState?.items) ? window.tasksState.items : [];
-    const plannerTasks = Array.isArray(window.plannerState?.tasks) ? window.plannerState.tasks : [];
-    const shipments = Array.isArray(window.plannerState?.shipments) ? window.plannerState.shipments : [];
-
-    const today = todayKey();
-
-    const byStatus = {};
-    boxes.forEach(b => {
-      const s = (b.status || 'Не указан').trim();
-      byStatus[s] = (byStatus[s] || 0) + 1;
-    });
-
-    const activeTasks = tasks.filter(t => !t.completed).length;
-    const openPlannerTasks = plannerTasks.filter(
-      t => t.status !== 'Выполнено' && t.status !== 'Отменено'
-    ).length;
-
-    const todayShipments = shipments.filter(s => s.date === today).length;
-    const todayTasksCount = plannerTasks.filter(
-      t => t.date === today && t.status !== 'Выполнено' && t.status !== 'Отменено'
-    ).length;
-
-    const lines = [];
-    lines.push('📊 <b>Состояние склада</b>\n');
-    lines.push(`Всего коробок: <b>${boxes.length}</b>`);
-
-    Object.entries(byStatus)
-      .sort((a, b) => b[1] - a[1])
-      .forEach(([s, n]) => {
-        lines.push(`  • ${escapeTelegram(s)}: ${n}`);
-      });
-
-    lines.push('');
-    lines.push(`📝 Задачи: <b>${activeTasks}</b> активных`);
-    lines.push(`📅 Планировщик: <b>${openPlannerTasks}</b> открытых`);
-    lines.push(`🚚 Сегодня отгрузок: <b>${todayShipments}</b>`);
-    lines.push(`📋 Сегодня задач: <b>${todayTasksCount}</b>`);
-
-    lines.push('');
-    lines.push(`<i>${new Date().toLocaleString('ru-RU')}</i>`);
-
-    return lines.join('\n');
-  }
-
-  function cmdToday() {
-    const today = todayKey();
-
-    const plannerTasks = Array.isArray(window.plannerState?.tasks) ? window.plannerState.tasks : [];
-    const shipments = Array.isArray(window.plannerState?.shipments) ? window.plannerState.shipments : [];
-    const tasks = Array.isArray(window.tasksState?.items) ? window.tasksState.items : [];
-
-    const todayShipments = shipments
-      .filter(s => s.date === today)
-      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
-
-    const todayPlannerTasks = plannerTasks
-      .filter(t => t.date === today && t.status !== 'Отменено')
-      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
-
-    const todayExternalTasks = tasks
-      .filter(t => t.due_date === today);
-
-    if (!todayShipments.length && !todayPlannerTasks.length && !todayExternalTasks.length) {
-      return `☕ <b>На ${new Date().toLocaleDateString('ru-RU')}</b>\n\nНичего не запланировано.`;
-    }
-
-    const lines = [];
-    lines.push(`📅 <b>На ${new Date().toLocaleDateString('ru-RU')}</b>\n`);
-
-    if (todayShipments.length) {
-      lines.push(`🚚 <b>Отгрузки (${todayShipments.length})</b>`);
-      todayShipments.forEach(s => {
-        const time = s.time ? `${s.time} ` : '';
-        const status = s.status === 'Отгружена' ? '✅' : '';
-        lines.push(`  ${status}${time}<b>${escapeTelegram(s.title || '—')}</b>`);
-        if (s.direction) lines.push(`    ↳ ${escapeTelegram(s.direction)}`);
-      });
-      lines.push('');
-    }
-
-    if (todayPlannerTasks.length) {
-      lines.push(`📋 <b>Задачи планировщика (${todayPlannerTasks.length})</b>`);
-      todayPlannerTasks.forEach(t => {
-        const time = t.time ? `${t.time} ` : '';
-        const done = t.status === 'Выполнено' ? '✅' : '⬜';
-        lines.push(`  ${done}${time}<b>${escapeTelegram(t.title || '—')}</b>`);
-      });
-      lines.push('');
-    }
-
-    if (todayExternalTasks.length) {
-      lines.push(`📝 <b>Задачи (${todayExternalTasks.length})</b>`);
-      todayExternalTasks.forEach(t => {
-        const done = t.completed ? '✅' : '⬜';
-        lines.push(`  ${done}<b>${escapeTelegram(t.title || '—')}</b>`);
-      });
-    }
-
-    return lines.join('\n');
-  }
-
-  function cmdTasks() {
-    const plannerTasks = Array.isArray(window.plannerState?.tasks) ? window.plannerState.tasks : [];
-    const tasks = Array.isArray(window.tasksState?.items) ? window.tasksState.items : [];
-
-    const openPlanner = plannerTasks
-      .filter(t => t.status !== 'Выполнено' && t.status !== 'Отменено')
-      .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
-      .slice(0, 10);
-
-    const openTasks = tasks
-      .filter(t => !t.completed)
-      .sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999'))
-      .slice(0, 10);
-
-    if (!openPlanner.length && !openTasks.length) {
-      return '🎉 <b>Активных задач нет</b>\n\nВсё сделано.';
-    }
-
-    const lines = [];
-    lines.push('📝 <b>Активные задачи</b>\n');
-
-    if (openPlanner.length) {
-      lines.push(`<b>Планировщик (${openPlanner.length})</b>`);
-      openPlanner.forEach(t => {
-        const date = t.date || '—';
-        const time = t.time ? ` ${t.time}` : '';
-        lines.push(`  • ${escapeTelegram(t.title || '—')}`);
-        lines.push(`    ${date}${time}`);
-      });
-      lines.push('');
-    }
-
-    if (openTasks.length) {
-      lines.push(`<b>Задачи (${openTasks.length})</b>`);
-      openTasks.forEach(t => {
-        const date = t.due_date || 'без срока';
-        lines.push(`  • ${escapeTelegram(t.title || '—')}`);
-        lines.push(`    ${date}`);
-      });
-    }
-
-    return lines.join('\n');
-  }
-
-  function cmdFind(query) {
-    if (!query) {
-      return '⚠️ Формат: <code>/find 4810123456789</code>\n\nНайти коробку по штрихкоду.';
-    }
-
-    const boxes = Array.isArray(window.state?.boxes) ? window.state.boxes : [];
-    const cleanQuery = String(query).replace(/\s+/g, '').trim();
-
-    const matches = boxes
-      .filter(b => {
-        const bc = String(b.barcode || '').replace(/\s+/g, '');
-        return bc === cleanQuery || bc.endsWith(cleanQuery) || bc.includes(cleanQuery);
-      })
-      .slice(0, 10);
-
-    if (!matches.length) {
-      return `🔍 По запросу <code>${escapeTelegram(cleanQuery)}</code> ничего не найдено.`;
-    }
-
-    const lines = [];
-    lines.push(`🔍 <b>Найдено: ${matches.length}</b>\n`);
-
-    matches.forEach((b, i) => {
-      lines.push(`<b>${i + 1}.</b> <code>${escapeTelegram(b.barcode || '—')}</code>`);
-      if (b.article) lines.push(`   Арт. ${escapeTelegram(b.article)}`);
-      const loc = [];
-      if (b.warehouse) loc.push(escapeTelegram(b.warehouse));
-      if (b.zone_row) loc.push(escapeTelegram(b.zone_row));
-      if (b.pallet) loc.push(`поддон ${escapeTelegram(b.pallet)}`);
-      if (loc.length) lines.push(`   📍 ${loc.join(' · ')}`);
-      if (b.status) lines.push(`   ${escapeTelegram(b.status)}`);
-      lines.push('');
-    });
-
-    return lines.join('\n');
-  }
-
-  async function handleCommand(text, fromChatId) {
-    /* Проверяем, что пишет владелец настроенного чата */
-    if (String(fromChatId) !== String(settings.chat_id)) {
-      console.log('[Telegram] Команда от чужого chat_id, игнорируем:', fromChatId);
-      return null;
-    }
-
-    const raw = String(text || '').trim();
-    if (!raw.startsWith('/')) return null;
-
-    /* Отрезаем @username от команды (если есть) */
-    const parts = raw.split(/\s+/);
-    const cmd = parts[0].split('@')[0].toLowerCase();
-    const args = parts.slice(1).join(' ');
-
-    switch (cmd) {
-      case '/start':
-      case '/help':
-        return cmdHelp();
-      case '/status':
-        return cmdStatus();
-      case '/today':
-        return cmdToday();
-      case '/tasks':
-        return cmdTasks();
-      case '/find':
-        return cmdFind(args);
-      case '/whoami':
-        return cmdWhoami();
-      default:
-        return `❓ Неизвестная команда: <code>${escapeTelegram(cmd)}</code>\n\nВведите /help для списка команд.`;
-    }
-  }
-
-  /* =========================================================
      УВЕДОМЛЕНИЯ О СОБЫТИЯХ
      ========================================================= */
-
-  function fmtDate(iso) {
-    if (!iso) return '';
-    try {
-      const d = new Date(iso);
-      const pad = n => String(n).padStart(2, '0');
-      return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ` +
-             `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    } catch (e) { return iso; }
-  }
 
   function buildMessage(row) {
     const t = row.table_name;
@@ -551,6 +388,7 @@
           (n.description ? `${escapeTelegram(n.description)}\n` : '') +
           (n.due_date ? `📅 ${escapeTelegram(n.due_date)}\n` : '') +
           (n.priority ? `⚡ ${escapeTelegram(n.priority)}\n` : '') +
+          (n.assigned_to ? `🎯 Кому: <b>${escapeTelegram(n.assigned_to)}</b>\n` : '') +
           `👤 ${escapeTelegram(row.operator_email || '—')}`
       };
     }
@@ -710,32 +548,24 @@
 
   function shouldSendDigest() {
     if (!settings.digest_enabled) return false;
-    if (!settings.bot_token || !settings.chat_id) return false;
+    if (!settings.bot_token) return false;
     if (!settings.enabled) return false;
 
     const today = todayKey();
 
-    /* Не отправляли сегодня? */
     if (settings.last_digest_date === today) return false;
 
-    /* Время уже пришло? */
     const target = settings.digest_time || '08:00';
     const now = new Date();
     const [hh, mm] = target.split(':').map(Number);
     const targetDate = new Date();
     targetDate.setHours(hh || 8, mm || 0, 0, 0);
 
-    /* Не раньше заданного времени */
     if (now < targetDate) return false;
 
-    /* Не позже чем через 3 часа после — если браузер был закрыт
-       утром, не отправляем опоздавший дайджест в обед */
     const limit = new Date(targetDate);
     limit.setHours(limit.getHours() + 3);
-    if (now > limit) {
-      /* Помечаем как отправленный, чтобы не пытаться снова */
-      return 'skip';
-    }
+    if (now > limit) return 'skip';
 
     return true;
   }
@@ -755,14 +585,14 @@
     const text = buildDigest();
 
     try {
-      await sendMessage(settings.bot_token, settings.chat_id, text);
+      await sendToAll(text);
       await logSend('digest', text, true, null);
 
       const today = todayKey();
       await saveSettings({ last_digest_date: today });
       settings.last_digest_date = today;
 
-      console.log('[Telegram] Утренняя сводка отправлена');
+      console.log('[Telegram] Утренняя сводка отправлена всем');
     } catch (e) {
       console.error('[Telegram] digest error:', e);
       await logSend('digest', text, false, e.message);
@@ -770,7 +600,8 @@
   }
 
   /* =========================================================
-     POLLING
+     POLLING СОБЫТИЙ
+     (команды и callback — через webhook, здесь только события)
      ========================================================= */
 
   async function pollEvents() {
@@ -807,7 +638,7 @@
       if (!isEventEnabled(msg.type, settings)) continue;
 
       try {
-        await sendMessage(settings.bot_token, settings.chat_id, msg.text);
+        await sendToAll(msg.text);
         await logSend(msg.type, msg.text, true, null);
       } catch (e) {
         console.error('[Telegram] send error:', e);
@@ -819,59 +650,19 @@
     settings.last_checked_at = newestTs;
   }
 
-  async function pollCommands() {
-    if (!settings.accept_commands) return;
-
-    const offset = Number(settings.command_offset || 0) + 1;
-
-    let updates;
-    try {
-      updates = await getUpdates(settings.bot_token, offset);
-    } catch (e) {
-      console.warn('[Telegram] getUpdates error:', e.message);
-      return;
-    }
-
-    if (!updates.length) return;
-
-    let newOffset = settings.command_offset;
-
-    for (const upd of updates) {
-      if (upd.update_id > newOffset) newOffset = upd.update_id;
-
-      const msg = upd.message || upd.edited_message;
-      if (!msg) continue;
-      if (!msg.text) continue;
-
-      const chatId = msg.chat?.id;
-      if (!chatId) continue;
-
-      try {
-        const reply = await handleCommand(msg.text, chatId);
-        if (reply) {
-          await sendMessage(settings.bot_token, settings.chat_id, reply);
-          console.log('[Telegram] Ответ на команду:', msg.text.split(/\s+/)[0]);
-        }
-      } catch (e) {
-        console.error('[Telegram] command handler error:', e);
-      }
-    }
-
-    await saveSettings({ command_offset: newOffset });
-    settings.command_offset = newOffset;
-  }
-
   async function poll() {
     if (polling) return;
     polling = true;
 
     try {
       if (!settings || !settings.enabled) return;
-      if (!settings.bot_token || !settings.chat_id) return;
+      if (!settings.bot_token) return;
 
       await pollEvents();
-      await pollCommands();
       await trySendDigest();
+
+      /* Команды и callback обрабатываются webhook — здесь их нет,
+         иначе будет двойной ответ. */
 
     } catch (e) {
       console.warn('[Telegram] poll outer error:', e);
@@ -896,6 +687,246 @@
   }
 
   /* =========================================================
+     УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ БОТА
+     ========================================================= */
+
+  async function loadBotUsers() {
+    const client = getSupabase();
+    if (!client) return [];
+
+    const { data, error } = await client
+      .from('telegram_users')
+      .select('*')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.warn('[Telegram] load users error:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  async function saveBotUser(payload) {
+    const client = getSupabase();
+    if (!client) throw new Error('Supabase-клиент недоступен');
+
+    const { error } = await client
+      .from('telegram_users')
+      .upsert({
+        ...payload,
+        updated_at: new Date().toISOString(),
+        updated_by: window.state?.user?.email || null
+      }, { onConflict: 'chat_id' });
+
+    if (error) throw error;
+
+    /* Сбрасываем кэш получателей, чтобы новые уведомления шли и новому пользователю */
+    invalidateRecipientsCache();
+  }
+
+  async function deleteBotUser(chatId) {
+    const client = getSupabase();
+    if (!client) throw new Error('Supabase-клиент недоступен');
+
+    const { error } = await client
+      .from('telegram_users')
+      .delete()
+      .eq('chat_id', chatId);
+
+    if (error) throw error;
+
+    invalidateRecipientsCache();
+  }
+
+  async function renderUsersBlock() {
+    const block = document.getElementById('spTgUsersBlock');
+    if (!block) return;
+
+    block.innerHTML = `<div class="sp-tg-loading">Загрузка пользователей…</div>`;
+
+    let users;
+    try {
+      users = await loadBotUsers();
+    } catch (e) {
+      block.innerHTML = `<div class="sp-tg-loading" style="color:#b42318;">Ошибка загрузки пользователей: ${escapeHtml(e.message || '')}</div>`;
+      return;
+    }
+
+    const rowsHtml = users.map(u => `
+      <tr>
+        <td class="sp-tg-user-chat"><code>${escapeHtml(u.chat_id)}</code></td>
+        <td><b>${escapeHtml(u.display_name || '—')}</b></td>
+        <td><code style="font-size:11px;">${escapeHtml(u.email || '—')}</code></td>
+        <td><span class="sp-tg-role sp-tg-role-${u.role}">${
+          u.role === 'admin' ? 'Администратор' :
+          u.role === 'picker' ? 'Оператор' : 'Наблюдатель'
+        }</span></td>
+        <td>
+          <button type="button" class="sp-tg-icon-btn" data-user-edit="${escapeHtml(u.chat_id)}" title="Изменить">✎</button>
+          <button type="button" class="sp-tg-icon-btn sp-tg-danger" data-user-delete="${escapeHtml(u.chat_id)}" title="Удалить">×</button>
+        </td>
+      </tr>
+    `).join('');
+
+    block.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:700;color:#0f172a;">
+          👥 Пользователи бота (${users.length})
+        </div>
+        <button type="button" class="sp-tg-btn sp-tg-btn-primary" id="spTgUserAdd" style="padding:7px 12px;font-size:12px;">
+          + Добавить
+        </button>
+      </div>
+
+      ${users.length ? `
+        <table class="sp-tg-users-table">
+          <thead>
+            <tr>
+              <th>Chat ID</th>
+              <th>Имя</th>
+              <th>Email</th>
+              <th>Роль</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      ` : `
+        <div style="padding:16px;text-align:center;color:#94a3b8;font-size:13px;background:#f8fafc;border-radius:10px;">
+          Пока никого нет. Нажмите «+ Добавить», чтобы подключить коллегу.
+        </div>
+      `}
+
+      <div class="sp-tg-help" style="margin-top:14px;">
+        <b>Как подключить коллегу:</b><br>
+        1. Пусть он напишет вашему боту <code>/start</code> в Telegram.<br>
+        2. Он получит сообщение с <b>chat_id</b> (внутри блока «Доступ запрещён»).<br>
+        3. Скопируйте его chat_id, добавьте здесь.<br>
+        4. Укажите email — тот, под которым он входит в SKLADAPLAN.<br>
+        5. Теперь он получает уведомления и может пользоваться командами.
+      </div>
+    `;
+
+    document.getElementById('spTgUserAdd')?.addEventListener('click', () => openUserModal(null));
+
+    block.querySelectorAll('[data-user-edit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const chatId = btn.getAttribute('data-user-edit');
+        const u = users.find(x => x.chat_id === chatId);
+        if (u) openUserModal(u);
+      });
+    });
+
+    block.querySelectorAll('[data-user-delete]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const chatId = btn.getAttribute('data-user-delete');
+        if (!confirm(`Удалить пользователя с chat_id «${chatId}»?\n\nОн перестанет получать уведомления и пользоваться командами.`)) return;
+
+        try {
+          await deleteBotUser(chatId);
+          toast('Пользователь удалён');
+          await renderUsersBlock();
+        } catch (e) {
+          console.error('[Telegram] delete user error:', e);
+          toast('Ошибка: ' + (e.message || ''), 'error');
+        }
+      });
+    });
+  }
+
+  function openUserModal(existing) {
+    const overlay = document.createElement('div');
+    overlay.id = 'spTgUserModal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100005;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+    const isEdit = !!existing;
+
+    overlay.innerHTML = `
+      <div style="background:#fff;border-radius:14px;width:100%;max-width:460px;padding:22px;box-shadow:0 25px 80px rgba(0,0,0,.35);">
+        <h3 style="margin:0 0 4px;font-size:17px;">${isEdit ? 'Изменить пользователя' : 'Добавить пользователя бота'}</h3>
+        <p style="margin:0 0 18px;font-size:13px;color:#64748b;">
+          Chat ID коллега видит в сообщении от бота после <code>/start</code>.
+        </p>
+
+        <label style="display:block;margin-bottom:12px;">
+          <span style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:5px;">Chat ID</span>
+          <input id="spTgUserChatId" type="text" value="${isEdit ? escapeHtml(existing.chat_id) : ''}"
+            ${isEdit ? 'readonly style="background:#f8fafc;color:#64748b;width:100%;box-sizing:border-box;border:1px solid #dfe3e8;border-radius:9px;padding:10px 12px;font-size:13px;font-family:ui-monospace,Menlo,monospace;"' :
+                     'style="width:100%;box-sizing:border-box;border:1px solid #dfe3e8;border-radius:9px;padding:10px 12px;font-size:13px;font-family:ui-monospace,Menlo,monospace;" placeholder="123456789"'}>
+        </label>
+
+        <label style="display:block;margin-bottom:12px;">
+          <span style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:5px;">Имя</span>
+          <input id="spTgUserName" type="text" value="${isEdit ? escapeHtml(existing.display_name || '') : ''}"
+            placeholder="Иван Петров"
+            style="width:100%;box-sizing:border-box;border:1px solid #dfe3e8;border-radius:9px;padding:10px 12px;font-size:13px;">
+        </label>
+
+        <label style="display:block;margin-bottom:12px;">
+          <span style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:5px;">Email в SKLADAPLAN</span>
+          <input id="spTgUserEmail" type="email" value="${isEdit ? escapeHtml(existing.email || '') : ''}"
+            placeholder="ivan@company.ru"
+            style="width:100%;box-sizing:border-box;border:1px solid #dfe3e8;border-radius:9px;padding:10px 12px;font-size:13px;">
+        </label>
+
+        <label style="display:block;margin-bottom:14px;">
+          <span style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:5px;">Роль в боте</span>
+          <select id="spTgUserRole" style="width:100%;box-sizing:border-box;border:1px solid #dfe3e8;border-radius:9px;padding:10px 12px;font-size:13px;background:#fff;">
+            <option value="admin" ${isEdit && existing.role === 'admin' ? 'selected' : ''}>Администратор — все права</option>
+            <option value="picker" ${isEdit && existing.role === 'picker' ? 'selected' : ''}>Оператор — работа со складом</option>
+            <option value="viewer" ${isEdit && existing.role === 'viewer' ? 'selected' : ''}>Наблюдатель — только просмотр</option>
+          </select>
+        </label>
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button type="button" id="spTgUserCancel" style="border:1px solid #e2e8f0;background:#f1f5f9;color:#334155;border-radius:9px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;">Отмена</button>
+          <button type="button" id="spTgUserSave" style="border:0;background:var(--primary,#2563EB);color:#fff;border-radius:9px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;">
+            ${isEdit ? 'Сохранить' : 'Добавить'}
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    document.getElementById('spTgUserCancel').addEventListener('click', close);
+
+    document.getElementById('spTgUserSave').addEventListener('click', async () => {
+      const chatId = (document.getElementById('spTgUserChatId')?.value || '').trim();
+      const name = (document.getElementById('spTgUserName')?.value || '').trim();
+      const email = (document.getElementById('spTgUserEmail')?.value || '').trim().toLowerCase();
+      const role = document.getElementById('spTgUserRole')?.value || 'picker';
+
+      if (!chatId || !/^-?\d+$/.test(chatId)) {
+        toast('Chat ID должен быть числом', 'error');
+        return;
+      }
+      if (!name) {
+        toast('Введите имя', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('spTgUserSave');
+      btn.disabled = true;
+      btn.textContent = 'Сохранение…';
+
+      try {
+        await saveBotUser({ chat_id: chatId, display_name: name, email, role, active: true });
+        close();
+        toast(isEdit ? 'Пользователь обновлён' : 'Пользователь добавлен');
+        await renderUsersBlock();
+      } catch (e) {
+        console.error('[Telegram] save user error:', e);
+        toast('Ошибка: ' + (e.message || ''), 'error');
+        btn.disabled = false;
+        btn.textContent = isEdit ? 'Сохранить' : 'Добавить';
+      }
+    });
+  }
+
+  /* =========================================================
      КАРТОЧКА
      ========================================================= */
 
@@ -907,10 +938,11 @@
     card.innerHTML = `
       <h3>📨 Telegram-бот</h3>
       <p class="sp-tg-sub">
-        Двусторонний бот: отправляет уведомления о событиях и отвечает на команды.
-        Работает, пока открыта вкладка хотя бы у одного администратора.
+        Уведомления и команды работают через webhook (мгновенно).
+        Пользователи бота получают уведомления и могут управлять задачами.
       </p>
       <div id="spTgBody"><div class="sp-tg-loading">Загрузка…</div></div>
+      <div id="spTgUsersBlock" style="margin-top:20px;"></div>
     `;
     return card;
   }
@@ -919,7 +951,7 @@
     const body = document.getElementById('spTgBody');
     if (!body || !settings) return;
 
-    const isConfigured = !!(settings.bot_token && settings.chat_id);
+    const isConfigured = !!(settings.bot_token);
     const isOn = settings.enabled && isConfigured;
 
     body.innerHTML = `
@@ -927,7 +959,7 @@
         <span class="dot ${isOn ? 'pulse' : ''}"></span>
         ${
           isOn
-            ? 'Работает · проверка каждые 25 секунд'
+            ? 'Работает · команды через webhook, события — polling 25 сек'
             : (isConfigured ? 'Готово к включению' : 'Не настроено')
         }
       </div>
@@ -941,7 +973,7 @@
       </label>
 
       <label class="sp-tg-field">
-        <span>Chat ID</span>
+        <span>Главный Chat ID (fallback, если список пуст)</span>
         <input id="spTgChatId" type="text"
           placeholder="Например: 123456789"
           value="${escapeHtml(settings.chat_id)}"
@@ -950,12 +982,7 @@
 
       <label class="sp-tg-check" style="margin: 12px 0;">
         <input type="checkbox" id="spTgEnabled" ${settings.enabled ? 'checked' : ''}>
-        <span>Отправлять уведомления и принимать команды</span>
-      </label>
-
-      <label class="sp-tg-check" style="margin: 8px 0 12px;">
-        <input type="checkbox" id="spTgAcceptCommands" ${settings.accept_commands ? 'checked' : ''}>
-        <span>Обрабатывать команды (/status, /today, /tasks, /find)</span>
+        <span>Отправлять уведомления о событиях</span>
       </label>
 
       <label class="sp-tg-check" style="margin: 8px 0 12px;">
@@ -978,18 +1005,6 @@
           <input type="checkbox" id="spTgPlanner" ${settings.notify_planner ? 'checked' : ''}>
           <span>Планировщик</span>
         </label>
-        <label class="sp-tg-check">
-          <input type="checkbox" id="spTgOptimization" ${settings.notify_optimization ? 'checked' : ''}>
-          <span>Оптимизация</span>
-        </label>
-        <label class="sp-tg-check">
-          <input type="checkbox" id="spTgVerification" ${settings.notify_verification ? 'checked' : ''}>
-          <span>Проверка скомплектованного</span>
-        </label>
-        <label class="sp-tg-check">
-          <input type="checkbox" id="spTgInventory" ${settings.notify_inventory ? 'checked' : ''}>
-          <span>Инвентаризация</span>
-        </label>
       </div>
 
       <div class="sp-tg-actions">
@@ -999,14 +1014,15 @@
       </div>
 
       <div class="sp-tg-help">
-        <b>Команды боту в Telegram:</b>
+        <b>Команды боту в Telegram</b> (мгновенные, через webhook):
         <div class="sp-tg-commands">
           <code>/status</code><span>сводка по складу</span>
           <code>/today</code><span>что на сегодня</span>
           <code>/tasks</code><span>активные задачи</span>
-          <code>/find 4810…</code><span>найти коробку по штрихкоду</span>
+          <code>/users</code><span>список пользователей</span>
+          <code>/assign Имя | Задача</code><span>назначить задачу</span>
+          <code>/find 4810…</code><span>найти коробку</span>
           <code>/whoami</code><span>ваш профиль</span>
-          <code>/help</code><span>справка</span>
         </div>
       </div>
     `;
@@ -1014,6 +1030,8 @@
     document.getElementById('spTgSave')?.addEventListener('click', onSave);
     document.getElementById('spTgTest')?.addEventListener('click', onTest);
     document.getElementById('spTgTestDigest')?.addEventListener('click', onTestDigest);
+
+    renderUsersBlock();
   }
 
   /* =========================================================
@@ -1025,14 +1043,10 @@
       bot_token: (document.getElementById('spTgToken')?.value || '').trim(),
       chat_id: (document.getElementById('spTgChatId')?.value || '').trim(),
       enabled: !!document.getElementById('spTgEnabled')?.checked,
-      accept_commands: !!document.getElementById('spTgAcceptCommands')?.checked,
       digest_enabled: !!document.getElementById('spTgDigestEnabled')?.checked,
       digest_time: (document.getElementById('spTgDigestTime')?.value || '08:00').trim(),
       notify_tasks: !!document.getElementById('spTgTasks')?.checked,
-      notify_planner: !!document.getElementById('spTgPlanner')?.checked,
-      notify_optimization: !!document.getElementById('spTgOptimization')?.checked,
-      notify_verification: !!document.getElementById('spTgVerification')?.checked,
-      notify_inventory: !!document.getElementById('spTgInventory')?.checked
+      notify_planner: !!document.getElementById('spTgPlanner')?.checked
     };
   }
 
@@ -1040,8 +1054,8 @@
     const btn = document.getElementById('spTgSave');
     const data = readForm();
 
-    if (data.enabled && (!data.bot_token || !data.chat_id)) {
-      toast('Для включения бота заполните Bot Token и Chat ID', 'error');
+    if (data.enabled && !data.bot_token) {
+      toast('Для включения уведомлений заполните Bot Token', 'error');
       return;
     }
 
@@ -1058,25 +1072,13 @@
       };
 
       if (!wasEnabled && data.enabled) {
-        /* Первый запуск — начинаем с текущего момента */
         patch.last_checked_at = new Date().toISOString();
-
-        /* И пропускаем старые апдейты */
-        try {
-          const updates = await getUpdates(data.bot_token, 0);
-          if (updates.length) {
-            const maxId = updates.reduce(
-              (max, u) => u.update_id > max ? u.update_id : max, 0
-            );
-            patch.command_offset = maxId;
-          }
-        } catch (e) {
-          console.warn('[Telegram] не удалось пропустить старые апдейты:', e.message);
-        }
       }
 
       await saveSettings(patch);
       settings = { ...settings, ...patch };
+
+      invalidateRecipientsCache();
 
       toast('Настройки сохранены');
 
@@ -1101,8 +1103,8 @@
     const btn = document.getElementById('spTgTest');
     const data = readForm();
 
-    if (!data.bot_token || !data.chat_id) {
-      toast('Сначала заполните Bot Token и Chat ID', 'error');
+    if (!data.bot_token) {
+      toast('Сначала заполните Bot Token', 'error');
       return;
     }
 
@@ -1113,14 +1115,16 @@
       '✅ <b>SKLADAPLAN</b>\n\n' +
       'Тестовое сообщение.\n' +
       'Если вы его видите — бот настроен правильно.\n\n' +
-      'Попробуйте отправить команду /help\n\n' +
       'Отправил: <code>' + escapeTelegram(window.state?.user?.email || '—') + '</code>\n' +
       'Время: ' + new Date().toLocaleString('ru-RU');
 
     try {
-      await sendMessage(data.bot_token, data.chat_id, text);
+      /* Обновим settings локально, чтобы sendToAll знал bot_token */
+      settings.bot_token = data.bot_token;
+
+      await sendToAll(text);
       await logSend('test', text, true, null);
-      toast('Тестовое сообщение отправлено');
+      toast('Тестовое сообщение отправлено всем пользователям');
     } catch (e) {
       console.error('[Telegram] test error:', e);
       await logSend('test', text, false, e.message);
@@ -1135,8 +1139,8 @@
     const btn = document.getElementById('spTgTestDigest');
     const data = readForm();
 
-    if (!data.bot_token || !data.chat_id) {
-      toast('Сначала заполните Bot Token и Chat ID', 'error');
+    if (!data.bot_token) {
+      toast('Сначала заполните Bot Token', 'error');
       return;
     }
 
@@ -1144,10 +1148,11 @@
     btn.textContent = 'Отправка…';
 
     try {
+      settings.bot_token = data.bot_token;
       const text = buildDigest();
-      await sendMessage(data.bot_token, data.chat_id, text);
+      await sendToAll(text);
       await logSend('digest_test', text, true, null);
-      toast('Тест сводки отправлен');
+      toast('Тест сводки отправлен всем');
     } catch (e) {
       console.error('[Telegram] digest test error:', e);
       await logSend('digest_test', 'test digest', false, e.message);
@@ -1180,7 +1185,7 @@
       settings = await loadSettings();
       renderBody();
 
-      if (settings.enabled && settings.bot_token && settings.chat_id) {
+      if (settings.enabled && settings.bot_token) {
         startPolling();
       }
     } catch (e) {
@@ -1221,7 +1226,7 @@
     const obs = new MutationObserver(tryAttach);
     obs.observe(document.body, { childList: true, subtree: true });
 
-    console.log('[Telegram] Модуль v3 инициализирован');
+    console.log('[Telegram] Модуль v3.1 инициализирован');
   }
 
   init();
@@ -1230,10 +1235,12 @@
 
   window.spTelegram = {
     sendMessage,
+    sendToAll,
     getSettings: () => settings,
     poll,
     sendDigest: trySendDigest,
-    version: '3.0.0'
+    reloadRecipients: invalidateRecipientsCache,
+    version: '3.1.0'
   };
 
 })();
