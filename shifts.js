@@ -22,7 +22,10 @@
   const PANEL_ID   = 'spShiftsPanel';
   const LS_PANEL_MODE = 'sp-shifts-active';
 
-  let currentShift = null;   // открытая смена или null
+    /* currentShift === undefined — «ещё не загружали»
+     currentShift === null      — «загрузили, смены нет»
+     currentShift === {...}     — «есть открытая смена» */
+  let currentShift = undefined;
   let listShifts   = [];     // все смены для панели
   let listLoading  = false;
   let tickTimer    = null;
@@ -561,30 +564,53 @@
     const host = document.getElementById('spShiftHost');
     if (!host) return;
 
-    host.innerHTML = buildWidgetHtml();
-    attachWidgetHandlers();
+    /* Отключаем observer, чтобы innerHTML не триггерил
+       scheduleRender() → бесконечный цикл */
+    const content = document.getElementById('content');
+    if (contentObserver && content) contentObserver.disconnect();
+
+    try {
+      host.innerHTML = buildWidgetHtml();
+      attachWidgetHandlers();
+    } finally {
+      if (contentObserver && content) {
+        contentObserver.observe(content, { childList: true, subtree: true });
+      }
+    }
   }
 
   function insertWidget() {
-    /* На Главной? Проверяем по маркеру dashboard.js */
     const dashHeader = document.getElementById('spDashboardHeader');
     if (!dashHeader) return;
 
-    if (document.getElementById(WIDGET_ID)) return;
+    let host = document.getElementById('spShiftHost');
 
-    /* Создаём контейнер после dashboard header, но до колонок */
-    const host = document.createElement('div');
-    host.id = 'spShiftHost';
+    if (!host) {
+      /* Первая вставка */
+      const content = document.getElementById('content');
+      if (contentObserver && content) contentObserver.disconnect();
 
-    const kpis = dashHeader.querySelector('.sp-dash-kpis');
-    if (kpis && kpis.parentNode === dashHeader) {
-      kpis.insertAdjacentElement('afterend', host);
-    } else {
-      dashHeader.insertBefore(host, dashHeader.firstChild);
+      try {
+        host = document.createElement('div');
+        host.id = 'spShiftHost';
+
+        const kpis = dashHeader.querySelector('.sp-dash-kpis');
+        if (kpis && kpis.parentNode === dashHeader) {
+          kpis.insertAdjacentElement('afterend', host);
+        } else {
+          dashHeader.insertBefore(host, dashHeader.firstChild);
+        }
+      } finally {
+        if (contentObserver && content) {
+          contentObserver.observe(content, { childList: true, subtree: true });
+        }
+      }
+
+      console.log('[Shifts] Виджет вставлен на Главной');
     }
 
+    /* Рендерим содержимое виджета — функция сама отключит observer */
     renderWidget();
-    console.log('[Shifts] Виджет вставлен на Главной');
   }
 
   function removeWidget() {
@@ -847,20 +873,25 @@
 
   /* ============== НАБЛЮДЕНИЕ ЗА #content ============== */
 
+  let scheduleTimer = null;
   function scheduleRender() {
-    if (scheduled) return;
-    scheduled = true;
-    requestAnimationFrame(async () => {
-      scheduled = false;
+    if (scheduleTimer) return;
+    scheduleTimer = setTimeout(async () => {
+      scheduleTimer = null;
       try {
         const onDash = !!document.getElementById('spDashboardHeader');
         const onTasks = getAppState()?.currentPage === 'tasks';
 
         if (onDash) {
-          await refresh();
+          /* Загружаем текущую смену ТОЛЬКО если ещё не загружали.
+             Иначе — уже знаем, renderWidget покажет актуальное. */
+          if (currentShift === undefined) {
+            currentShift = await loadOpenShift();
+          }
           insertWidget();
         } else {
           removeWidget();
+          currentShift = undefined; /* при возврате на Главную перезагрузим */
         }
 
         if (onTasks) {
@@ -871,7 +902,7 @@
       } catch (e) {
         console.warn('[Shifts] schedule error:', e);
       }
-    });
+    }, 300);
   }
 
   function startObserver() {
@@ -882,14 +913,16 @@
     contentObserver = new MutationObserver(() => scheduleRender());
     contentObserver.observe(content, { childList: true, subtree: true });
 
-    /* Дополнительно — следим за кликами по режимам */
     document.addEventListener('click', e => {
       if (e.target.closest('[data-sp-up-mode]')) {
-        setTimeout(scheduleRender, 100);
+        setTimeout(scheduleRender, 150);
       }
     }, true);
 
+    /* Первый запуск — форсированно, чтобы сразу загрузить смену */
+    currentShift = undefined;
     scheduleRender();
+
     console.log('[Shifts] Наблюдение за #content запущено');
   }
 
