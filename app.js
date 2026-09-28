@@ -32743,6 +32743,17 @@ received: {
   },
 
 
+  optimization: {
+
+    title:
+      'Оптимизация склада',
+
+    heading:
+      'Оптимизация склада'
+
+  },
+
+
   /*
     Два самостоятельных раздела:
 
@@ -33259,6 +33270,16 @@ function render() {
         moveView();
 
       setupMove();
+
+      break;
+
+
+    case 'optimization':
+
+      content.innerHTML =
+        warehouseOptimizationView();
+
+      setupWarehouseOptimization();
 
       break;
 

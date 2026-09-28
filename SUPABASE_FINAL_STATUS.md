@@ -21,3 +21,10 @@ Run `SUPABASE_VERIFY.sql` after P0 and send/inspect the results before enabling 
 
 ## Important operational limitation
 No browser, live Supabase project, physical scanner, or production Vercel deployment is available in this environment. Therefore this archive must not be represented as having passed a live end-to-end warehouse smoke test.
+
+
+## Warehouse optimization
+- `SUPABASE_OPTIMIZATION.sql` adds `warehouse_optimizations`, `warehouse_optimization_moves` and atomic `sp_apply_warehouse_optimization`.
+- The frontend calculates a plan without mutating `boxes`; closing the optimization applies all selected moves in one database transaction.
+- A stale or conflicting plan raises an exception and rolls the whole operation back.
+- The browser never performs direct UPDATEs to `boxes` for optimization.

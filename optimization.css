@@ -1,0 +1,172 @@
+/* =========================================================
+   SKLADAPLAN — ОПТИМИЗАЦИЯ СКЛАДА
+   ========================================================= */
+
+.optimization-shell {
+  max-width: 1180px;
+}
+
+.optimization-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.optimization-zone-list,
+.optimization-pallet-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.optimization-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.optimization-check:hover {
+  background: #fafafa;
+}
+
+.optimization-check input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.optimization-check-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.optimization-check-title {
+  font-weight: 600;
+}
+
+.optimization-check-meta {
+  margin-top: 2px;
+  color: #777;
+  font-size: 12px;
+}
+
+.optimization-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.optimization-kpi {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  background: #fafafa;
+}
+
+.optimization-kpi-label {
+  color: #777;
+  font-size: 12px;
+}
+
+.optimization-kpi-value {
+  margin-top: 5px;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.optimization-report-wrap {
+  overflow: auto;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+}
+
+.optimization-report {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+}
+
+.optimization-report th,
+.optimization-report td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.optimization-report th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fafafa;
+  color: #555;
+  font-size: 12px;
+}
+
+.optimization-report tr:last-child td {
+  border-bottom: 0;
+}
+
+.optimization-report .muted {
+  color: #777;
+  font-size: 12px;
+}
+
+.optimization-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.optimization-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.optimization-empty {
+  padding: 28px 16px;
+  text-align: center;
+  color: #777;
+}
+
+.optimization-warning {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff8e6;
+  color: #795b00;
+}
+
+.optimization-success {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #effaf4;
+  color: #17663f;
+}
+
+@media (max-width: 900px) {
+  .optimization-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .optimization-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .optimization-kpis {
+    grid-template-columns: 1fr 1fr;
+  }
+}
