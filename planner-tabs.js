@@ -167,51 +167,37 @@
 
   /* ============== ПРЕОБРАЗОВАНИЕ ============== */
 
-  function buildTabs() {
+    function buildTabs() {
     const panel = document.querySelector('.planner-day-panel');
     if (!panel) return;
 
-    /* Уже преобразовано — просто применить активный таб */
     if (panel.dataset.spPtDone === '1') {
       applyActiveTab(activeTab);
       return;
     }
 
-    /* Ищем все секции внутри панели */
     const sections = [...panel.querySelectorAll(':scope > .planner-list-section')];
     if (!sections.length) return;
 
-    /* Определяем тип каждой секции по заголовку */
     const items = sections.map(section => {
       const titleEl = section.querySelector('.planner-list-title');
       const titleText = titleEl ? titleEl.textContent.trim() : '';
 
-      let key = '';
-      let label = '';
-      let icon = '';
+      let key = '', label = '', icon = '';
 
       if (/^Отгрузки/i.test(titleText)) {
-        key = 'shipments';
-        label = 'Отгрузки';
-        icon = '🚚';
+        key = 'shipments'; label = 'Отгрузки'; icon = '🚚';
       } else if (/^Задачи\b/.test(titleText) && !/раздела/i.test(titleText)) {
-        key = 'tasks';
-        label = 'Задачи';
-        icon = '📝';
+        key = 'tasks'; label = 'Задачи'; icon = '📝';
       } else if (/раздела/i.test(titleText) || /Задачи из раздела/i.test(titleText)) {
-        key = 'external';
-        label = 'Из раздела';
-        icon = '📋';
+        key = 'external'; label = 'Из раздела'; icon = '📋';
       } else {
-        /* Что-то незнакомое — оставляем как есть, без таба */
         return null;
       }
 
-      /* Считаем элементы внутри для счётчика */
       const listEl = section.querySelector('.planner-list');
       const count = listEl ? listEl.querySelectorAll('.planner-card').length : 0;
 
-      /* Ищем кнопку «Открыть раздел» (только у внешних задач) */
       let openBtn = null;
       if (titleEl) {
         openBtn = titleEl.querySelector('button, .planner-button');
@@ -232,9 +218,7 @@
       btn.className = 'sp-pt-tab';
       btn.setAttribute('data-sp-pt-tab', item.key);
       btn.innerHTML = `${item.icon} ${escapeHtml(item.label)}` +
-        (item.count > 0
-          ? `<span class="sp-pt-count">${item.count}</span>`
-          : '');
+        (item.count > 0 ? `<span class="sp-pt-count">${item.count}</span>` : '');
       btn.addEventListener('click', () => {
         activeTab = item.key;
         saveActiveTab(activeTab);
@@ -243,14 +227,12 @@
       nav.appendChild(btn);
     });
 
-    /* Создаём панели — оборачиваем section в .sp-pt-panel */
+    /* СОЗДАЁМ все панели заранее — но вставляем только в конце */
     const panels = items.map(item => {
       const wrap = document.createElement('div');
       wrap.className = PANEL_CLASS;
       wrap.setAttribute('data-sp-pt-panel', item.key);
 
-      /* Если у секции есть кнопка «Открыть раздел» —
-         выносим её в отдельный блок над списком */
       if (item.openBtn) {
         const originalTitle = item.section.querySelector('.planner-list-title');
         const openWrap = document.createElement('div');
@@ -258,40 +240,37 @@
 
         const clone = item.openBtn.cloneNode(true);
         clone.classList.add('sp-pt-open-section');
-
-        /* Копируем data-page, если есть */
         if (item.openBtn.dataset && item.openBtn.dataset.page) {
           clone.dataset.page = item.openBtn.dataset.page;
         }
-
-        /* Оригинальная кнопка в новой структуре уже не нужна —
-           клона достаточно. Но data-page обрабатывается
-           делегированием на document, поэтому клик сработает. */
         openWrap.appendChild(clone);
         wrap.appendChild(openWrap);
 
-        /* Убираем заголовок целиком — он дублировал бы таб */
         if (originalTitle && originalTitle.parentNode) {
           originalTitle.parentNode.removeChild(originalTitle);
         }
       }
 
-      /* Переносим сам section в панель */
       wrap.appendChild(item.section);
-
       return wrap;
     });
 
-    /* Вставляем всё в начало панели, перед существующими детьми */
+    /* Вставляем nav ПЕРВЫМ ребёнком панели */
     panel.insertBefore(nav, panel.firstChild);
-    panels.forEach(p => panel.appendChild(p));
+
+    /* Вставляем панели СРАЗУ после nav */
+    let insertAfter = nav;
+    panels.forEach(p => {
+      if (insertAfter.nextSibling) {
+        panel.insertBefore(p, insertAfter.nextSibling);
+      } else {
+        panel.appendChild(p);
+      }
+      insertAfter = p;
+    });
 
     panel.dataset.spPtDone = '1';
 
-    /* Определяем активный таб:
-       1. Если сохранённый есть в списке — оставляем
-       2. Если нет — берём первый непустой
-       3. Если все пустые — первый */
     const keys = items.map(i => i.key);
     if (!keys.includes(activeTab)) {
       const firstNonEmpty = items.find(i => i.count > 0);
