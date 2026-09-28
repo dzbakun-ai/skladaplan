@@ -27,7 +27,7 @@
 
   const STYLES_ID = 'spUnifiedPlannerStyles';
   const LS_KEY = 'sp-unified-planner-mode';
-  const MODES = ['tasks', 'planner', 'shifts'];
+  const MODES = ['tasks', 'planner', 'shifts', 'reminders'];
 
   let currentMode = 'tasks';
 
@@ -160,10 +160,18 @@
         >
           ⏱ Смены
         </button>
+        <button type="button"
+          class="sp-up-mode ${currentMode === 'reminders' ? 'is-active' : ''}"
+          data-sp-up-mode="reminders"
+          role="tab"
+          aria-selected="${currentMode === 'reminders'}"
+        >
+          🔔 Напоминания
+        </button>
       </div>
     `;
   }
-
+   
   function attachModeHandlers() {
     document.querySelectorAll('[data-sp-up-mode]').forEach(btn => {
       if (btn.dataset.spUpBound === '1') return;
@@ -232,6 +240,11 @@
          Здесь оставляем пустой контейнер. */
       if (currentMode === 'shifts') {
         return switcher + '<div id="spShiftsHost"></div>';
+      }
+
+             /* Режим «Напоминания» — панель вставит reminders-модуль */
+      if (currentMode === 'reminders') {
+        return switcher + '<div id="spRemindersHost"></div>';
       }
        
       /* Режим «Задачи» */
