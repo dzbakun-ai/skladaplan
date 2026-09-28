@@ -27,7 +27,7 @@
 
   const STYLES_ID = 'spUnifiedPlannerStyles';
   const LS_KEY = 'sp-unified-planner-mode';
-  const MODES = ['tasks', 'planner'];
+  const MODES = ['tasks', 'planner', 'shifts'];
 
   let currentMode = 'tasks';
 
@@ -152,6 +152,14 @@
         >
           📅 Планировщик
         </button>
+        <button type="button"
+          class="sp-up-mode ${currentMode === 'shifts' ? 'is-active' : ''}"
+          data-sp-up-mode="shifts"
+          role="tab"
+          aria-selected="${currentMode === 'shifts'}"
+        >
+          ⏱ Смены
+        </button>
       </div>
     `;
   }
@@ -220,6 +228,12 @@
         return switcher + '<div class="sp-up-content">' + plannerHtml + '</div>';
       }
 
+      /* Режим «Смены» — панель вставит shift-модуль через observer.
+         Здесь оставляем пустой контейнер. */
+      if (currentMode === 'shifts') {
+        return switcher + '<div id="spShiftsHost"></div>';
+      }
+       
       /* Режим «Задачи» */
       let tasksHtml = '';
       try {
