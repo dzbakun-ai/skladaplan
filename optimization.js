@@ -1,7 +1,20 @@
 /* =========================================================
    SKLADAPLAN — ОПТИМИЗАЦИЯ СКЛАДА
    Расчёт выполняется в браузере на свежем snapshot.
-   Применение — одной атомарной RPC в Supabase.
+
+   ВАЖНО (после фикса 2026-09-28):
+   Алгоритм работает ТОЛЬКО по текстовым полям
+   boxes."Склад" / "Зона/ряд" / "Поддон".
+
+   Почему не через warehouses / locations / pallets:
+   в реальных данных эти справочники и boxes расходятся
+   (регистр, пробелы, префикс «Склад », кириллица А vs
+   латинская A). Фильтр, который сравнивает строки «в лоб»,
+   молча возвращает пустой результат — именно это и было
+   причиной, что «Оптимизация» ничего не находила.
+
+   Тот же принцип (text-first) уже используется в RPC
+   sp_move_boxes / sp_merge_pallets — см. supabase_migration.sql.
    ========================================================= */
 
 'use strict';
@@ -28,7 +41,9 @@ if (!state.optimization) {
     applying: false,
     loaded: false,
     error: '',
-    result: null
+    result: null,
+    availableWarehouses: [],
+    availableZones: []
   };
 }
 
@@ -45,14 +60,51 @@ function optimizationBoxArticle(box) {
 }
 
 function optimizationUnique(values) {
-  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru'));
+  return [...new Set(values.filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'ru', { numeric: true, sensitivity: 'base' }));
 }
+
+/* ---------------------------------------------------------
+   Список складов и зон — из state.boxes.
+
+   state.boxes заполняется в app.js на старте приложения
+   (loadBoxesFromSupabase). Здесь берём distinct-значения
+   именно тех полей, которые потом будем фильтровать —
+   поэтому несовпадения написания исключены по построению.
+   --------------------------------------------------------- */
+
+function optimizationWarehouseList() {
+  return optimizationUnique(
+    (state.boxes || [])
+      .map(b => (b.warehouse || '').trim())
+      .filter(Boolean)
+  );
+}
+
+function optimizationZoneList(warehouse) {
+  if (!warehouse) return [];
+
+  return optimizationUnique(
+    (state.boxes || [])
+      .filter(b => (b.warehouse || '').trim() === warehouse)
+      .map(b => (b.zone_row || '').trim())
+      .filter(Boolean)
+  );
+}
+
+/* ---------------------------------------------------------
+   Свежая выгрузка коробок выбранного склада из Supabase.
+   Фильтр — строго по тому складу, что выбран в селекте,
+   и по статусу «На складе» (не трогаем Зарезервировано,
+   КПодбору, Скомплектовано, Отгружено и т.д.).
+   --------------------------------------------------------- */
 
 async function optimizationFetchAllBoxes(warehouse) {
   const rows = [];
 
   for (let from = 0; ; from += OPTIMIZATION_PAGE_SIZE) {
     const to = from + OPTIMIZATION_PAGE_SIZE - 1;
+
     const { data, error } = await supabaseClient
       .from('boxes')
       .select(BOX_SELECT)
@@ -61,97 +113,70 @@ async function optimizationFetchAllBoxes(warehouse) {
       .range(from, to);
 
     if (error) throw error;
+
     rows.push(...(data || []));
+
     if (!data || data.length < OPTIMIZATION_PAGE_SIZE) break;
   }
 
   return rows;
 }
 
-async function optimizationLoadWarehouses() {
-  const { data, error } = await supabaseClient
-    .from('warehouses')
-    .select('id,name')
-    .order('name');
+/* ---------------------------------------------------------
+   Bootstrap — синхронный, берёт списки из state.boxes.
+   --------------------------------------------------------- */
 
-  if (error) throw error;
-  return data || [];
-}
-
-async function optimizationLoadLocations(warehouseId) {
-  const { data, error } = await supabaseClient
-    .from('locations')
-    .select('id,warehouse_id,code')
-    .eq('warehouse_id', warehouseId)
-    .order('code');
-
-  if (error) throw error;
-  return data || [];
-}
-
-async function optimizationLoadPallets(warehouseId, locationId) {
-  const { data, error } = await supabaseClient
-    .from('pallets')
-    .select('id,warehouse_id,location_id,pallet_number,status')
-    .eq('warehouse_id', warehouseId)
-    .eq('location_id', locationId)
-    .order('pallet_number');
-
-  if (error) throw error;
-  return data || [];
-}
-
-async function optimizationBootstrap() {
+function optimizationBootstrap() {
   const opt = state.optimization;
   opt.error = '';
 
-  const warehouses = await optimizationLoadWarehouses();
-  const warehouseNames = warehouses.map(row => row.name).filter(Boolean);
+  const warehouses = optimizationWarehouseList();
+  opt.availableWarehouses = warehouses;
 
-  if (!opt.warehouse && warehouseNames.length) {
-    opt.warehouse = warehouseNames[0];
+  if (!opt.warehouse || !warehouses.includes(opt.warehouse)) {
+    opt.warehouse = warehouses[0] || '';
   }
 
-  if (!opt.warehouse) {
-    opt.loaded = true;
-    return;
-  }
-
-  const warehouse = warehouses.find(row => row.name === opt.warehouse);
-  if (!warehouse) {
-    opt.warehouse = warehouseNames[0] || '';
-  }
-
-  const locations = await optimizationLoadLocations(warehouse.id);
-  const zones = optimizationUnique(locations.map(row => row.code));
+  const zones = optimizationZoneList(opt.warehouse);
+  opt.availableZones = zones;
 
   if (!opt.targetZone || !zones.includes(opt.targetZone)) {
-    opt.targetZone = zones[0] || '';
+    opt.targetZone =
+      zones.find(z => !opt.sourceZones.has(z)) ||
+      zones[0] ||
+      '';
   }
 
-  if (!opt.sourceZones.size) {
-    opt.sourceZones = new Set();
-  }
+  // Убираем из уже выбранных исходных те зоны, которых больше нет.
+  const zoneSet = new Set(zones);
+  opt.sourceZones = new Set(
+    [...opt.sourceZones].filter(z => zoneSet.has(z))
+  );
 
-  opt.availableWarehouses = warehouseNames;
-  opt.availableLocations = locations;
-  opt.availableZones = zones;
   opt.loaded = true;
 }
+
+/* ---------------------------------------------------------
+   Группировка коробок по (склад + зона + поддон).
+   Коробки без поддона тоже включаются — в группу с пустым
+   «Поддон». Раньше они молча отбрасывались.
+   --------------------------------------------------------- */
 
 function optimizationGroupSourceBoxes(boxes) {
   const groups = new Map();
 
   boxes.forEach(box => {
-    const key = optimizationPalletKey(box.warehouse, box.zone_row, box.pallet);
-    if (!box.pallet || !box.zone_row) return;
+    if (!box.zone_row) return;
+
+    const palletValue = (box.pallet || '').trim();
+    const key = optimizationPalletKey(box.warehouse, box.zone_row, palletValue);
 
     if (!groups.has(key)) {
       groups.set(key, {
         key,
         warehouse: box.warehouse,
         zone: box.zone_row,
-        pallet: box.pallet,
+        pallet: palletValue,
         count: 0,
         articles: new Map(),
         boxes: []
@@ -160,6 +185,7 @@ function optimizationGroupSourceBoxes(boxes) {
 
     const group = groups.get(key);
     const article = optimizationBoxArticle(box) || 'Без артикула';
+
     group.count += 1;
     group.boxes.push(box);
     group.articles.set(article, (group.articles.get(article) || 0) + 1);
@@ -167,59 +193,78 @@ function optimizationGroupSourceBoxes(boxes) {
 
   return [...groups.values()].sort((a, b) => {
     if (a.count !== b.count) return a.count - b.count;
-    return a.pallet.localeCompare(b.pallet, 'ru');
+    return a.pallet.localeCompare(b.pallet, 'ru', { numeric: true });
   });
 }
 
-function optimizationBuildTargetPallets(boxes, pallets, targetZone, capacity) {
+/* ---------------------------------------------------------
+   Целевые поддоны — группируем коробки целевой зоны по
+   тексту «Поддон». Таблица pallets не используется
+   вовсе: нам важна реальная картина в boxes.
+   --------------------------------------------------------- */
+
+function optimizationBuildTargetPallets(boxes, targetZone, capacity) {
   const groups = new Map();
 
   boxes
-    .filter(box => box.zone_row === targetZone && box.pallet)
+    .filter(box => box.zone_row === targetZone && (box.pallet || '').trim())
     .forEach(box => {
-      if (!groups.has(box.pallet)) {
-        groups.set(box.pallet, {
-          pallet: box.pallet,
+      const pallet = (box.pallet || '').trim();
+
+      if (!groups.has(pallet)) {
+        groups.set(pallet, {
+          pallet,
           count: 0,
           articles: new Set(),
           boxes: []
         });
       }
-      const group = groups.get(box.pallet);
+
+      const group = groups.get(pallet);
       group.count += 1;
+
       const article = optimizationBoxArticle(box);
       if (article) group.articles.add(article);
+
       group.boxes.push(box);
     });
 
-  return pallets
-    .filter(pallet => pallet.status !== 'Закрыт')
-    .map(pallet => {
-      const group = groups.get(pallet.pallet_number);
-      const count = group?.count || 0;
-      const articles = [...(group?.articles || [])];
+  return [...groups.values()]
+    .map(group => {
+      const articles = [...group.articles];
+
       return {
-        id: pallet.id,
-        pallet: pallet.pallet_number,
-        status: pallet.status,
-        count,
-        free: Math.max(0, capacity - count),
-        article: articles.length === 1 ? articles[0] : (articles.length ? '__MULTIPLE_ARTICLES__' : ''),
+        id: null,
+        pallet: group.pallet,
+        status: 'На складе',
+        count: group.count,
+        free: Math.max(0, capacity - group.count),
+        article: articles.length === 1
+          ? articles[0]
+          : (articles.length ? '__MULTIPLE_ARTICLES__' : ''),
         articles
       };
     })
-    .filter(pallet => pallet.free > 0 && pallet.article !== '__MULTIPLE_ARTICLES__')
-    .sort((a, b) => b.count - a.count || a.pallet.localeCompare(b.pallet, 'ru'));
+    .filter(p => p.free > 0 && p.article !== '__MULTIPLE_ARTICLES__')
+    .sort((a, b) =>
+      b.count - a.count ||
+      a.pallet.localeCompare(b.pallet, 'ru', { numeric: true })
+    );
 }
 
+/* ---------------------------------------------------------
+   Алгоритм подбора — без изменений по смыслу.
+   --------------------------------------------------------- */
+
 function optimizationChooseMoves(sourceGroups, targetPallets, capacity) {
-  const targets = targetPallets.map(target => ({ ...target }));
+  const targets = targetPallets.map(t => ({ ...t }));
   const moves = [];
 
   const eligible = sourceGroups
     .filter(group => group.count < capacity)
     .flatMap(group => {
       const byArticle = new Map();
+
       group.boxes.forEach(box => {
         const article = optimizationBoxArticle(box) || '';
         if (!byArticle.has(article)) byArticle.set(article, []);
@@ -233,10 +278,9 @@ function optimizationChooseMoves(sourceGroups, targetPallets, capacity) {
       }));
     });
 
-  // First use the most-filled compatible targets, which tends to free source pallets faster.
   eligible.sort((a, b) => {
     if (a.boxes.length !== b.boxes.length) return b.boxes.length - a.boxes.length;
-    return a.group.pallet.localeCompare(b.group.pallet, 'ru');
+    return a.group.pallet.localeCompare(b.group.pallet, 'ru', { numeric: true });
   });
 
   eligible.forEach(source => {
@@ -244,8 +288,14 @@ function optimizationChooseMoves(sourceGroups, targetPallets, capacity) {
 
     while (remaining.length) {
       const target = targets
-        .filter(candidate => candidate.free > 0 && (!candidate.article || candidate.article === source.article))
-        .sort((a, b) => b.count - a.count || a.pallet.localeCompare(b.pallet, 'ru'))[0];
+        .filter(candidate =>
+          candidate.free > 0 &&
+          (!candidate.article || candidate.article === source.article)
+        )
+        .sort((a, b) =>
+          b.count - a.count ||
+          a.pallet.localeCompare(b.pallet, 'ru', { numeric: true })
+        )[0];
 
       if (!target) break;
 
@@ -266,8 +316,7 @@ function optimizationChooseMoves(sourceGroups, targetPallets, capacity) {
         sourceBefore: source.group.count,
         sourceAfter: null,
         targetBefore: target.count,
-        targetAfter: target.count + selected.length,
-        sourceBoxIds: source.group.boxes.map(box => box.id)
+        targetAfter: target.count + selected.length
       });
 
       target.count += selected.length;
@@ -277,6 +326,7 @@ function optimizationChooseMoves(sourceGroups, targetPallets, capacity) {
   });
 
   const movedBySource = new Map();
+
   moves.forEach(move => {
     const key = optimizationPalletKey(move.sourceWarehouse, move.sourceZone, move.sourcePallet);
     movedBySource.set(key, (movedBySource.get(key) || 0) + move.boxCount);
@@ -284,7 +334,7 @@ function optimizationChooseMoves(sourceGroups, targetPallets, capacity) {
 
   moves.forEach(move => {
     const key = optimizationPalletKey(move.sourceWarehouse, move.sourceZone, move.sourcePallet);
-    const sourceGroup = sourceGroups.find(group => group.key === key);
+    const sourceGroup = sourceGroups.find(g => g.key === key);
     move.sourceAfter = Math.max(0, (sourceGroup?.count || 0) - (movedBySource.get(key) || 0));
   });
 
@@ -296,6 +346,10 @@ function optimizationSelectedSourceGroups(groups) {
   if (opt.mode === 'all') return groups;
   return groups.filter(group => opt.selectedPalletKeys.has(group.key));
 }
+
+/* ---------------------------------------------------------
+   РАСЧЁТ
+   --------------------------------------------------------- */
 
 async function optimizationCalculate() {
   const opt = state.optimization;
@@ -334,20 +388,14 @@ async function optimizationCalculate() {
   render();
 
   try {
-    const warehouses = await optimizationLoadWarehouses();
-    const warehouse = warehouses.find(row => row.name === opt.warehouse);
-    if (!warehouse) throw new Error('Склад не найден');
-
-    const locations = await optimizationLoadLocations(warehouse.id);
-    const targetLocation = locations.find(row => row.code === opt.targetZone);
-    if (!targetLocation) throw new Error(`Целевая зона не найдена: ${opt.targetZone}`);
-
     const boxes = await optimizationFetchAllBoxes(opt.warehouse);
+
     const sourceBoxes = boxes.filter(box => opt.sourceZones.has(box.zone_row));
     const sourceGroups = optimizationGroupSourceBoxes(sourceBoxes);
     const filteredGroups = optimizationSelectedSourceGroups(sourceGroups);
-    const targetPalletRows = await optimizationLoadPallets(warehouse.id, targetLocation.id);
-    const targetPallets = optimizationBuildTargetPallets(boxes, targetPalletRows, opt.targetZone, capacity);
+
+    const targetPallets =
+      optimizationBuildTargetPallets(boxes, opt.targetZone, capacity);
 
     opt.sourceData = filteredGroups;
     opt.targetPallets = targetPallets;
@@ -355,7 +403,15 @@ async function optimizationCalculate() {
     opt.calculatedAt = new Date().toISOString();
     opt.loaded = true;
 
-    toast(`Расчёт готов: ${opt.plan.reduce((sum, move) => sum + move.boxCount, 0)} коробок к перемещению`);
+    const totalMoves = opt.plan.reduce((s, m) => s + m.boxCount, 0);
+
+    if (!filteredGroups.length) {
+      toast('В выбранных исходных зонах нет коробок со статусом «На складе»', 'error');
+    } else if (!targetPallets.length) {
+      toast('В целевой зоне нет паллет со свободным местом', 'error');
+    } else {
+      toast(`Расчёт готов: ${totalMoves} коробок к перемещению`);
+    }
   } catch (error) {
     console.error('optimizationCalculate:', error);
     opt.error = error?.message || 'Не удалось рассчитать оптимизацию';
@@ -365,6 +421,10 @@ async function optimizationCalculate() {
     render();
   }
 }
+
+/* ---------------------------------------------------------
+   Сводка, отчёт, экспорт — по смыслу не изменились.
+   --------------------------------------------------------- */
 
 function optimizationActiveMoves() {
   const opt = state.optimization;
@@ -380,21 +440,26 @@ function optimizationSummary() {
     movedBySource.set(key, (movedBySource.get(key) || 0) + move.boxCount);
   });
 
-  const sourceKeys = new Set(moves.map(move => optimizationPalletKey(move.sourceWarehouse, move.sourceZone, move.sourcePallet)));
+  const sourceKeys = new Set(
+    moves.map(m => optimizationPalletKey(m.sourceWarehouse, m.sourceZone, m.sourcePallet))
+  );
+
   const freedKeys = new Set();
 
   movedBySource.forEach((moved, key) => {
-    const source = state.optimization.sourceData.find(group => group.key === key);
+    const source = state.optimization.sourceData.find(g => g.key === key);
     if (source && moved >= source.count) freedKeys.add(key);
   });
 
-  const plannedSourceBoxes = state.optimization.sourceData.reduce((sum, group) => sum + group.count, 0);
-  const movedBoxes = moves.reduce((sum, move) => sum + move.boxCount, 0);
+  const plannedSourceBoxes = state.optimization.sourceData
+    .reduce((sum, g) => sum + g.count, 0);
+
+  const movedBoxes = moves.reduce((sum, m) => sum + m.boxCount, 0);
 
   return {
     sourcePallets: sourceKeys.size,
     sourceBoxes: plannedSourceBoxes,
-    targetPallets: new Set(moves.map(move => move.targetPallet)).size,
+    targetPallets: new Set(moves.map(m => m.targetPallet)).size,
     movedBoxes,
     freedPallets: freedKeys.size,
     unresolvedBoxes: Math.max(0, plannedSourceBoxes - movedBoxes),
@@ -402,22 +467,24 @@ function optimizationSummary() {
   };
 }
 
-function optSourceGroup(warehouse, zone, pallet) {
-  const key = optimizationPalletKey(warehouse, zone, pallet);
-  return state.optimization.sourceData.find(group => group.key === key);
-}
-
 function optimizationRenderZones() {
   const opt = state.optimization;
   const zones = opt.availableZones || [];
-  return zones.map(zone => `
-    <label class="optimization-check">
-      <input type="checkbox" data-opt-source-zone="${optimizationEscape(zone)}" ${opt.sourceZones.has(zone) ? 'checked' : ''}>
-      <span class="optimization-check-main">
-        <span class="optimization-check-title">${optimizationEscape(zone)}</span>
-      </span>
-    </label>
-  `).join('') || '<div class="optimization-empty">Нет зон</div>';
+
+  return zones.length
+    ? zones.map(zone => `
+        <label class="optimization-check">
+          <input
+            type="checkbox"
+            data-opt-source-zone="${optimizationEscape(zone)}"
+            ${opt.sourceZones.has(zone) ? 'checked' : ''}
+          >
+          <span class="optimization-check-main">
+            <span class="optimization-check-title">${optimizationEscape(zone)}</span>
+          </span>
+        </label>
+      `).join('')
+    : '<div class="optimization-empty">Нет зон</div>';
 }
 
 function optimizationRenderSourcePallets() {
@@ -425,18 +492,31 @@ function optimizationRenderSourcePallets() {
   if (opt.mode !== 'selected') return '';
 
   if (!opt.sourceData.length) {
-    return '<div class="optimization-empty">Подходящих неполных паллет пока нет или данные ещё загружаются.</div>';
+    return '<div class="optimization-empty">Подходящих неполных паллет пока нет.</div>';
   }
 
   return opt.sourceData.map(group => {
     const checked = opt.selectedPalletKeys.has(group.key);
-    const articleText = [...group.articles.entries()].map(([article, count]) => `${article}: ${count}`).join(' · ');
+    const articleText = [...group.articles.entries()]
+      .map(([a, c]) => `${a}: ${c}`)
+      .join(' · ');
+
+    const palletLabel = group.pallet || '(без поддона)';
+
     return `
       <label class="optimization-check">
-        <input type="checkbox" data-opt-source-pallet="${optimizationEscape(group.key)}" ${checked ? 'checked' : ''}>
+        <input
+          type="checkbox"
+          data-opt-source-pallet="${optimizationEscape(group.key)}"
+          ${checked ? 'checked' : ''}
+        >
         <span class="optimization-check-main">
-          <span class="optimization-check-title">${optimizationEscape(group.zone)} · ${optimizationEscape(group.pallet)}</span>
-          <span class="optimization-check-meta">${group.count} коробок · ${optimizationEscape(articleText)}</span>
+          <span class="optimization-check-title">
+            ${optimizationEscape(group.zone)} · ${optimizationEscape(palletLabel)}
+          </span>
+          <span class="optimization-check-meta">
+            ${group.count} коробок · ${optimizationEscape(articleText)}
+          </span>
         </span>
       </label>
     `;
@@ -445,6 +525,7 @@ function optimizationRenderSourcePallets() {
 
 function optimizationRenderReport() {
   const moves = state.optimization.plan;
+
   if (!moves.length) {
     return '<div class="optimization-empty">Подходящих перемещений не найдено.</div>';
   }
@@ -473,6 +554,7 @@ function optimizationRenderReport() {
             const previous = cumulative.get(move.targetPallet) || 0;
             const isActive = !excluded;
             const after = move.targetBefore + previous + (isActive ? move.boxCount : 0);
+
             if (isActive) cumulative.set(move.targetPallet, previous + move.boxCount);
 
             return `
@@ -482,7 +564,7 @@ function optimizationRenderReport() {
                 </td>
                 <td>${index + 1}</td>
                 <td>${optimizationEscape(move.sourceZone)}</td>
-                <td>${optimizationEscape(move.sourcePallet)}</td>
+                <td>${optimizationEscape(move.sourcePallet || '—')}</td>
                 <td>${optimizationEscape(move.article || 'Без артикула')}</td>
                 <td>${move.boxCount}</td>
                 <td>${optimizationEscape(move.targetZone)}</td>
@@ -499,6 +581,7 @@ function optimizationRenderReport() {
 
 function optimizationExportCsv() {
   const moves = optimizationActiveMoves();
+
   if (!moves.length) {
     toast('В отчёте нет выбранных перемещений', 'error');
     return;
@@ -508,7 +591,7 @@ function optimizationExportCsv() {
   const rows = moves.map((move, index) => [
     index + 1,
     move.sourceZone,
-    move.sourcePallet,
+    move.sourcePallet || '',
     move.article || '',
     move.boxCount,
     move.targetZone,
@@ -530,6 +613,13 @@ function optimizationExportCsv() {
   URL.revokeObjectURL(url);
 }
 
+/* ---------------------------------------------------------
+   ПРИМЕНЕНИЕ — пока оставляем как было.
+   RPC sp_apply_warehouse_optimization вызывается с теми же
+   текстовыми значениями, что пришли из boxes.
+   Фикс на стороне БД — см. SUPABASE_OPTIMIZATION_FIX.sql.
+   --------------------------------------------------------- */
+
 async function optimizationApply() {
   const opt = state.optimization;
   const moves = optimizationActiveMoves();
@@ -545,7 +635,7 @@ async function optimizationApply() {
     `Перемещений: ${summary.moves}\n` +
     `Коробок: ${summary.movedBoxes}\n` +
     `Освободится паллет: ${summary.freedPallets}\n\n` +
-    `После подтверждения SKLADAPLAN изменит адреса коробок в основной базе. Операцию нельзя частично применить.`
+    `После подтверждения SKLADAPLAN изменит адреса коробок. Операцию нельзя частично применить.`
   );
 
   if (!confirmed) return;
@@ -582,7 +672,7 @@ async function optimizationApply() {
       await loadBoxesFromSupabase();
     } catch (reloadError) {
       console.error('optimizationApply reload:', reloadError);
-      opt.error = `Оптимизация применена в базе, но экран не удалось обновить: ${reloadError?.message || 'ошибка загрузки'}`;
+      opt.error = `Оптимизация применена, но экран не удалось обновить: ${reloadError?.message || 'ошибка'}`;
     }
 
     opt.plan = [];
@@ -603,7 +693,13 @@ async function optimizationApply() {
   }
 }
 
+/* ---------------------------------------------------------
+   ВЬЮ
+   --------------------------------------------------------- */
+
 function warehouseOptimizationView() {
+  optimizationBootstrap(); // синхронно, обновляет списки складов/зон
+
   const opt = state.optimization;
   const summary = optimizationSummary();
   const zones = opt.availableZones || [];
@@ -615,7 +711,7 @@ function warehouseOptimizationView() {
         <div class="sp-card-label">ОПТИМИЗАЦИЯ СКЛАДА</div>
         <h2 style="margin:4px 0 8px;">Консолидация паллет</h2>
         <p class="sp-muted" style="margin:0;">
-          Система ищет свободную ёмкость в целевой зоне и формирует готовый рабочий отчёт.
+          Система ищет свободную ёмкость в целевой зоне и формирует рабочий отчёт.
           Расчёт ничего не меняет в базе до нажатия «Закрыть оптимизацию».
         </p>
       </div>
@@ -631,14 +727,22 @@ function warehouseOptimizationView() {
             <label>
               Склад
               <select id="optimizationWarehouse">
-                ${warehouses.map(name => `<option value="${optimizationEscape(name)}" ${name === opt.warehouse ? 'selected' : ''}>${optimizationEscape(name)}</option>`).join('')}
+                ${warehouses.length
+                  ? warehouses.map(name => `
+                      <option value="${optimizationEscape(name)}" ${name === opt.warehouse ? 'selected' : ''}>${optimizationEscape(name)}</option>
+                    `).join('')
+                  : '<option value="">Нет складов в boxes</option>'}
               </select>
             </label>
 
             <label>
               Целевая зона / ряд
               <select id="optimizationTargetZone">
-                ${zones.map(zone => `<option value="${optimizationEscape(zone)}" ${zone === opt.targetZone ? 'selected' : ''}>${optimizationEscape(zone)}</option>`).join('')}
+                ${zones.length
+                  ? zones.map(zone => `
+                      <option value="${optimizationEscape(zone)}" ${zone === opt.targetZone ? 'selected' : ''}>${optimizationEscape(zone)}</option>
+                    `).join('')
+                  : '<option value="">Нет зон у этого склада</option>'}
               </select>
             </label>
 
@@ -689,7 +793,11 @@ function warehouseOptimizationView() {
           <div class="optimization-toolbar">
             <div>
               <div class="sp-card-label">РЕЗУЛЬТАТ</div>
-              <div class="sp-muted" style="margin-top:4px;">${opt.calculatedAt ? `Расчёт: ${new Date(opt.calculatedAt).toLocaleString('ru-RU')}` : 'Расчёт ещё не выполнен'}</div>
+              <div class="sp-muted" style="margin-top:4px;">
+                ${opt.calculatedAt
+                  ? `Расчёт: ${new Date(opt.calculatedAt).toLocaleString('ru-RU')}`
+                  : 'Расчёт ещё не выполнен'}
+              </div>
             </div>
             <div class="optimization-toolbar-actions">
               <button class="sp-btn secondary" id="optimizationExportBtn" type="button" ${!optimizationActiveMoves().length ? 'disabled' : ''}>Экспорт отчёта</button>
@@ -707,7 +815,9 @@ function warehouseOptimizationView() {
           </div>
 
           <div style="margin-top:16px;">
-            ${summary.unresolvedBoxes ? `<div class="optimization-warning" style="margin-bottom:12px;">Не все коробки удалось разместить. Их не будет в плане перемещений — физически их пока не переносим.</div>` : ''}
+            ${summary.unresolvedBoxes
+              ? `<div class="optimization-warning" style="margin-bottom:12px;">Не все коробки удалось разместить. Их не будет в плане перемещений.</div>`
+              : ''}
             ${optimizationRenderReport()}
           </div>
         </div>
@@ -718,39 +828,34 @@ function warehouseOptimizationView() {
 
 async function optimizationRefreshSourcePallets() {
   const opt = state.optimization;
-  if (!opt.warehouse || !opt.sourceZones.size) return;
+  if (!opt.warehouse || !opt.sourceZones.size) {
+    opt.sourceData = [];
+    return;
+  }
 
   try {
     const boxes = await optimizationFetchAllBoxes(opt.warehouse);
-    const groups = optimizationGroupSourceBoxes(boxes.filter(box => opt.sourceZones.has(box.zone_row)));
-    opt.sourceData = groups.filter(group => group.count < Number(opt.capacity));
-    const availableKeys = new Set(opt.sourceData.map(group => group.key));
-    opt.selectedPalletKeys = new Set([...opt.selectedPalletKeys].filter(key => availableKeys.has(key)));
+    const sourceBoxes = boxes.filter(box => opt.sourceZones.has(box.zone_row));
+    const groups = optimizationGroupSourceBoxes(sourceBoxes);
+
+    opt.sourceData = groups.filter(g => g.count < Number(opt.capacity));
+
+    const availableKeys = new Set(opt.sourceData.map(g => g.key));
+    opt.selectedPalletKeys = new Set(
+      [...opt.selectedPalletKeys].filter(key => availableKeys.has(key))
+    );
   } catch (error) {
     console.error('optimizationRefreshSourcePallets:', error);
-    toast(error?.message || 'Не удалось загрузить паллеты', 'error');
+    opt.sourceData = [];
   }
 }
 
+/* ---------------------------------------------------------
+   SETUP
+   --------------------------------------------------------- */
+
 function setupWarehouseOptimization() {
   const opt = state.optimization;
-
-  if (!opt.loaded) {
-    opt.loading = true;
-    optimizationBootstrap()
-      .then(async () => {
-        if (opt.mode === 'selected') await optimizationRefreshSourcePallets();
-      })
-      .catch(error => {
-        console.error('optimizationBootstrap:', error);
-        opt.error = error?.message || 'Не удалось загрузить данные склада';
-      })
-      .finally(() => {
-        opt.loading = false;
-        render();
-      });
-    return;
-  }
 
   $('#optimizationWarehouse')?.addEventListener('change', async event => {
     opt.warehouse = event.target.value;
@@ -759,6 +864,7 @@ function setupWarehouseOptimization() {
     opt.sourceData = [];
     opt.plan = [];
     opt.selectedPalletKeys = new Set();
+    opt.excludedMoves = new Set();
     opt.loaded = false;
     render();
   });
@@ -767,31 +873,56 @@ function setupWarehouseOptimization() {
     opt.targetZone = event.target.value;
     opt.sourceZones.delete(opt.targetZone);
     opt.plan = [];
+    opt.excludedMoves = new Set();
     render();
   });
 
   $('#optimizationCapacity')?.addEventListener('change', async event => {
     opt.capacity = Math.max(1, Math.min(1000, Number(event.target.value) || OPTIMIZATION_DEFAULT_CAPACITY));
     opt.plan = [];
-    if (opt.mode === 'selected') await optimizationRefreshSourcePallets();
+    opt.excludedMoves = new Set();
+
+    if (opt.mode === 'selected') {
+      await optimizationRefreshSourcePallets();
+    }
+
     render();
   });
 
   $('#optimizationMode')?.addEventListener('change', async event => {
     opt.mode = event.target.value;
     opt.plan = [];
-    if (opt.mode === 'selected') await optimizationRefreshSourcePallets();
+    opt.excludedMoves = new Set();
+
+    if (opt.mode === 'selected') {
+      await optimizationRefreshSourcePallets();
+    }
+
     render();
   });
 
   $all('[data-opt-source-zone]').forEach(input => {
     input.addEventListener('change', async event => {
       const zone = event.target.getAttribute('data-opt-source-zone');
-      if (event.target.checked) opt.sourceZones.add(zone);
-      else opt.sourceZones.delete(zone);
-      if (zone === opt.targetZone && event.target.checked) event.target.checked = false;
+
+      if (event.target.checked) {
+        opt.sourceZones.add(zone);
+      } else {
+        opt.sourceZones.delete(zone);
+      }
+
+      if (zone === opt.targetZone && event.target.checked) {
+        event.target.checked = false;
+        opt.sourceZones.delete(zone);
+      }
+
       opt.plan = [];
-      if (opt.mode === 'selected') await optimizationRefreshSourcePallets();
+      opt.excludedMoves = new Set();
+
+      if (opt.mode === 'selected') {
+        await optimizationRefreshSourcePallets();
+      }
+
       render();
     });
   });
@@ -799,15 +930,21 @@ function setupWarehouseOptimization() {
   $all('[data-opt-source-pallet]').forEach(input => {
     input.addEventListener('change', event => {
       const key = event.target.getAttribute('data-opt-source-pallet');
-      if (event.target.checked) opt.selectedPalletKeys.add(key);
-      else opt.selectedPalletKeys.delete(key);
+
+      if (event.target.checked) {
+        opt.selectedPalletKeys.add(key);
+      } else {
+        opt.selectedPalletKeys.delete(key);
+      }
+
       opt.plan = [];
+      opt.excludedMoves = new Set();
       render();
     });
   });
 
   $('#optimizationSelectAllPallets')?.addEventListener('click', () => {
-    opt.selectedPalletKeys = new Set(opt.sourceData.map(group => group.key));
+    opt.selectedPalletKeys = new Set(opt.sourceData.map(g => g.key));
     render();
   });
 
@@ -823,8 +960,13 @@ function setupWarehouseOptimization() {
   $all('[data-opt-move]').forEach(input => {
     input.addEventListener('change', event => {
       const id = event.target.getAttribute('data-opt-move');
-      if (event.target.checked) opt.excludedMoves.delete(id);
-      else opt.excludedMoves.add(id);
+
+      if (event.target.checked) {
+        opt.excludedMoves.delete(id);
+      } else {
+        opt.excludedMoves.add(id);
+      }
+
       render();
     });
   });
