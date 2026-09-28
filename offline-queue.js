@@ -302,8 +302,16 @@
     const supaUrl = getSupabaseUrl();
     if (!url.startsWith(supaUrl)) return false;
     if (method !== 'POST' && method !== 'PUT' && method !== 'PATCH' && method !== 'DELETE') return false;
+
+    /* Аутентификацию, Storage и Edge Functions не ставим в очередь:
+       - auth — критично для логина, вне офлайна смысла нет
+       - storage — файлы большие, сложно воспроизвести
+       - functions — обычно это разовые вызовы (email, отчёты),
+         повторная отправка может дать дубли или странные эффекты */
     if (url.indexOf('/auth/v1/') !== -1) return false;
     if (url.indexOf('/storage/v1/') !== -1) return false;
+    if (url.indexOf('/functions/v1/') !== -1) return false;
+
     return true;
   }
 
