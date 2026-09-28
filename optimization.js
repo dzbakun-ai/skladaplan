@@ -3,7 +3,7 @@
    Правило проекта: 1 штрихкод = 1 физическая коробка.
    Артикулы для оптимизации НЕ учитываются.
 
-   Версия от 2026-09-28:
+   Версия от 2026-09-28 (v3):
    1. Списки складов/зон — из state.boxes (не из warehouses/
       locations): исключает расхождение «Склад СОХ» vs «СОХ»
       и разницу в регистрах зон.
@@ -16,6 +16,8 @@
       копирует штрихкоды построчно, каждый повтор
       отдельной строкой (для сканера / Excel).
    6. «Паллет после» — корректное «было → станет».
+   7. После применения оптимизации все активные
+      пользователи Telegram-бота получают уведомление.
    ========================================================= */
 
 'use strict';
@@ -23,6 +25,19 @@
 const OPTIMIZATION_PAGE = 'optimization';
 const OPTIMIZATION_DEFAULT_CAPACITY = 40;
 const OPTIMIZATION_PAGE_SIZE = 1000;
+
+/* ---------------------------------------------------------
+   Хелпер: доступ к Supabase-клиенту.
+   В app.js он объявлен через const, поэтому через
+   window.supabaseClient недоступен — читаем по имени.
+   --------------------------------------------------------- */
+function getSupabase() {
+  try {
+    if (typeof supabaseClient !== 'undefined' && supabaseClient) return supabaseClient;
+  } catch (e) {}
+  if (window.supabaseClient) return window.supabaseClient;
+  return null;
+}
 
 if (!state.optimization) {
   state.optimization = {
@@ -820,6 +835,72 @@ function optimizationExportCsv() {
   URL.revokeObjectURL(url);
 }
 
+/* =========================================================
+   Уведомление в Telegram после применения оптимизации
+   ========================================================= */
+async function notifyOptimizationApplied(result, opt) {
+  try {
+    const client = getSupabase();
+    if (!client) return;
+
+    const { data: settings } = await client
+      .from('telegram_settings')
+      .select('bot_token, enabled')
+      .eq('id', 1)
+      .maybeSingle();
+
+    if (!settings || !settings.enabled || !settings.bot_token) return;
+
+    const { data: users } = await client
+      .from('telegram_users')
+      .select('chat_id')
+      .eq('active', true);
+
+    if (!users || !users.length) return;
+
+    const operatorEmail =
+      (typeof state !== 'undefined' && state?.user?.email) ||
+      (window.state?.user?.email) ||
+      '—';
+
+    const text =
+      '⚙️ <b>Оптимизация склада применена</b>\n\n' +
+      `Целевая зона: <b>${escapeHtml(opt.targetZone)}</b>\n` +
+      `📦 Перемещено коробок: <b>${result.box_count || 0}</b>\n` +
+      `🔀 Операций: <b>${result.move_count || 0}</b>\n` +
+      `🆓 Освободилось паллет: <b>${result.freed_pallet_count || 0}</b>\n\n` +
+      `👤 ${escapeHtml(operatorEmail)}\n` +
+      `Время: ${new Date().toLocaleString('ru-RU')}`;
+
+    const reply_markup = {
+      inline_keyboard: [[
+        { text: '📊 Подробнее', callback_data: `opt_show:${result.optimization_id}` },
+        { text: '📋 Все оптимизации', callback_data: 'cmd_opt' }
+      ]]
+    };
+
+    for (const u of users) {
+      try {
+        await fetch(`https://api.telegram.org/bot${settings.bot_token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: u.chat_id,
+            text: text,
+            parse_mode: 'HTML',
+            disable_web_page_preview: true,
+            reply_markup: reply_markup
+          })
+        });
+      } catch (e) {
+        console.warn('[Optimization] notify to', u.chat_id, 'error:', e);
+      }
+    }
+  } catch (e) {
+    console.warn('[Optimization] notify error:', e);
+  }
+}
+
 /* ---------------------------------------------------------
    ПРИМЕНЕНИЕ
    --------------------------------------------------------- */
@@ -887,6 +968,15 @@ async function optimizationApply() {
     opt.calculatedAt = null;
 
     toast(`Оптимизация закрыта. Перемещено коробок: ${data?.box_count ?? summary.movedBoxes}`);
+
+    /* Уведомление в Telegram всем пользователям бота.
+       Не блокирует основной поток: если что-то пойдёт не так —
+       просто лог в консоль. */
+    try {
+      await notifyOptimizationApplied(data || {}, opt);
+    } catch (e) {
+      console.warn('[Optimization] notify failed:', e);
+    }
   } catch (error) {
     console.error('optimizationApply:', error);
     opt.error = error?.message || 'Не удалось закрыть оптимизацию';
