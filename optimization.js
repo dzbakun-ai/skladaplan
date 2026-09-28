@@ -940,61 +940,123 @@ async function sendPlanToTelegram() {
 
   const zonesList = [...opt.targetZones].join(', ');
 
-  const lines = [];
-  lines.push('⚙️ <b>Оптимизация — план расчёта</b>\n');
-  lines.push(`Склад: <b>${escapeHtml(opt.warehouse)}</b>`);
-  lines.push(`Целевые зоны: <b>${escapeHtml(zonesList)}</b>`);
-  lines.push(`Вместимость паллета: <b>${opt.capacity}</b> кор.`);
-  lines.push(`Исходных зон: <b>${opt.sourceZones.size}</b>`);
-  lines.push('');
-  lines.push(`📦 К перемещению коробок: <b>${summary.movedBoxes}</b>`);
-  lines.push(`🔀 Операций: <b>${summary.moves}</b>`);
-  lines.push(`🆓 Освободится паллет: <b>${summary.freedPallets}</b>`);
-  if (summary.unresolvedBoxes > 0) lines.push(`⚠️ Не размещено: <b>${summary.unresolvedBoxes}</b>`);
-  lines.push('');
-  lines.push('<b>Перемещения:</b>');
-  lines.push('');
+  /* =====================================================
+     Сборка сообщения с разбивкой по лимиту Telegram
+     (4096 символов — берём 3500 для запаса)
+     ===================================================== */
 
-  const preview = moves.slice(0, 15);
-  preview.forEach((m, i) => {
-    lines.push(`${i + 1}. <code>${escapeHtml(m.sourceZone)}</code> · поддон ${escapeHtml(m.sourcePallet || '—')}`);
-    lines.push(`   → <code>${escapeHtml(m.targetZone)}</code> · поддон ${escapeHtml(m.targetPallet)}`);
-    lines.push(`   📦 ${m.boxCount} кор.`);
-    if (i < preview.length - 1) lines.push('');
-  });
+  const MAX_LEN = 3500;
+  const messages = [];
+  let cur = [];
+  let curLen = 0;
 
-  if (moves.length > preview.length) {
-    lines.push('');
-    lines.push(`<i>…и ещё ${moves.length - preview.length} перемещений</i>`);
+  const push = (line) => {
+    const l = String(line).length + 1;
+    if (curLen + l > MAX_LEN && cur.length > 0) {
+      messages.push(cur.join('\n'));
+      cur = [];
+      curLen = 0;
+    }
+    cur.push(line);
+    curLen += l;
+  };
+
+  /* --- Шапка --- */
+
+  push('⚙️ <b>Оптимизация — план расчёта</b>');
+  push('');
+  push(`Склад: <b>${escapeHtml(opt.warehouse)}</b>`);
+  push(`Целевые зоны: <b>${escapeHtml(zonesList)}</b>`);
+  push(`Вместимость паллета: <b>${opt.capacity}</b> кор.`);
+  push(`Исходных зон: <b>${opt.sourceZones.size}</b>`);
+  push('');
+  push(`📦 К перемещению: <b>${summary.movedBoxes}</b> коробок`);
+  push(`🔀 Операций: <b>${summary.moves}</b>`);
+  push(`🆓 Освободится паллет: <b>${summary.freedPallets}</b>`);
+
+  if (summary.unresolvedBoxes > 0) {
+    push(`⚠️ Не размещено: <b>${summary.unresolvedBoxes}</b>`);
   }
 
-  lines.push('');
-  lines.push('⚠️ <b>Это только план. В базе пока ничего не изменено.</b>');
-  lines.push(`👤 ${escapeHtml(operatorEmail)}`);
-  lines.push(`Время: ${new Date().toLocaleString('ru-RU')}`);
+  push('');
+  push('━━━━━━━━━━━━━━━━━━━━');
+  push('');
 
-  const text = lines.join('\n');
+  /* --- Перемещения с штрихкодами --- */
 
-  let sent = 0;
-  for (const u of users) {
-    try {
-      const res = await fetch(`https://api.telegram.org/bot${settings.bot_token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: u.chat_id, text, parse_mode: 'HTML',
-          disable_web_page_preview: true
-        })
+  moves.forEach((move, index) => {
+    push(`<b>№${index + 1}.</b> Из <code>${escapeHtml(move.sourceZone)}</code> · поддон ${escapeHtml(move.sourcePallet || '—')}`);
+    push(`     → в <code>${escapeHtml(move.targetZone)}</code> · поддон ${escapeHtml(move.targetPallet)}`);
+    push(`     📦 <b>${move.boxCount} кор.</b>`);
+
+    const grouped = optimizationGroupBarcodes(move.barcodes || []);
+
+    if (grouped.length) {
+      grouped.forEach(g => {
+        const qty = g.count > 1 ? `  ×${g.count}` : '';
+        push(`     <code>${g.barcode}</code>${qty}`);
       });
-      const data = await res.json().catch(() => ({}));
-      if (data && data.ok) sent++;
-    } catch (e) {
-      console.warn('[Optimization] send plan error to', u.chat_id, e);
+    } else {
+      push('     <i>(нет штрихкодов)</i>');
+    }
+
+    push('');
+  });
+
+  push('━━━━━━━━━━━━━━━━━━━━');
+  push('');
+  push('⚠️ <b>Это только план. В базе пока ничего не изменено.</b>');
+  push('');
+  push(`👤 ${escapeHtml(operatorEmail)}`);
+  push(`Время: ${new Date().toLocaleString('ru-RU')}`);
+
+  if (cur.length) messages.push(cur.join('\n'));
+
+  /* =====================================================
+     Отправка — каждому пользователю, каждой частью
+     ===================================================== */
+
+  const totalParts = messages.length;
+  let sentCount = 0;
+
+  for (const u of users) {
+    for (let i = 0; i < messages.length; i++) {
+      const prefix = totalParts > 1
+        ? `📄 <i>Часть ${i + 1} из ${totalParts}</i>\n\n`
+        : '';
+
+      try {
+        const res = await fetch(
+          `https://api.telegram.org/bot${settings.bot_token}/sendMessage`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: u.chat_id,
+              text: prefix + messages[i],
+              parse_mode: 'HTML',
+              disable_web_page_preview: true
+            })
+          }
+        );
+        const data = await res.json().catch(() => ({}));
+        if (data && data.ok) sentCount++;
+      } catch (e) {
+        console.warn('[Optimization] send error to', u.chat_id, e);
+      }
+
+      /* Пауза между частями — чтобы Telegram не отбивал как спам */
+      if (messages.length > 1) {
+        await new Promise(r => setTimeout(r, 350));
+      }
     }
   }
 
-  if (sent > 0) toast(`План отправлен в Telegram: ${sent}`);
-  else toast('Не удалось отправить план в Telegram', 'error');
+  if (sentCount > 0) {
+    toast(`Отправлено в Telegram: ${sentCount} сообщени${sentCount === 1 ? 'е' : 'й'}`);
+  } else {
+    toast('Не удалось отправить план в Telegram', 'error');
+  }
 }
 
 /* =========================================================
