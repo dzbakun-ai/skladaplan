@@ -3,17 +3,19 @@
    Правило проекта: 1 штрихкод = 1 физическая коробка.
    Артикулы для оптимизации НЕ учитываются.
 
-   Версия после фикса от 2026-09-28:
+   Версия от 2026-09-28:
    1. Списки складов/зон — из state.boxes (не из warehouses/
       locations): исключает расхождение «Склад СОХ» vs «СОХ»
       и разницу в регистрах зон.
    2. Целевые поддоны — из boxes."Поддон" целевой зоны.
    3. Коробки без поддона не отбрасываются.
    4. Артикулы не влияют ни на что.
-   5. Штрихкоды в раскрывающейся строке группируются:
-      одинаковые коды показываются как «код × количество».
-   6. «Паллет после» показывает «было → станет» корректно,
-      без двойного прибавления.
+   5. Раскрывающаяся строка отчёта — таблица
+      № / Штрихкод / Кол-во, одинаковые штрихкоды
+      сгруппированы. Есть кнопка «Скопировать список» —
+      копирует штрихкоды построчно, каждый повтор
+      отдельной строкой (для сканера / Excel).
+   6. «Паллет после» — корректное «было → станет».
    ========================================================= */
 
 'use strict';
@@ -241,16 +243,6 @@ function optimizationBuildTargetPallets(boxes, targetZone, capacity) {
 
 /* ---------------------------------------------------------
    Подбор перемещений.
-
-   Логика:
-   - перебираем исходные поддоны (те, где < capacity),
-     начиная с самых заполненных;
-   - для каждого берём целевой поддон с наибольшим
-     заполнением, у которого ещё есть свободное место;
-   - перекидываем столько коробок, сколько влезет
-     (или сколько осталось в исходном поддоне);
-   - если в исходном поддоне коробки ещё остались —
-     ищем следующий целевой.
    --------------------------------------------------------- */
 
 function optimizationChooseMoves(sourceGroups, targetPallets, capacity) {
@@ -505,8 +497,7 @@ function optimizationRenderSourcePallets() {
 
 /* ---------------------------------------------------------
    Рендер отчёта.
-   В раскрывающейся строке одинаковые штрихкоды собраны
-   в один чип: «код × количество».
+   Раскрывающаяся строка — таблица № / Штрихкод / Кол-во.
    --------------------------------------------------------- */
 
 function optimizationRenderReport() {
@@ -535,46 +526,139 @@ function optimizationRenderReport() {
         min-width: 22px;
       }
       .opt-expand-btn:hover { background: #f0f0f0; color: #111; }
+
       .opt-details-row td {
         padding: 0 !important;
-        background: #fafafa;
-        border-bottom: 1px solid #eee;
+        background: #f7f9fb;
+        border-bottom: 1px solid #e5e9ed;
       }
-      .opt-barcodes-wrap { padding: 10px 14px; }
-      .opt-barcodes-header {
-        font-size: 11px;
-        color: #666;
-        margin-bottom: 8px;
-        font-weight: 600;
+
+      .opt-details-wrap {
+        padding: 12px 16px 14px;
       }
-      .opt-barcodes-list {
+
+      .opt-details-head {
         display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
         flex-wrap: wrap;
-        gap: 5px;
-        max-height: 220px;
-        overflow-y: auto;
       }
-      .opt-barcode-chip {
+
+      .opt-details-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #333;
+      }
+
+      .opt-details-title .opt-details-num {
+        font-weight: 500;
+        color: #666;
+        margin-left: 6px;
+      }
+
+      .opt-details-copy {
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        padding: 5px 10px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 600;
+        color: #333;
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: 4px 9px;
-        border-radius: 5px;
-        background: #fff;
-        border: 1px solid #ddd;
-        font-family: ui-monospace, Menlo, Consolas, monospace;
-        font-size: 11px;
-        color: #222;
-        white-space: nowrap;
+        gap: 5px;
       }
-      .opt-barcode-chip small {
-        color: var(--primary, #2563EB);
-        font-weight: 700;
+      .opt-details-copy:hover {
+        background: #f0f0f0;
+        border-color: #999;
+      }
+      .opt-details-copy:active {
+        transform: scale(0.98);
+      }
+
+      .opt-barcodes-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #fff;
+        border: 1px solid #e0e4e8;
+        border-radius: 6px;
+        overflow: hidden;
+        font-size: 12px;
+      }
+      .opt-barcodes-table thead th {
+        background: #eef1f4;
+        color: #555;
+        font-weight: 600;
         font-size: 10px;
-        padding: 1px 5px;
-        background: #eef2ff;
-        border-radius: 3px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 6px 10px;
+        text-align: left;
+        border-bottom: 1px solid #e0e4e8;
+      }
+      .opt-barcodes-table tbody td {
+        padding: 6px 10px;
+        border-bottom: 1px solid #f0f2f4;
+        vertical-align: middle;
+      }
+      .opt-barcodes-table tbody tr:last-child td {
+        border-bottom: 0;
+      }
+      .opt-barcodes-table tbody tr:hover {
+        background: #fafbfc;
+      }
+      .opt-barcodes-table .opt-num {
+        color: #999;
+        font-variant-numeric: tabular-nums;
+        width: 40px;
+      }
+      .opt-barcodes-table .opt-barcode {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13px;
+        font-weight: 600;
+        color: #111;
+        letter-spacing: 0.01em;
+      }
+      .opt-barcodes-table .opt-qty {
+        width: 70px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .opt-barcodes-table .opt-qty-badge {
+        display: inline-block;
+        min-width: 26px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #eef1f4;
+        color: #444;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .opt-barcodes-table .opt-qty-badge.is-multi {
+        background: var(--primary, #2563EB);
+        color: #fff;
+      }
+      .opt-barcodes-scroll {
+        max-height: 260px;
+        overflow-y: auto;
+        border-radius: 6px;
+      }
+
+      @media (max-width: 640px) {
+        .opt-barcodes-table thead th:first-child,
+        .opt-barcodes-table tbody td:first-child {
+          display: none;
+        }
+        .opt-barcodes-table .opt-qty {
+          width: 54px;
+        }
+        .opt-barcode {
+          font-size: 12px !important;
+          word-break: break-all;
+        }
       }
     </style>
 
@@ -600,14 +684,17 @@ function optimizationRenderReport() {
             const barcodes = Array.isArray(move.barcodes) ? move.barcodes : [];
             const grouped = optimizationGroupBarcodes(barcodes);
 
-            const barcodeChips = grouped.length
-              ? grouped.map(g => `
-                  <span class="opt-barcode-chip">
-                    ${optimizationEscape(g.barcode)}
-                    ${g.count > 1 ? `<small>× ${g.count}</small>` : ''}
+            const rowsHtml = grouped.map((g, i) => `
+              <tr>
+                <td class="opt-num">${i + 1}</td>
+                <td class="opt-barcode">${optimizationEscape(g.barcode)}</td>
+                <td class="opt-qty">
+                  <span class="opt-qty-badge ${g.count > 1 ? 'is-multi' : ''}">
+                    ${g.count > 1 ? '× ' + g.count : g.count}
                   </span>
-                `).join('')
-              : '<span class="sp-muted">Нет данных</span>';
+                </td>
+              </tr>
+            `).join('');
 
             return `
               <tr style="${excluded ? 'opacity:.45;' : ''}">
@@ -633,14 +720,36 @@ function optimizationRenderReport() {
               ${isExpanded ? `
                 <tr class="opt-details-row">
                   <td colspan="9">
-                    <div class="opt-barcodes-wrap">
-                      <div class="opt-barcodes-header">
-                        Штрихкоды на перемещение:
-                        ${grouped.length} уникальных,
-                        всего ${barcodes.length} коробок
+                    <div class="opt-details-wrap">
+                      <div class="opt-details-head">
+                        <div class="opt-details-title">
+                          Штрихкоды на перемещение
+                          <span class="opt-details-num">
+                            · ${grouped.length} уник. · всего ${barcodes.length} кор.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          class="opt-details-copy"
+                          data-opt-copy-move="${optimizationEscape(move.id)}"
+                          title="Скопировать все штрихкоды в буфер обмена"
+                        >
+                          📋 Скопировать список
+                        </button>
                       </div>
-                      <div class="opt-barcodes-list">
-                        ${barcodeChips}
+                      <div class="opt-barcodes-scroll">
+                        <table class="opt-barcodes-table">
+                          <thead>
+                            <tr>
+                              <th>№</th>
+                              <th>Штрихкод</th>
+                              <th style="text-align:right;">Кол-во</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${rowsHtml || '<tr><td colspan="3" class="sp-muted" style="text-align:center;padding:14px;">Нет данных</td></tr>'}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   </td>
@@ -1100,6 +1209,63 @@ function setupWarehouseOptimization() {
       }
 
       render();
+    });
+  });
+
+  /* -------------------------------------------------------
+     Кнопка «Скопировать список» в раскрытой строке.
+     Копирует все штрихкоды построчно: каждый повтор —
+     отдельной строкой. Формат — для сканера или Excel.
+     ------------------------------------------------------- */
+
+  $all('[data-opt-copy-move]').forEach(btn => {
+    btn.addEventListener('click', async event => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const moveId = btn.getAttribute('data-opt-copy-move');
+      const move = opt.plan.find(m => m.id === moveId);
+
+      if (!move) return;
+
+      const grouped = optimizationGroupBarcodes(move.barcodes || []);
+
+      const lines = [];
+      grouped.forEach(g => {
+        for (let i = 0; i < g.count; i++) {
+          lines.push(g.barcode);
+        }
+      });
+
+      const text = lines.join('\n');
+
+      let success = false;
+
+      if (typeof copyTextToClipboard === 'function') {
+        success = await copyTextToClipboard(text);
+      } else {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.cssText = 'position:fixed;left:-10000px;';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          success = true;
+        } catch (e) {
+          success = false;
+        }
+      }
+
+      if (success) {
+        const oldText = btn.innerHTML;
+        btn.innerHTML = '✓ Скопировано';
+        setTimeout(() => { btn.innerHTML = oldText; }, 1400);
+        toast(`Скопировано штрихкодов: ${lines.length}`);
+      } else {
+        toast('Не удалось скопировать', 'error');
+      }
     });
   });
 }
