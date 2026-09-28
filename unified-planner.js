@@ -320,8 +320,11 @@
   /* ============== САЙДБАР ============== */
 
   function patchSidebar() {
-    /* Переименование «Задачи» → «Планирование» */
-    const tasksNav = document.querySelector('.nav[data-page="tasks"]');
+    const sidebarNav = document.querySelector('.sidebar-nav');
+    if (!sidebarNav) return;
+
+    /* === 1. Переименование «Задачи» → «Планирование» === */
+    const tasksNav = sidebarNav.querySelector('.nav[data-page="tasks"]');
     if (tasksNav) {
       const label = tasksNav.querySelector('.nav-label');
       if (label && label.textContent.trim() !== 'Планирование') {
@@ -329,21 +332,28 @@
       }
     }
 
-    /* Скрытие «Планировщик» */
-    const plannerNav = document.querySelector('.nav[data-page="planner"]');
-    if (plannerNav) {
-      plannerNav.style.display = 'none';
+    /* === 2. Удаляем «Планировщик» из DOM ===
+       display:none недостаточно — есть !important в CSS. */
+    const plannerNav = sidebarNav.querySelector('.nav[data-page="planner"]');
+    if (plannerNav && plannerNav.parentNode) {
+      plannerNav.parentNode.removeChild(plannerNav);
+      console.log('[UnifiedPlanner] «Планировщик» удалён из сайдбара');
     }
-  }
 
-  function startSidebarObserver() {
-    const sidebar = document.querySelector('.sidebar');
-    if (!sidebar) { setTimeout(startSidebarObserver, 300); return; }
+    /* === 3. Перемещаем «Планирование» сразу после «Главная» === */
+    if (!tasksNav) return;
 
-    const obs = new MutationObserver(() => patchSidebar());
-    obs.observe(sidebar, { childList: true, subtree: true });
-    patchSidebar();
-    console.log('[UnifiedPlanner] Наблюдение за сайдбаром запущено');
+    const dashboardNav = sidebarNav.querySelector('.nav[data-page="dashboard"]');
+    if (!dashboardNav) return;
+
+    /* Если «Планирование» уже сразу после «Главной» — ничего не делаем */
+    if (dashboardNav.nextElementSibling === tasksNav) return;
+
+    /* Иначе — перемещаем */
+    if (dashboardNav.parentNode) {
+      dashboardNav.parentNode.insertBefore(tasksNav, dashboardNav.nextElementSibling);
+      console.log('[UnifiedPlanner] «Планирование» перемещено на 2-е место');
+    }
   }
 
   /* ============== ИНИЦИАЛИЗАЦИЯ ============== */
