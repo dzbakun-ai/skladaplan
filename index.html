@@ -52,6 +52,11 @@
     href="optimization.css?v=20260928e"
   >
 
+  <link
+    rel="stylesheet"
+    href="dashboard-compact.css?v=20260929cd"
+  >
+
 </head>
 
 
@@ -891,42 +896,39 @@
 
 </nav>
 
-// SUPABASE
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-// XLSX
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
-// HELP
-<script src="help.js?v=20260928a"></script>
-
-// SKLADAPLAN
-<script src="app.js?v=20260928a"></script>
-
-// ОПТИМИЗАЦИЯ СКЛАДА
-<script src="optimization.js?v=20260928e"></script>
-
-// TASKS
-<script src="tasks.js?v=20260928a"></script>
-
-// PLANNER
-<script src="planner.js?v=20260928a"></script>
-
-// КАМЕРА-СКАНЕР
-<script src="camera-scanner.js?v=20260928cam"></script>
 
 <!-- =====================================================
-     COMMAND PALETTE — Ctrl+K
+     СКРИПТЫ
      ===================================================== -->
 
-<script
-  src="command-palette.js?v=20260928cp"
-></script>
-  
-  <!-- =====================================================
-     PWA — регистрация service worker
-     ===================================================== -->
+<!-- SUPABASE -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
+<!-- XLSX -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<!-- HELP -->
+<script src="help.js?v=20260928a"></script>
+
+<!-- SKLADAPLAN -->
+<script src="app.js?v=20260928a"></script>
+
+<!-- ОПТИМИЗАЦИЯ СКЛАДА -->
+<script src="optimization.js?v=20260928e"></script>
+
+<!-- TASKS -->
+<script src="tasks.js?v=20260928a"></script>
+
+<!-- PLANNER -->
+<script src="planner.js?v=20260928a"></script>
+
+<!-- КАМЕРА-СКАНЕР -->
+<script src="camera-scanner.js?v=20260928cam"></script>
+
+<!-- COMMAND PALETTE — Ctrl+K -->
+<script src="command-palette.js?v=20260928cp"></script>
+
+<!-- PWA — регистрация service worker -->
 <script>
 (function () {
   if (!('serviceWorker' in navigator)) return;
@@ -973,78 +975,78 @@
 })();
 </script>
 
-// AUDIT LOG — журнал действий
+<!-- AUDIT LOG — журнал действий -->
 <script src="audit-log.js?v=20260928al"></script>
-  
-// АНАЛИТИКА — дашборды с графиками
+
+<!-- АНАЛИТИКА — дашборды с графиками -->
 <script src="analytics.js?v=20260928an"></script>
 
-// КАРТОЧКА «История и аналитика»
+<!-- КАРТОЧКА «История и аналитика» -->
 <script src="data-tools-card.js?v=20260928dt"></script>
 
-// УПРАВЛЕНИЕ РОЛЯМИ
+<!-- УПРАВЛЕНИЕ РОЛЯМИ -->
 <script src="roles.js?v=20260928r"></script>
 
-// UI-РОЛИ — интерфейс подстраивается под роль
+<!-- UI-РОЛИ — интерфейс подстраивается под роль -->
 <script src="ui-roles.js?v=20260928ui"></script>
 
-// TELEGRAM-УВЕДОМЛЕНИЯ
+<!-- TELEGRAM-УВЕДОМЛЕНИЯ -->
 <script src="telegram.js?v=20260928tg5"></script>
 
-// ОФЛАЙН-ОЧЕРЕДЬ
+<!-- ОФЛАЙН-ОЧЕРЕДЬ -->
 <script src="offline-queue.js?v=20260928oq2"></script>
 
-// EMAIL (SMTP)
+<!-- EMAIL (SMTP) -->
 <script src="email.js?v=20260928em"></script>
-  
-// DASHBOARD — KPI на главной
+
+<!-- DASHBOARD — KPI на главной -->
 <script src="dashboard.js?v=20260928dash"></script>
 
-// КОМПАКТНАЯ ГЛАВНАЯ
-<link rel="stylesheet" href="dashboard-compact.css?v=20260929cd">
+<!-- КОМПАКТНАЯ ГЛАВНАЯ -->
 <script src="dashboard-compact.js?v=20260929cd"></script>
 
-// ИСТОРИЯ КОРОБКИ
+<!-- ПОЛИРОВКА «СОСТОЯНИЕ СКЛАДА» -->
+<script src="dashboard-state-polish.js?v=20260929sp1"></script>
+
+<!-- ИСТОРИЯ КОРОБКИ -->
 <script src="box-history.js?v=20260928bh"></script>
 
-// СПРАВОЧНИКИ
+<!-- СПРАВОЧНИКИ -->
 <script src="references.js?v=20260928ref"></script>
 
-// ТЕМА ОФОРМЛЕНИЯ
+<!-- ТЕМА ОФОРМЛЕНИЯ -->
 <script src="theme.js?v=20260928th"></script>
-  
-// ПЕЧАТЬ ЭТИКЕТОК
+
+<!-- ПЕЧАТЬ ЭТИКЕТОК -->
 <script src="labels.js?v=20260928lbl"></script>
 
-// ОТГРУЗКА С ПОДТВЕРЖДЕНИЕМ
+<!-- ОТГРУЗКА С ПОДТВЕРЖДЕНИЕМ -->
 <script src="ship-confirm.js?v=20260928sc"></script>
-  
-// ИСТОРИЯ ОТГРУЗОК
+
+<!-- ИСТОРИЯ ОТГРУЗОК -->
 <script src="shipments-log-ui.js?v=20260928sl"></script>
-  
-// ПОВТОРЯЮЩИЕСЯ ЗАДАЧИ (РИТУАЛЫ)
+
+<!-- ПОВТОРЯЮЩИЕСЯ ЗАДАЧИ (РИТУАЛЫ) -->
 <script src="recurring.js?v=20260929rec"></script>
 
-// ТАБЫ НА СТРАНИЦЕ «ЗАДАЧИ» + СТИКЕР-ЗАМЕТКА
+<!-- ТАБЫ НА СТРАНИЦЕ «ЗАДАЧИ» + СТИКЕР-ЗАМЕТКА -->
 <script src="tasks-tabs.js?v=20260929tt"></script>
-  
+
+<!-- СТИКЕР-ЗАМЕТКИ С ДОКОМ (v3) -->
 <script src="sticky-notes.js?v=20260929sd2"></script>
 
-// ДОК ДЛЯ СТИКЕРОВ
-<script src="sticky-notes-dock.js?v=20260929sd"></script>
-
-// ТАБЫ В ПЛАНИРОВЩИКЕ
+<!-- ТАБЫ В ПЛАНИРОВЩИКЕ -->
 <script src="planner-tabs.js?v=20260929pt"></script>
 
-// ОБЪЕДИНЕНИЕ «ЗАДАЧИ» + «ПЛАНИРОВЩИК»
+<!-- ОБЪЕДИНЕНИЕ «ЗАДАЧИ» + «ПЛАНИРОВЩИК» -->
 <script src="unified-planner.js?v=20260929up2"></script>
 
-// УЧЁТ СМЕН
+<!-- УЧЁТ СМЕН -->
 <script src="shifts.js?v=20260929sh2"></script>
 
-// НАПОМИНАНИЯ
+<!-- НАПОМИНАНИЯ -->
 <script src="reminders.js?v=20260929rem"></script>
-  
+
 </body>
 
 </html>
