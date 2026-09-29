@@ -64,10 +64,6 @@
 
 <!-- =====================================================
      ИКОНКИ — единый спрайт для навигации
-     Минималистичные line-иконки, viewBox 24×24,
-     цвет наследуется через currentColor —
-     работают в активном/неактивном/hover состояниях
-     без дополнительного JS.
      ===================================================== -->
 
 <svg
@@ -181,10 +177,6 @@
       <circle cx="18" cy="12" r="1.3" fill="currentColor" stroke="none"/>
     </symbol>
 
-    <!-- ===================================================
-         ИКОНКИ — ЗАДАЧИ (виджет Главной и Планировщик)
-         =================================================== -->
-
     <symbol id="icon-x" viewBox="0 0 24 24">
       <path d="M6 6l12 12"/>
       <path d="M18 6L6 18"/>
@@ -238,15 +230,11 @@
 
 <div class="app">
 
-
   <!-- =====================================================
        SIDEBAR
        ===================================================== -->
 
   <aside class="sidebar">
-
-
-    <!-- CLOSE (mobile «Ещё») -->
 
     <button
       class="sidebar-close"
@@ -270,469 +258,142 @@
       ✕
     </button>
 
-
-    <!-- BRAND -->
-
     <div class="brand">
-
-      <div class="logo">
-        S
-      </div>
-
+      <div class="logo">S</div>
       <div class="brand-text">
-
-        <b>
-          SKLADAPLAN
-        </b>
-
-        <span>
-          WAREHOUSE MANAGEMENT
-        </span>
-
+        <b>SKLADAPLAN</b>
+        <span>WAREHOUSE MANAGEMENT</span>
       </div>
-
     </div>
-
-
-    <!-- ===================================================
-         SIDEBAR NAVIGATION
-         =================================================== -->
 
     <nav class="sidebar-nav">
 
-
-      <!-- =================================================
-           ОСНОВНАЯ РАБОТА
-           ================================================= -->
-
       <div class="nav-section">
+        <div class="nav-section-title">ОСНОВНАЯ РАБОТА</div>
 
-        <div class="nav-section-title">
-          ОСНОВНАЯ РАБОТА
-        </div>
-
-
-        <!-- ГЛАВНАЯ -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="dashboard"
-        >
-
+        <button class="nav" type="button" data-page="dashboard">
           <span class="nav-icon"><svg class="icon"><use href="#icon-home"></use></svg></span>
-
-          <span class="nav-label">
-            Главная
-          </span>
-
+          <span class="nav-label">Главная</span>
         </button>
 
-
-        <!-- БАЗА -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="base"
-        >
-
+        <button class="nav" type="button" data-page="base">
           <span class="nav-icon"><svg class="icon"><use href="#icon-grid"></use></svg></span>
-
-          <span class="nav-label">
-            База
-          </span>
-
+          <span class="nav-label">База</span>
         </button>
 
-
-        <!-- ПРИЁМКА -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="received"
-        >
-
+        <button class="nav" type="button" data-page="received">
           <span class="nav-icon"><svg class="icon"><use href="#icon-inbox-down"></use></svg></span>
-
-          <span class="nav-label">
-            Приёмка
-          </span>
-
+          <span class="nav-label">Приёмка</span>
         </button>
 
-
-        <!-- СБОРКА -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="assembly"
-        >
-
+        <button class="nav" type="button" data-page="assembly">
           <span class="nav-icon"><svg class="icon"><use href="#icon-package"></use></svg></span>
-
-          <span class="nav-label">
-            Сборка
-          </span>
-
-          <em
-            id="assemblyBadge"
-            aria-hidden="true"
-          ></em>
-
+          <span class="nav-label">Сборка</span>
+          <em id="assemblyBadge" aria-hidden="true"></em>
         </button>
 
-
-        <!-- СОБРАНО -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="collected"
-        >
-
+        <button class="nav" type="button" data-page="collected">
           <span class="nav-icon"><svg class="icon"><use href="#icon-check-circle"></use></svg></span>
-
-          <span class="nav-label">
-            Собрано
-          </span>
-
+          <span class="nav-label">Собрано</span>
         </button>
 
-
-        <!-- УБЫЛО -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="shipped"
-        >
-
+        <button class="nav" type="button" data-page="shipped">
           <span class="nav-icon"><svg class="icon"><use href="#icon-send"></use></svg></span>
-
-          <span class="nav-label">
-            Убыло
-          </span>
-
+          <span class="nav-label">Убыло</span>
         </button>
 
-
-        <!-- ПЕРЕМЕЩЕНИЕ -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="move"
-        >
-
+        <button class="nav" type="button" data-page="move">
           <span class="nav-icon"><svg class="icon"><use href="#icon-swap"></use></svg></span>
-
-          <span class="nav-label">
-            Перемещение
-          </span>
-
+          <span class="nav-label">Перемещение</span>
         </button>
 
-
-        <!-- ОПТИМИЗАЦИЯ СКЛАДА -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="optimization"
-        >
-
+        <button class="nav" type="button" data-page="optimization">
           <span class="nav-icon"><svg class="icon"><use href="#icon-sigma"></use></svg></span>
-
-          <span class="nav-label">
-            Оптимизация склада
-          </span>
-
+          <span class="nav-label">Оптимизация склада</span>
         </button>
 
-
-        <!--
-          ЗАДАЧИ — список дел (tasks.js, public.tasks)
-        -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="tasks"
-        >
-
+        <button class="nav" type="button" data-page="tasks">
           <span class="nav-icon"><svg class="icon"><use href="#icon-list"></use></svg></span>
-
-          <span class="nav-label">
-            Задачи
-          </span>
-
+          <span class="nav-label">Задачи</span>
         </button>
 
-
-        <!--
-          ПЛАНИРОВЩИК — календарь отгрузок и задач
-          (planner.js, planner_shipments / planner_tasks).
-          Календарь показывает и задачи из раздела
-          «Задачи» — это и есть связь между разделами.
-        -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="planner"
-        >
-
+        <button class="nav" type="button" data-page="planner">
           <span class="nav-icon"><svg class="icon"><use href="#icon-calendar"></use></svg></span>
-
-          <span class="nav-label">
-            Планировщик
-          </span>
-
+          <span class="nav-label">Планировщик</span>
         </button>
-
       </div>
 
-
-      <!-- =================================================
-           ИНСТРУМЕНТЫ
-           ================================================= -->
-
       <div class="nav-section">
+        <div class="nav-section-title">ИНСТРУМЕНТЫ</div>
 
-        <div class="nav-section-title">
-          ИНСТРУМЕНТЫ
-        </div>
-
-
-        <!-- СРАВНЕНИЕ -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="tools"
-          data-tool="compare"
-        >
-
+        <button class="nav" type="button" data-page="tools" data-tool="compare">
           <span class="nav-icon"><svg class="icon"><use href="#icon-columns"></use></svg></span>
-
-          <span class="nav-label">
-            Сравнение
-          </span>
-
+          <span class="nav-label">Сравнение</span>
         </button>
 
-
-        <!-- ДЕЛЕНИЕ -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="comparison"
-          data-tool="split"
-        >
-
+        <button class="nav" type="button" data-page="comparison" data-tool="split">
           <span class="nav-icon"><svg class="icon"><use href="#icon-divide"></use></svg></span>
-
-          <span class="nav-label">
-            Деление
-          </span>
-
+          <span class="nav-label">Деление</span>
         </button>
 
-
-        <!-- СУММА -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="tools"
-          data-tool="sum"
-        >
-
+        <button class="nav" type="button" data-page="tools" data-tool="sum">
           <span class="nav-icon"><svg class="icon"><use href="#icon-sigma"></use></svg></span>
-
-          <span class="nav-label">
-            Сумма
-          </span>
-
+          <span class="nav-label">Сумма</span>
         </button>
 
-
-        <!-- ЗАЯВКА → КОРОБКИ -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="comparison"
-          data-tool="convert"
-        >
-
+        <button class="nav" type="button" data-page="comparison" data-tool="convert">
           <span class="nav-icon"><svg class="icon"><use href="#icon-box-arrow"></use></svg></span>
-
-          <span class="nav-label">
-            Заявка → Коробки
-          </span>
-
+          <span class="nav-label">Заявка → Коробки</span>
         </button>
 
-
-        <!-- ИНВЕНТАРИЗАЦИЯ -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="tools"
-          data-tool="inventory"
-        >
-
+        <button class="nav" type="button" data-page="tools" data-tool="inventory">
           <span class="nav-icon"><svg class="icon"><use href="#icon-clipboard-check"></use></svg></span>
-
-          <span class="nav-label">
-            Инвентаризация
-          </span>
-
+          <span class="nav-label">Инвентаризация</span>
         </button>
 
-
-        <!-- EXCEL -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="tools"
-          data-tool="excel"
-        >
-
+        <button class="nav" type="button" data-page="tools" data-tool="excel">
           <span class="nav-icon"><svg class="icon"><use href="#icon-table"></use></svg></span>
-
-          <span class="nav-label">
-            Excel
-          </span>
-
+          <span class="nav-label">Excel</span>
         </button>
 
-
-        <!-- ДАННЫЕ -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="tools"
-          data-tool="data"
-        >
-
+        <button class="nav" type="button" data-page="tools" data-tool="data">
           <span class="nav-icon"><svg class="icon"><use href="#icon-database"></use></svg></span>
-
-          <span class="nav-label">
-            Данные
-          </span>
-
+          <span class="nav-label">Данные</span>
         </button>
-
       </div>
 
-
-      <!-- =================================================
-           СПРАВОЧНАЯ ИНФОРМАЦИЯ
-           ================================================= -->
-
       <div class="nav-section">
+        <div class="nav-section-title">СПРАВОЧНАЯ ИНФОРМАЦИЯ</div>
 
-        <div class="nav-section-title">
-          СПРАВОЧНАЯ ИНФОРМАЦИЯ
-        </div>
-
-
-        <!-- КАРТА -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="map"
-          data-tool="map"
-        >
-
+        <button class="nav" type="button" data-page="map" data-tool="map">
           <span class="nav-icon"><svg class="icon"><use href="#icon-map"></use></svg></span>
-
-          <span class="nav-label">
-            Карта
-          </span>
-
+          <span class="nav-label">Карта</span>
         </button>
 
-
-        <!-- СПРАВКА -->
-
-        <button
-          class="nav"
-          type="button"
-          data-page="tools"
-          data-tool="help"
-        >
-
+        <button class="nav" type="button" data-page="tools" data-tool="help">
           <span class="nav-icon"><svg class="icon"><use href="#icon-help"></use></svg></span>
-
-          <span class="nav-label">
-            Справка
-          </span>
-
+          <span class="nav-label">Справка</span>
         </button>
-
       </div>
 
     </nav>
 
-
-    <!-- ===================================================
-         SIDEBAR FOOTER
-         =================================================== -->
-
     <div class="sidebar-foot">
-
-
       <div class="offline">
-
         <i></i>
-
-        <span>
-          Онлайн-режим
-        </span>
-
+        <span>Онлайн-режим</span>
       </div>
-
-
       <small>
-
         SKLADAPLAN<br>
-
         Автор проекта —
         Дмитрий Бакун
-
       </small>
-
     </div>
-
   </aside>
-
-
-  <!-- =====================================================
-       MAIN
-       ===================================================== -->
 
   <main>
 
-
-    <!-- ===================================================
-         TOPBAR
-         =================================================== -->
-
     <header class="topbar">
-
-
-      <!-- MOBILE MENU -->
 
       <button
         class="mobile-menu"
@@ -744,30 +405,13 @@
         ☰
       </button>
 
-
-      <!-- PAGE TITLE -->
-
       <div class="topbar-title">
-
         <div class="crumb">
-
           SKLADAPLAN /
-
-          <span id="pageTitle">
-            Главная
-          </span>
-
+          <span id="pageTitle">Главная</span>
         </div>
-
-
-        <h1 id="heading">
-          Главный экран склада
-        </h1>
-
+        <h1 id="heading">Главный экран склада</h1>
       </div>
-
-
-      <!-- TOP ACTIONS -->
 
       <div
         class="top-actions"
@@ -776,25 +420,14 @@
 
     </header>
 
-
-    <!-- ===================================================
-         PAGE CONTENT
-         =================================================== -->
-
     <section
       id="content"
       aria-live="polite"
     ></section>
 
-
   </main>
 
 </div>
-
-
-<!-- =====================================================
-     MOBILE NAVIGATION
-     ===================================================== -->
 
 <nav
   class="mobile-nav"
@@ -802,81 +435,26 @@
   aria-label="Основная навигация"
 >
 
-
-  <!-- ГЛАВНАЯ -->
-
-  <button
-    class="mobile-nav-btn"
-    type="button"
-    data-page="dashboard"
-  >
-
+  <button class="mobile-nav-btn" type="button" data-page="dashboard">
     <span aria-hidden="true"><svg class="icon"><use href="#icon-home"></use></svg></span>
-
-    <small>
-      Главная
-    </small>
-
+    <small>Главная</small>
   </button>
 
-
-  <!-- БАЗА -->
-
-  <button
-    class="mobile-nav-btn"
-    type="button"
-    data-page="base"
-  >
-
+  <button class="mobile-nav-btn" type="button" data-page="base">
     <span aria-hidden="true"><svg class="icon"><use href="#icon-grid"></use></svg></span>
-
-    <small>
-      База
-    </small>
-
+    <small>База</small>
   </button>
 
-
-  <!-- ПРИЁМКА -->
-
-  <button
-    class="mobile-nav-btn"
-    type="button"
-    data-page="received"
-  >
-
+  <button class="mobile-nav-btn" type="button" data-page="received">
     <span aria-hidden="true"><svg class="icon"><use href="#icon-inbox-down"></use></svg></span>
-
-    <small>
-      Приёмка
-    </small>
-
+    <small>Приёмка</small>
   </button>
 
-
-  <!-- СБОРКА -->
-
-  <button
-    class="mobile-nav-btn"
-    type="button"
-    data-page="assembly"
-  >
-
+  <button class="mobile-nav-btn" type="button" data-page="assembly">
     <span aria-hidden="true"><svg class="icon"><use href="#icon-package"></use></svg></span>
-
-    <small>
-      Сборка
-    </small>
-
-    <em
-      id="mobileAssemblyBadge"
-      aria-hidden="true"
-    ></em>
-
+    <small>Сборка</small>
+    <em id="mobileAssemblyBadge" aria-hidden="true"></em>
   </button>
-
-
-  <!-- ЕЩЁ -->
 
   <button
     class="mobile-nav-btn mobile-more-btn"
@@ -885,13 +463,8 @@
     aria-label="Открыть меню"
     aria-expanded="false"
   >
-
     <span aria-hidden="true"><svg class="icon"><use href="#icon-more"></use></svg></span>
-
-    <small>
-      Ещё
-    </small>
-
+    <small>Ещё</small>
   </button>
 
 </nav>
@@ -912,6 +485,131 @@
 
 <!-- SKLADAPLAN -->
 <script src="app.js?v=20260928a"></script>
+
+<!-- =====================================================
+     ЗАПОМИНАНИЕ ПОСЛЕДНЕЙ СТРАНИЦЫ
+     При обновлении (F5, перезагрузка на телефоне, PWA)
+     возвращаем пользователя на ту же вкладку, а не на Главную.
+     Встроено прямо в HTML — отдельный файл не нужен.
+     ===================================================== -->
+<script>
+(function () {
+  'use strict';
+  if (window.spRememberPage) return;
+
+  const PAGE_KEY = 'sp-last-page';
+  const TOOL_KEY = 'sp-last-tool';
+  const VALID_PAGES = [
+    'dashboard', 'base', 'received', 'assembly', 'collected', 'shipped',
+    'move', 'optimization', 'tasks', 'tools',
+    'comparison', 'excel', 'data', 'map'
+  ];
+
+  function getState() {
+    try { if (typeof state !== 'undefined' && state) return state; } catch (e) {}
+    if (window.state) return window.state;
+    return null;
+  }
+
+  function saveFromState() {
+    const st = getState();
+    if (!st) return;
+    try {
+      if (st.currentPage) localStorage.setItem(PAGE_KEY, String(st.currentPage));
+      localStorage.setItem(TOOL_KEY, String(st.activeTool || ''));
+    } catch (e) {}
+  }
+
+  /* 1. Восстановление — до первого render() из app.js */
+  (function restoreNow() {
+    const st = getState();
+    if (!st) return;
+    let savedPage = '', savedTool = '';
+    try {
+      savedPage = localStorage.getItem(PAGE_KEY) || '';
+      savedTool = localStorage.getItem(TOOL_KEY) || '';
+    } catch (e) { return; }
+    if (savedPage && VALID_PAGES.indexOf(savedPage) !== -1) {
+      st.currentPage = savedPage;
+      st.activeTool = savedTool || '';
+      console.log('[RememberPage] Восстановлено:', savedPage,
+        savedTool ? '(инструмент: ' + savedTool + ')' : '');
+    }
+  })();
+
+  /* 2. Перехват render() */
+  function installRenderHook() {
+    if (typeof window.render !== 'function') return false;
+    if (window.render.__rememberWrapped) return true;
+    const orig = window.render;
+    const wrapped = function () {
+      const result = orig.apply(this, arguments);
+      saveFromState();
+      return result;
+    };
+    wrapped.__rememberWrapped = true;
+    window.render = wrapped;
+    return true;
+  }
+
+  /* 3. Перехват goToPage() — подстраховка */
+  function installGoToPageHook() {
+    if (typeof window.goToPage !== 'function') return false;
+    if (window.goToPage.__rememberWrapped) return true;
+    const orig = window.goToPage;
+    const wrapped = function () {
+      const result = orig.apply(this, arguments);
+      saveFromState();
+      return result;
+    };
+    wrapped.__rememberWrapped = true;
+    window.goToPage = wrapped;
+    return true;
+  }
+
+  let attempts = 0;
+  const timer = setInterval(() => {
+    attempts++;
+    const okR = installRenderHook();
+    const okG = installGoToPageHook();
+    if (okR && okG) {
+      clearInterval(timer);
+      console.log('[RememberPage] Хуки установлены');
+    }
+    if (attempts >= 40) clearInterval(timer);
+  }, 100);
+
+  installRenderHook();
+  installGoToPageHook();
+
+  /* 4. Сохранение при уходе/сворачивании */
+  window.addEventListener('beforeunload', saveFromState);
+  window.addEventListener('pagehide', saveFromState);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') saveFromState();
+  });
+
+  window.spRememberPage = {
+    clear: () => {
+      try {
+        localStorage.removeItem(PAGE_KEY);
+        localStorage.removeItem(TOOL_KEY);
+      } catch (e) {}
+    },
+    getSaved: () => {
+      try {
+        return {
+          page: localStorage.getItem(PAGE_KEY),
+          tool: localStorage.getItem(TOOL_KEY)
+        };
+      } catch (e) { return null; }
+    },
+    version: '1.0.0'
+  };
+
+  console.log('[RememberPage] Модуль инициализирован');
+})();
+</script>
 
 <!-- ОПТИМИЗАЦИЯ СКЛАДА -->
 <script src="optimization.js?v=20260928e"></script>
@@ -939,33 +637,24 @@
       .then(registration => {
         console.log('[PWA] Service worker зарегистрирован:', registration.scope);
 
-        /* Если у пользователя есть старая версия SW —
-           проверяем, не появилась ли новая. */
         registration.update();
 
-        /* Слушаем обновление SW: если появилась новая версия —
-           говорим ей активироваться сразу. */
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           if (!newWorker) return;
 
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              /* Новая версия готова. Просто применяем. */
               newWorker.postMessage('SKIP_WAITING');
             }
           });
         });
       })
       .catch(error => {
-        /* Не критично — приложение продолжит работать
-           как обычный сайт. */
         console.warn('[PWA] Service worker не зарегистрирован:', error);
       });
   });
 
-  /* Когда service worker обновился и контролирует страницу —
-     один раз перезагружаем, чтобы подхватить свежие JS/CSS. */
   let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (refreshing) return;
