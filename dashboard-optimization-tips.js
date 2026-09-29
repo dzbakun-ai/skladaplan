@@ -1,15 +1,8 @@
 /* =========================================================
-   SKLADAPLAN — ОПТИМИЗАЦИЯ СКЛАДА (карточка на главной)
-   =========================================================
-
-   Вставляет блок «Оптимизация склада» в правую колонку
-   дашборда, над «Информацией». Показывает:
-     • сколько паллет можно освободить, объединив неполные
-     • топ-3 самых неполных паллет
-     • среднюю загрузку паллеты
-
-   Работает через MutationObserver + ретрай.
-   Не трогает app.js и другие модули.
+   SKLADAPLAN — ОПТИМИЗАЦИЯ СКЛАДА (карточка на главной, v2)
+   Идемпотентный: при каждом тике следит, чтобы «Информация»
+   была ровно одна и лежала в правой колонке .sp-dash-right-col
+   вместе с блоком оптимизации. Дубликаты удаляет.
    ========================================================= */
 
 (function () {
@@ -25,7 +18,6 @@
   let scheduled = false;
   let observer = null;
 
-  /* ---------- Доступ к state ---------- */
   function getAppState() {
     try { if (typeof state !== 'undefined' && state) return state; } catch (e) {}
     if (window.state) return window.state;
@@ -39,9 +31,7 @@
       .replace(/'/g, '&#039;');
   }
 
-  /* ---------- Расчёт рекомендаций ---------- */
   function computeTips(boxes) {
-    /* 1. Группируем коробки по физическим паллетам */
     const map = new Map();
     for (const b of boxes) {
       if (b.status === 'Отгружено' || b.status === 'Пустая') continue;
@@ -50,44 +40,28 @@
       const zone = (b.zone_row || '').trim();
       const wh = (b.warehouse || '').trim();
       const key = wh + '||' + zone + '||' + pallet;
-      if (!map.has(key)) {
-        map.set(key, { wh, zone, pallet, count: 0 });
-      }
+      if (!map.has(key)) map.set(key, { wh, zone, pallet, count: 0 });
       map.get(key).count++;
     }
-
     const pallets = [...map.values()];
-
-    /* 2. Средняя загрузка */
     const totalBoxes = pallets.reduce((s, p) => s + p.count, 0);
     const avgLoad = pallets.length ? Math.round(totalBoxes / pallets.length) : 0;
-
-    /* 3. Неполные паллеты — потенциальные кандидаты на объединение */
-    const incomplete = pallets
-      .filter(p => p.count < INCOMPLETE_THRESHOLD)
+    const incomplete = pallets.filter(p => p.count < INCOMPLETE_THRESHOLD)
       .sort((a, b) => a.count - b.count);
 
-    /* 4. Оценка потенциала: сколько паллет можно освободить.
-       Группируем неполные по (склад, зона). В каждой группе
-       считаем, сколько «схлопнутых» паллет получится, если
-       перепаковать все коробки в минимум паллет. */
     const byZone = new Map();
     for (const p of incomplete) {
       const k = p.wh + '||' + p.zone;
       if (!byZone.has(k)) byZone.set(k, []);
       byZone.get(k).push(p);
     }
-
     let freedTotal = 0;
     for (const arr of byZone.values()) {
       const totalInZone = arr.reduce((s, p) => s + p.count, 0);
       const before = arr.length;
-      /* Сколько паллет понадобится, если укладывать поровну
-         (максимум INCOMPLETE_THRESHOLD коробок на паллету) */
       const after = Math.max(1, Math.ceil(totalInZone / INCOMPLETE_THRESHOLD));
       freedTotal += Math.max(0, before - after);
     }
-
     return {
       totalPallets: pallets.length,
       avgLoad,
@@ -97,16 +71,13 @@
     };
   }
 
-  /* ---------- Вёрстка ---------- */
   function buildBlock(boxes) {
     const tips = computeTips(boxes);
     const wrap = document.createElement('div');
     wrap.id = BLOCK_ID;
 
     const topIncomplete = tips.incomplete.slice(0, MAX_SHOWN);
-
     const hasPotential = tips.freed > 0;
-
     let contentHtml = '';
 
     if (hasPotential) {
@@ -177,28 +148,25 @@
     });
   }
 
-  /* ---------- Поиск «Информации» в колонках ---------- */
-  function findInfoCard(columns) {
-    const cards = columns.querySelectorAll(':scope > .sp-card');
-    for (const c of cards) {
-      if (c.id === BLOCK_ID) continue;
-      if (c.id === 'spDashboardInsights') continue;
-      if (c.hasAttribute('data-sp-dash-insights-hidden')) continue;
-      const first = c.firstElementChild;
-      if (first && /Информация/i.test((first.textContent || '').trim())) {
-        return c;
-      }
-    }
-    return null;
+  /* ---------- Поиск «Информации» ---------- */
+
+  function isInfoCard(card) {
+    if (!card || card.id === BLOCK_ID) return false;
+    if (card.id === 'spDashboardInsights') return false;
+    const first = card.firstElementChild;
+    if (!first) return false;
+    return /Информация/i.test((first.textContent || '').trim());
   }
 
-  /* ---------- Сборка ---------- */
+  function findAllInfoCards(scope) {
+    return [...scope.querySelectorAll(':scope > .sp-card')].filter(isInfoCard);
+  }
+
   function build() {
     const isDash = !!document.getElementById('spDashboardHeader');
 
     if (!isDash) {
       document.getElementById(BLOCK_ID)?.remove();
-      document.querySelector('.' + RIGHT_COL_CLASS)?.classList.remove(RIGHT_COL_CLASS);
       return;
     }
 
@@ -209,25 +177,39 @@
     if (!columns) return;
 
     const swodka = document.getElementById('spDashboardInsights');
-    const info = findInfoCard(columns);
+    if (!swodka) return;
 
-    if (!swodka || !info) return;
-
-    /* --- Найти/создать правую колонку-обёртку --- */
+    /* 1. Найти/создать правую колонку */
     let rightCol = columns.querySelector(':scope > .' + RIGHT_COL_CLASS);
     if (!rightCol) {
       rightCol = document.createElement('div');
       rightCol.className = RIGHT_COL_CLASS;
-      /* Ставим сразу после «Оперативной сводки» (вторая колонка) */
-      columns.insertBefore(rightCol, swodka.nextSibling);
     }
 
-    /* --- Переместить «Информацию» в правую колонку, если ещё не там --- */
-    if (info.parentElement !== rightCol) {
-      rightCol.appendChild(info);
+    /* 2. Найти все «Информации» где угодно в #content */
+    const allInfo = [...document.querySelectorAll('#content .sp-card')].filter(isInfoCard);
+
+    /* Если «Информации» нет вообще — выходим (перерисовка ещё не завершилась) */
+    if (!allInfo.length) return;
+
+    /* Оставляем первую, остальные удаляем */
+    const keepInfo = allInfo[0];
+    for (let i = 1; i < allInfo.length; i++) allInfo[i].remove();
+
+    /* Убеждаемся, что колонка стоит в columns, и переставим её после сводки */
+    if (rightCol.parentElement !== columns) {
+      columns.appendChild(rightCol);
+    }
+    if (swodka.nextElementSibling !== rightCol) {
+      columns.insertBefore(rightCol, swodka.nextElementSibling);
     }
 
-    /* --- Собрать/обновить блок оптимизации --- */
+    /* Переносим «Информацию» внутрь rightCol */
+    if (keepInfo.parentElement !== rightCol) {
+      rightCol.appendChild(keepInfo);
+    }
+
+    /* 3. Собираем/обновляем блок оптимизации */
     const fresh = buildBlock(st.boxes);
     bindHandlers(fresh);
 
@@ -235,16 +217,22 @@
     if (existing) existing.remove();
 
     /* Оптимизация — над «Информацией» */
-    rightCol.insertBefore(fresh, info);
+    rightCol.insertBefore(fresh, keepInfo);
+
+    /* 4. Убираем «Информацию» со старого места в columns, если осталась */
+    [...columns.querySelectorAll(':scope > .sp-card')].forEach(card => {
+      if (card !== swodka && card !== fresh && card !== rightCol && card !== keepInfo) {
+        /* Оставляем только те, что не являются дублем Info */
+        if (isInfoCard(card)) card.remove();
+      }
+    });
   }
 
-  /* ---------- Стили ---------- */
   function injectStyles() {
     if (document.getElementById(STYLES_ID)) return;
     const style = document.createElement('style');
     style.id = STYLES_ID;
     style.textContent = `
-      /* Правая колонка — flex-стек */
       .sp-dash-right-col {
         display: flex;
         flex-direction: column;
@@ -254,8 +242,6 @@
       .sp-dash-right-col > .sp-card {
         margin: 0 !important;
       }
-
-      /* ---------- Блок «Оптимизация склада» ---------- */
       #${BLOCK_ID} {
         background: var(--surface, #fff);
         border: 1px solid var(--line, #e2e8f0);
@@ -267,7 +253,6 @@
         flex-direction: column;
         gap: 12px;
       }
-
       #${BLOCK_ID} .sp-ot-head {
         display: flex;
         align-items: center;
@@ -279,8 +264,6 @@
         font-weight: 700;
         color: #0f172a;
       }
-
-      /* Большая цифра */
       #${BLOCK_ID} .sp-ot-big {
         display: flex;
         align-items: baseline;
@@ -301,7 +284,6 @@
         line-height: 1.25;
         font-weight: 600;
       }
-
       #${BLOCK_ID} .sp-ot-sub {
         font-size: 11px;
         color: #94a3b8;
@@ -309,8 +291,6 @@
         letter-spacing: .04em;
         font-weight: 700;
       }
-
-      /* Список неполных паллет */
       #${BLOCK_ID} .sp-ot-list {
         display: flex;
         flex-direction: column;
@@ -341,8 +321,6 @@
         font-variant-numeric: tabular-nums;
         flex-shrink: 0;
       }
-
-      /* Пустое состояние */
       #${BLOCK_ID} .sp-ot-empty {
         padding: 12px 6px;
         text-align: center;
@@ -353,8 +331,6 @@
         border: 1px solid #dcfce7;
         border-radius: 10px;
       }
-
-      /* Мини-статистика снизу */
       #${BLOCK_ID} .sp-ot-stats {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -381,8 +357,6 @@
         font-variant-numeric: tabular-nums;
         line-height: 1;
       }
-
-      /* Кнопка */
       #${BLOCK_ID} .sp-ot-action {
         display: flex;
         align-items: center;
@@ -400,17 +374,12 @@
         font-family: inherit;
         transition: background .15s ease;
       }
-      #${BLOCK_ID} .sp-ot-action:hover {
-        background: var(--primary-hover, #1D4ED8);
-      }
-      #${BLOCK_ID} .sp-ot-action:active {
-        transform: scale(.98);
-      }
+      #${BLOCK_ID} .sp-ot-action:hover { background: var(--primary-hover, #1D4ED8); }
+      #${BLOCK_ID} .sp-ot-action:active { transform: scale(.98); }
     `;
     document.head.appendChild(style);
   }
 
-  /* ---------- Observer + ретрай ---------- */
   function schedule() {
     if (scheduled) return;
     scheduled = true;
@@ -437,16 +406,10 @@
       startObserver();
     }
     let ticks = 0;
-    const t = setInterval(() => {
-      ticks++; schedule();
-      if (ticks >= 30) clearInterval(t);
-    }, 500);
+    const t = setInterval(() => { ticks++; schedule(); if (ticks >= 60) clearInterval(t); }, 400);
   }
 
   init();
 
-  window.spDashOptimizationTips = {
-    rebuild: schedule,
-    version: '1.0.0'
-  };
+  window.spDashOptimizationTips = { rebuild: schedule, version: '2.0.0' };
 })();
