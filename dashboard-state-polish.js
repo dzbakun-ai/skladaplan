@@ -1,339 +1,602 @@
 /* =========================================================
-   SKLADAPLAN — ПОЛИРОВКА «СОСТОЯНИЕ СКЛАДА»
-   Не трогает app.js / dashboard.js.
-   Работает поверх compact-dashboard.
+   SKLADAPLAN — ОПЕРАТИВНАЯ СВОДКА НА ГЛАВНОЙ
+   =========================================================
+
+   Заменяет бесполезный дубль «Состояние коробок» (он
+   повторял 4 KPI-карточки сверху) на реально полезный
+   виджет:
+
+   1. Метрики за сегодня: принято / собрано / отгружено
+   2. Мини-график движения за 7 дней
+   3. Топ-5 зон по загрузке (кликабельно → в Базу)
+   4. Проблемные коробки: без поддона / без зоны / залежавшиеся
+
+   Не трогает app.js / dashboard.js / dashboard-compact.js.
+   Работает через MutationObserver на #content.
    ========================================================= */
 
 (function () {
   'use strict';
-  if (window.spDashStatePolish) return;
+  if (window.spDashboardInsights) return;
 
-  const STYLES_ID = 'spDashStatePolishStyles';
-  const REPLACE_ID = 'spDashStateReplace';
-  const HIDE_ATTR = 'data-sp-state-hidden';
-  const LS_COLORS = 'sp-state-colors';
+  const STYLES_ID = 'spDashboardInsightsStyles';
+  const BLOCK_ID  = 'spDashboardInsights';
+  const HIDE_ATTR = 'data-sp-dash-insights-hidden';
 
   let scheduled = false;
   let observer = null;
 
-  /* Цвета статусов — единый набор, читаемый в обеих темах */
-  const STATUS_COLORS = {
-    'На складе':       '#475569',
-    'КЗабору':         '#f59e0b',
-    'КПодбору':        '#f59e0b',
-    'Зарезервирована': '#f59e0b',
-    'Скомплектовано':  '#10b981',
-    'Отгружено':       '#2563EB',
-    'Пустая':          '#cbd5e1'
-  };
+  /* ---------- ДОСТУП К STATE ---------- */
 
-  function colorFor(status) {
-    return STATUS_COLORS[status] || '#94a3b8';
+  function getAppState() {
+    try { if (typeof state !== 'undefined' && state) return state; } catch (e) {}
+    if (window.state) return window.state;
+    return null;
   }
 
-  /* ---------- Стили ---------- */
+  /* ---------- УТИЛИТЫ ---------- */
 
-  function injectStyles() {
-    if (document.getElementById(STYLES_ID)) return;
-    const style = document.createElement('style');
-    style.id = STYLES_ID;
-    style.textContent = `
-      /* ========= KPI-карточки «Состояние склада» — компактнее ========= */
-      body.sp-compact-dash .sp-dashboard-kpi-grid {
-        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-        gap: 10px !important;
-        margin-bottom: 12px !important;
-      }
-      body.sp-compact-dash .sp-dashboard-kpi-grid > .sp-card {
-        padding: 12px 14px !important;
-        border-radius: 12px !important;
-        position: relative;
-        overflow: hidden;
-      }
-      /* Цветная полоска слева */
-      body.sp-compact-dash .sp-dashboard-kpi-grid > .sp-card::before {
-        content: '';
-        position: absolute;
-        left: 0; top: 0; bottom: 0;
-        width: 3px;
-        background: var(--sp-kpi-accent, #475569);
-      }
-      body.sp-compact-dash .sp-dashboard-kpi-grid > .sp-card .sp-card-label {
-        font-size: 10px !important;
-        text-transform: uppercase;
-        letter-spacing: .04em;
-        margin-bottom: 4px !important;
-      }
-      body.sp-compact-dash .sp-dashboard-kpi-grid > .sp-card > div:nth-child(2) {
-        /* числовое значение — делаем чуть меньше и плотнее */
-        font-size: 22px !important;
-        line-height: 1 !important;
-        letter-spacing: -.01em;
-      }
-      /* Прячем дублирующиеся иконки-кружки внутри KPI */
-      body.sp-compact-dash .sp-dashboard-kpi-grid > .sp-card > div:first-child > div:last-child {
-        display: none !important;
-      }
-      /* Прогресс-бар в KPI — тоньше */
-      body.sp-compact-dash .sp-dashboard-kpi-grid > .sp-card > div:last-child {
-        margin-top: 8px !important;
-        height: 3px !important;
-      }
-
-      /* ========= «Состояние коробок» — заменяем на стековую полосу ========= */
-      #${REPLACE_ID} {
-        background: var(--surface, #fff);
-        border: 1px solid var(--line, #e2e8f0);
-        border-radius: 14px;
-        padding: 16px 18px;
-        margin-bottom: 12px;
-        box-shadow: var(--shadow-card);
-      }
-      #${REPLACE_ID} .sp-ss-head {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 14px;
-      }
-      #${REPLACE_ID} .sp-ss-title {
-        font-size: 15px;
-        font-weight: 700;
-        color: #0f172a;
-      }
-      #${REPLACE_ID} .sp-ss-sub {
-        font-size: 12px;
-        color: #64748b;
-        margin-top: 2px;
-      }
-      #${REPLACE_ID} .sp-ss-total {
-        font-size: 12px;
-        color: #64748b;
-        white-space: nowrap;
-      }
-      #${REPLACE_ID} .sp-ss-total b {
-        color: #0f172a;
-        font-size: 14px;
-      }
-
-      /* Горизонтальная стековая полоса */
-      #${REPLACE_ID} .sp-ss-bar {
-        display: flex;
-        width: 100%;
-        height: 14px;
-        border-radius: 999px;
-        overflow: hidden;
-        background: #f1f5f9;
-        margin-bottom: 14px;
-      }
-      #${REPLACE_ID} .sp-ss-seg {
-        height: 100%;
-        transition: opacity .15s ease;
-        position: relative;
-        min-width: 2px;
-      }
-      #${REPLACE_ID} .sp-ss-seg + .sp-ss-seg {
-        margin-left: 1px;
-      }
-      #${REPLACE_ID} .sp-ss-seg:hover { opacity: .82; }
-
-      /* Легенда — две колонки */
-      #${REPLACE_ID} .sp-ss-legend {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px 18px;
-      }
-      #${REPLACE_ID} .sp-ss-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 13px;
-        padding: 4px 0;
-      }
-      #${REPLACE_ID} .sp-ss-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 3px;
-        flex-shrink: 0;
-      }
-      #${REPLACE_ID} .sp-ss-name {
-        color: #475569;
-        flex: 1;
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      #${REPLACE_ID} .sp-ss-num {
-        font-weight: 700;
-        color: #0f172a;
-        font-variant-numeric: tabular-nums;
-      }
-      #${REPLACE_ID} .sp-ss-pct {
-        color: #94a3b8;
-        font-size: 11px;
-        min-width: 40px;
-        text-align: right;
-      }
-
-      /* Мобильная адаптация */
-      @media (max-width: 700px) {
-        body.sp-compact-dash .sp-dashboard-kpi-grid {
-          grid-template-columns: 1fr 1fr !important;
-        }
-        #${REPLACE_ID} .sp-ss-legend {
-          grid-template-columns: 1fr;
-        }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  /* ---------- Поиск и парсинг оригинального блока ---------- */
-
-  function getStatusCounts() {
-    /* Читаем счётчики из уже отрендеренных KPI-карточек —
-       так не нужно ничего пересчитывать */
-    const grid = document.querySelector('.sp-dashboard-kpi-grid');
-    if (!grid) return null;
-
-    /* В оригинальной вёрстке dashboardView() порядок такой:
-       На складе, К сборке, Скомплектовано, Убыло */
-    const cards = [...grid.querySelectorAll(':scope > .sp-card')];
-
-    const labels = ['На складе', 'К сборке', 'Скомплектовано', 'Отгружено'];
-
-    const out = [];
-    cards.forEach((card, i) => {
-      const labelEl = card.querySelector('.sp-card-label');
-      const valueEl = card.querySelector('div[style*="font-size:32px"], div[style*="font-size:24px"], div');
-      /* Берём "правильное" значение — первый div, который содержит только число */
-      let value = 0;
-      const divs = card.querySelectorAll(':scope > div');
-      for (const d of divs) {
-        const txt = (d.textContent || '').trim();
-        if (/^\d+$/.test(txt)) {
-          value = parseInt(txt, 10);
-          break;
-        }
-      }
-      const name = (labelEl?.textContent || labels[i] || '—').trim();
-      out.push({ name, value });
-    });
-
-    return out;
-  }
-
-  /* ---------- Отрисовка замены ---------- */
-
-  function buildReplacement(counts) {
-    const total = counts.reduce((s, x) => s + x.value, 0);
-    if (!total) return null;
-
-    const wrap = document.createElement('div');
-    wrap.id = REPLACE_ID;
-
-    /* Полоса */
-    const segs = counts
-      .filter(x => x.value > 0)
-      .map(x => {
-        const pct = (x.value / total) * 100;
-        return `<div class="sp-ss-seg"
-          style="width:${pct.toFixed(2)}%;background:${colorFor(x.name)};"
-          title="${x.name}: ${x.value} (${pct.toFixed(1)}%)"></div>`;
-      })
-      .join('');
-
-    /* Легенда — сортируем по убыванию количества */
-    const sortedCounts = [...counts].sort((a, b) => b.value - a.value);
-    const legend = sortedCounts
-      .filter(x => x.value > 0)
-      .map(x => {
-        const pct = total ? (x.value / total * 100).toFixed(1) : '0.0';
-        return `
-          <div class="sp-ss-item">
-            <span class="sp-ss-dot" style="background:${colorFor(x.name)}"></span>
-            <span class="sp-ss-name">${escapeHtml(x.name)}</span>
-            <span class="sp-ss-num">${x.value}</span>
-            <span class="sp-ss-pct">${pct}%</span>
-          </div>
-        `;
-      })
-      .join('');
-
-    wrap.innerHTML = `
-      <div class="sp-ss-head">
-        <div>
-          <div class="sp-ss-title">Состояние коробок</div>
-          <div class="sp-ss-sub">Распределение по текущему статусу</div>
-        </div>
-        <div class="sp-ss-total">Всего: <b>${total}</b></div>
-      </div>
-      <div class="sp-ss-bar">${segs}</div>
-      <div class="sp-ss-legend">${legend}</div>
-    `;
-    return wrap;
-  }
-
-  function escapeHtml(v) {
+  function esc(v) {
     return String(v ?? '')
       .replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   }
 
-  /* ---------- Главная логика ---------- */
+  function dayKey(d) {
+    const dt = d instanceof Date ? d : new Date(d);
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  }
 
-  function build() {
-    /* Работаем только на главной */
-    if (!document.getElementById('spDashboardHeader')) {
-      document.getElementById(REPLACE_ID)?.remove();
-      return;
+  function todayKey() { return dayKey(new Date()); }
+
+  function isoDayKey(iso) {
+    if (!iso) return '';
+    return String(iso).slice(0, 10);
+  }
+
+  function daysAgoKey(n) {
+    const d = new Date();
+    d.setDate(d.getDate() - n);
+    return dayKey(d);
+  }
+
+  /* ---------- РАСЧЁТЫ ---------- */
+
+  function computeTodayStats(boxes) {
+    const today = todayKey();
+    let received = 0, collected = 0, shipped = 0;
+    for (const b of boxes) {
+      if (isoDayKey(b.date) === today) received++;
+      if (isoDayKey(b.collected_at) === today) collected++;
+      if (isoDayKey(b.shipped_at) === today) shipped++;
     }
+    return { received, collected, shipped };
+  }
 
-    const counts = getStatusCounts();
-    if (!counts || !counts.length) return;
+  function computeWeekSeries(boxes) {
+    const map = {};
+    for (let i = 6; i >= 0; i--) {
+      const k = daysAgoKey(i);
+      const d = new Date(k + 'T00:00:00');
+      map[k] = {
+        key: k,
+        label: d.toLocaleDateString('ru-RU', { weekday: 'short' }).replace('.', ''),
+        received: 0, collected: 0, shipped: 0
+      };
+    }
+    for (const b of boxes) {
+      const rd = isoDayKey(b.date);
+      if (map[rd]) map[rd].received++;
+      const cd = isoDayKey(b.collected_at);
+      if (map[cd]) map[cd].collected++;
+      const sd = isoDayKey(b.shipped_at);
+      if (map[sd]) map[sd].shipped++;
+    }
+    return Object.values(map);
+  }
 
-    /* 1. Ставим цветные акценты на KPI-карточках */
-    const grid = document.querySelector('.sp-dashboard-kpi-grid');
-    if (grid) {
-      const cards = [...grid.querySelectorAll(':scope > .sp-card')];
-      cards.forEach((card, i) => {
-        const name = counts[i]?.name;
-        if (name) card.style.setProperty('--sp-kpi-accent', colorFor(name));
+  function computeTopZones(boxes, limit) {
+    const map = new Map();
+    for (const b of boxes) {
+      if (b.status === 'Отгружено' || b.status === 'Пустая') continue;
+      const zone = (b.zone_row || '').trim();
+      if (!zone) continue;
+      map.set(zone, (map.get(zone) || 0) + 1);
+    }
+    return [...map.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([zone, count]) => ({ zone, count }));
+  }
+
+  function computeProblems(boxes) {
+    let noPallet = 0, noZone = 0, stale = 0;
+    const staleKey = daysAgoKey(30);
+    for (const b of boxes) {
+      if (b.status === 'Отгружено' || b.status === 'Пустая') continue;
+      if (!b.pallet || !String(b.pallet).trim()) noPallet++;
+      if (!b.zone_row || !String(b.zone_row).trim()) noZone++;
+      if (b.status === 'На складе') {
+        const created = isoDayKey(b.created_at || b.date);
+        if (created && created < staleKey) stale++;
+      }
+    }
+    return { noPallet, noZone, stale };
+  }
+
+  /* ---------- ВЁРСТКА ---------- */
+
+  function buildWeekBars(series) {
+    const max = Math.max(1, ...series.flatMap(d => [
+      d.received, d.collected, d.shipped
+    ]));
+    return series.map(day => {
+      const hR = Math.round((day.received / max) * 100);
+      const hC = Math.round((day.collected / max) * 100);
+      const hS = Math.round((day.shipped / max) * 100);
+      const total = day.received + day.collected + day.shipped;
+      return `
+        <div class="sp-di-bar-day" title="${esc(day.label)}: приход ${day.received} · собрано ${day.collected} · отгружено ${day.shipped}">
+          <div class="sp-di-bar-cols">
+            <div class="sp-di-bar-col sp-di-c-received" style="height:${hR}%"></div>
+            <div class="sp-di-bar-col sp-di-c-collected" style="height:${hC}%"></div>
+            <div class="sp-di-bar-col sp-di-c-shipped" style="height:${hS}%"></div>
+          </div>
+          <div class="sp-di-bar-total">${total || ''}</div>
+          <div class="sp-di-bar-label">${esc(day.label)}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function buildTopZones(zones) {
+    if (!zones.length) {
+      return `<div class="sp-di-empty">Нет данных по зонам</div>`;
+    }
+    const max = zones[0].count;
+    return zones.map(z => {
+      const pct = Math.round((z.count / max) * 100);
+      return `
+        <button type="button" class="sp-di-zone-row" data-di-zone="${esc(z.zone)}" title="Открыть в Базе с фильтром">
+          <span class="sp-di-zone-name">${esc(z.zone)}</span>
+          <span class="sp-di-zone-bar">
+            <span class="sp-di-zone-fill" style="width:${pct}%"></span>
+          </span>
+          <span class="sp-di-zone-num">${z.count}</span>
+        </button>
+      `;
+    }).join('');
+  }
+
+  function buildProblems(problems) {
+    const items = [];
+    if (problems.noPallet > 0) {
+      items.push({
+        key: 'nopallet', icon: '📦',
+        label: 'Коробки без поддона',
+        hint: 'не привязаны ни к одной паллете',
+        count: problems.noPallet
       });
     }
+    if (problems.noZone > 0) {
+      items.push({
+        key: 'nozone', icon: '📍',
+        label: 'Коробки без зоны',
+        hint: 'нет места на складе',
+        count: problems.noZone
+      });
+    }
+    if (problems.stale > 0) {
+      items.push({
+        key: 'stale', icon: '⏳',
+        label: 'Без движения 30+ дней',
+        hint: 'лежат, стоит проверить',
+        count: problems.stale
+      });
+    }
+    if (!items.length) return '';
+    return `
+      <div class="sp-di-problems">
+        <div class="sp-di-section-head">
+          <span>⚠️ Требует внимания</span>
+        </div>
+        <div class="sp-di-problems-list">
+          ${items.map(it => `
+            <button type="button" class="sp-di-problem-row" data-di-problem="${esc(it.key)}">
+              <span class="sp-di-problem-icon">${it.icon}</span>
+              <span class="sp-di-problem-body">
+                <span class="sp-di-problem-label">${esc(it.label)}</span>
+                <span class="sp-di-problem-hint">${esc(it.hint)}</span>
+              </span>
+              <span class="sp-di-problem-count">${it.count}</span>
+              <span class="sp-di-problem-arrow">→</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
 
-    /* 2. Ищем оригинальный блок «Состояние коробок» и прячем его */
-    document.querySelectorAll('.sp-card h3, .sp-card > div > div').forEach(el => {
-      if (el.hasAttribute(HIDE_ATTR)) return;
-      const txt = (el.textContent || '').trim();
-      if (txt === 'Состояние коробок') {
-        /* Поднимаемся до ближайшего .sp-card */
-        let card = el.closest('.sp-card');
-        /* Иногда это внутренний div без прямого .sp-card — ищем глубже */
-        while (card && !card.querySelector('div[style*="background:#eee"]') && !card.querySelector('div[style*="background: #eee"]')) {
-          const parent = card.parentElement?.closest('.sp-card');
-          if (!parent) break;
-          card = parent;
-        }
-        if (card && !card.hasAttribute(HIDE_ATTR)) {
-          card.setAttribute(HIDE_ATTR, '1');
-          card.style.display = 'none';
+  function buildBlock(boxes) {
+    const today = computeTodayStats(boxes);
+    const week = computeWeekSeries(boxes);
+    const zones = computeTopZones(boxes, 5);
+    const problems = computeProblems(boxes);
 
-          /* 3. Вставляем замену сразу после скрытого блока */
-          const old = document.getElementById(REPLACE_ID);
-          if (old) old.remove();
-          const replacement = buildReplacement(counts);
-          if (replacement) {
-            card.parentNode.insertBefore(replacement, card.nextSibling);
-          }
+    const wrap = document.createElement('div');
+    wrap.id = BLOCK_ID;
+
+    wrap.innerHTML = `
+      <div class="sp-di-head">
+        <div>
+          <div class="sp-di-title">📊 Оперативная сводка</div>
+          <div class="sp-di-sub">Что происходит на складе прямо сейчас</div>
+        </div>
+      </div>
+
+      <div class="sp-di-today">
+        <div class="sp-di-today-cell">
+          <div class="sp-di-today-label">Принято сегодня</div>
+          <div class="sp-di-today-value sp-di-v-received">${today.received}</div>
+        </div>
+        <div class="sp-di-today-cell">
+          <div class="sp-di-today-label">Скомплектовано</div>
+          <div class="sp-di-today-value sp-di-v-collected">${today.collected}</div>
+        </div>
+        <div class="sp-di-today-cell">
+          <div class="sp-di-today-label">Отгружено</div>
+          <div class="sp-di-today-value sp-di-v-shipped">${today.shipped}</div>
+        </div>
+      </div>
+
+      <div class="sp-di-section">
+        <div class="sp-di-section-head">
+          <span>Движение за 7 дней</span>
+          <span class="sp-di-legend">
+            <span class="sp-di-legend-item"><i class="sp-di-dot sp-di-c-received"></i>Приход</span>
+            <span class="sp-di-legend-item"><i class="sp-di-dot sp-di-c-collected"></i>Сборка</span>
+            <span class="sp-di-legend-item"><i class="sp-di-dot sp-di-c-shipped"></i>Отгрузка</span>
+          </span>
+        </div>
+        <div class="sp-di-week">
+          ${buildWeekBars(week)}
+        </div>
+      </div>
+
+      <div class="sp-di-section">
+        <div class="sp-di-section-head">
+          <span>Топ-5 зон по загрузке</span>
+          <span class="sp-di-section-hint">нажмите, чтобы открыть в Базе</span>
+        </div>
+        <div class="sp-di-zones">
+          ${buildTopZones(zones)}
+        </div>
+      </div>
+
+      ${buildProblems(problems)}
+    `;
+
+    return wrap;
+  }
+
+  /* ---------- ОБРАБОТЧИКИ ---------- */
+
+  function bindHandlers(root) {
+    root.querySelectorAll('[data-di-zone]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const zone = btn.getAttribute('data-di-zone');
+        const st = getAppState();
+        if (st) {
+          st.baseSearch = '';
+          st.baseZone = zone;
+          st.basePallet = '';
+          st.baseWarehouse = '';
+          st.baseStatus = '';
+          st.baseDirection = '';
+          st.basePage = 1;
         }
-      }
+        if (typeof window.goToPage === 'function') window.goToPage('base');
+      });
+    });
+
+    root.querySelectorAll('[data-di-problem]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const kind = btn.getAttribute('data-di-problem');
+        const st = getAppState();
+        if (st) {
+          st.baseSearch = '';
+          st.baseZone = '';
+          st.basePallet = '';
+          st.baseWarehouse = '';
+          st.baseStatus = '';
+          st.baseDirection = '';
+          st.basePage = 1;
+        }
+        if (kind === 'stale' && st) st.baseStatus = 'На складе';
+        if (typeof window.goToPage === 'function') window.goToPage('base');
+        if (typeof window.toast === 'function') {
+          const hints = {
+            nopallet: 'В Базу. Поиск «Поддон» — пусто',
+            nozone:   'В Базу. Поиск «Зона/ряд» — пусто',
+            stale:    'В Базу. Показаны все «На складе»'
+          };
+          window.toast(hints[kind] || 'Открыто в Базе');
+        }
+      });
     });
   }
 
-  /* ---------- Observer ---------- */
+  /* ---------- ПОИСК И ЗАМЕНА СТАРОГО БЛОКА ---------- */
+
+  function findOldStateCard() {
+    /* Ищем .sp-card, в котором встречается текст «Состояние коробок»
+       — по структуре dashboardView() это либо заголовок div,
+       либо .sp-card-label. Универсально: по тексту в начале карточки. */
+    const cards = document.querySelectorAll('#content .sp-dashboard-columns .sp-card');
+    for (const c of cards) {
+      const text = (c.textContent || '').trim().slice(0, 200);
+      if (/^\s*Состояние коробок\b/.test(text)) return c;
+    }
+    /* Фолбэк — искать по всему #content */
+    const allCards = document.querySelectorAll('#content .sp-card');
+    for (const c of allCards) {
+      const text = (c.textContent || '').trim().slice(0, 200);
+      if (/^\s*Состояние коробок\b/.test(text)) return c;
+    }
+    return null;
+  }
+
+  /* ---------- СБОРКА ---------- */
+
+  function build() {
+    const isDash = !!document.getElementById('spDashboardHeader');
+    const existing = document.getElementById(BLOCK_ID);
+
+    /* Не на главной — убираем блок */
+    if (!isDash) {
+      existing?.remove();
+      return;
+    }
+
+    const st = getAppState();
+    if (!st || !Array.isArray(st.boxes)) return;
+
+    const oldCard = findOldStateCard();
+    if (!oldCard) return;
+
+    /* Скрываем старую карточку */
+    if (!oldCard.hasAttribute(HIDE_ATTR)) {
+      oldCard.setAttribute(HIDE_ATTR, '1');
+      oldCard.style.display = 'none';
+    }
+
+    /* Собираем и вставляем свой блок на место старого */
+    const fresh = buildBlock(st.boxes);
+    bindHandlers(fresh);
+
+    if (existing) {
+      existing.replaceWith(fresh);
+    } else {
+      oldCard.parentNode.insertBefore(fresh, oldCard);
+    }
+  }
+
+  /* ---------- СТИЛИ ---------- */
+
+  function injectStyles() {
+    if (document.getElementById(STYLES_ID)) return;
+    const style = document.createElement('style');
+    style.id = STYLES_ID;
+    style.textContent = `
+      #${BLOCK_ID} {
+        background: var(--surface, #fff);
+        border: 1px solid var(--line, #e2e8f0);
+        border-radius: 14px;
+        padding: 16px 18px;
+        margin: 0;
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      #${BLOCK_ID} .sp-di-head { margin-bottom: 14px; }
+      #${BLOCK_ID} .sp-di-title { font-size: 15px; font-weight: 700; color: #0f172a; }
+      #${BLOCK_ID} .sp-di-sub { font-size: 12px; color: #64748b; margin-top: 2px; }
+
+      /* ---------- Три больших числа за сегодня ---------- */
+      #${BLOCK_ID} .sp-di-today {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      #${BLOCK_ID} .sp-di-today-cell {
+        background: #f8fafc;
+        border: 1px solid #eef1f4;
+        border-radius: 10px;
+        padding: 10px 12px;
+        position: relative;
+        overflow: hidden;
+      }
+      #${BLOCK_ID} .sp-di-today-cell::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 3px;
+        background: var(--sp-today-accent, #94a3b8);
+      }
+      #${BLOCK_ID} .sp-di-today-cell:nth-child(1) { --sp-today-accent: #0ea5e9; }
+      #${BLOCK_ID} .sp-di-today-cell:nth-child(2) { --sp-today-accent: #10b981; }
+      #${BLOCK_ID} .sp-di-today-cell:nth-child(3) { --sp-today-accent: #2563EB; }
+      #${BLOCK_ID} .sp-di-today-label {
+        font-size: 10px; font-weight: 700;
+        letter-spacing: .04em; text-transform: uppercase;
+        color: #64748b; margin-bottom: 4px;
+      }
+      #${BLOCK_ID} .sp-di-today-value {
+        font-size: 24px; font-weight: 800; line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      #${BLOCK_ID} .sp-di-v-received  { color: #0ea5e9; }
+      #${BLOCK_ID} .sp-di-v-collected { color: #10b981; }
+      #${BLOCK_ID} .sp-di-v-shipped   { color: #2563EB; }
+
+      /* ---------- Секции ---------- */
+      #${BLOCK_ID} .sp-di-section {
+        margin-top: 16px; padding-top: 14px;
+        border-top: 1px solid #f1f5f9;
+      }
+      #${BLOCK_ID} .sp-di-section-head {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 10px; margin-bottom: 10px;
+        font-size: 12px; font-weight: 700; color: #475569;
+        text-transform: uppercase; letter-spacing: .04em;
+      }
+      #${BLOCK_ID} .sp-di-section-hint {
+        font-size: 10px; font-weight: 500; color: #94a3b8;
+        text-transform: none; letter-spacing: 0;
+      }
+
+      #${BLOCK_ID} .sp-di-legend {
+        display: inline-flex; gap: 10px;
+        font-size: 10px; font-weight: 500; color: #64748b;
+        text-transform: none; letter-spacing: 0;
+      }
+      #${BLOCK_ID} .sp-di-legend-item {
+        display: inline-flex; align-items: center; gap: 4px;
+      }
+      #${BLOCK_ID} .sp-di-dot {
+        width: 8px; height: 8px; border-radius: 2px; display: inline-block;
+      }
+      #${BLOCK_ID} .sp-di-c-received  { background: #0ea5e9; }
+      #${BLOCK_ID} .sp-di-c-collected { background: #10b981; }
+      #${BLOCK_ID} .sp-di-c-shipped   { background: #2563EB; }
+
+      /* ---------- График 7 дней ---------- */
+      #${BLOCK_ID} .sp-di-week {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 6px;
+        height: 100px;
+        align-items: end;
+      }
+      #${BLOCK_ID} .sp-di-bar-day {
+        display: flex; flex-direction: column;
+        height: 100%; align-items: center; gap: 3px;
+      }
+      #${BLOCK_ID} .sp-di-bar-cols {
+        display: flex; align-items: flex-end; justify-content: center;
+        gap: 2px; flex: 1; width: 100%;
+      }
+      #${BLOCK_ID} .sp-di-bar-col {
+        width: 7px; min-height: 2px;
+        border-radius: 2px 2px 0 0;
+        transition: opacity .15s ease;
+      }
+      #${BLOCK_ID} .sp-di-bar-day:hover .sp-di-bar-col { opacity: .78; }
+      #${BLOCK_ID} .sp-di-bar-total {
+        font-size: 10px; color: #0f172a; font-weight: 700;
+        min-height: 12px; line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      #${BLOCK_ID} .sp-di-bar-label {
+        font-size: 10px; color: #94a3b8; font-weight: 600;
+        text-transform: lowercase;
+      }
+
+      /* ---------- Топ зон ---------- */
+      #${BLOCK_ID} .sp-di-zones {
+        display: flex; flex-direction: column; gap: 3px;
+      }
+      #${BLOCK_ID} .sp-di-zone-row {
+        display: grid;
+        grid-template-columns: minmax(80px, 130px) 1fr auto;
+        align-items: center; gap: 10px;
+        padding: 5px 6px;
+        border: 0; background: transparent;
+        border-radius: 7px; cursor: pointer;
+        font-family: inherit; text-align: left;
+        transition: background .12s ease;
+      }
+      #${BLOCK_ID} .sp-di-zone-row:hover { background: #f8fafc; }
+      #${BLOCK_ID} .sp-di-zone-name {
+        font-size: 12px; font-weight: 700; color: #0f172a;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      #${BLOCK_ID} .sp-di-zone-bar {
+        display: block; height: 8px;
+        background: #f1f5f9; border-radius: 999px; overflow: hidden;
+      }
+      #${BLOCK_ID} .sp-di-zone-fill {
+        display: block; height: 100%;
+        background: linear-gradient(90deg, #2563EB, #3b82f6);
+        border-radius: 999px; transition: width .25s ease;
+      }
+      #${BLOCK_ID} .sp-di-zone-num {
+        font-size: 12px; font-weight: 800; color: #0f172a;
+        font-variant-numeric: tabular-nums;
+        min-width: 42px; text-align: right;
+      }
+
+      /* ---------- Требует внимания ---------- */
+      #${BLOCK_ID} .sp-di-problems {
+        margin-top: 16px; padding-top: 14px;
+        border-top: 1px solid #f1f5f9;
+      }
+      #${BLOCK_ID} .sp-di-problems-list {
+        display: flex; flex-direction: column; gap: 4px;
+      }
+      #${BLOCK_ID} .sp-di-problem-row {
+        display: grid;
+        grid-template-columns: 28px 1fr auto 20px;
+        align-items: center; gap: 10px;
+        padding: 8px 10px;
+        border: 1px solid #fef3c7; background: #fffbeb;
+        border-radius: 9px; cursor: pointer;
+        font-family: inherit; text-align: left;
+        transition: background .12s ease, border-color .12s ease;
+      }
+      #${BLOCK_ID} .sp-di-problem-row:hover {
+        background: #fef3c7; border-color: #fcd34d;
+      }
+      #${BLOCK_ID} .sp-di-problem-icon { font-size: 16px; text-align: center; }
+      #${BLOCK_ID} .sp-di-problem-body { display: flex; flex-direction: column; min-width: 0; }
+      #${BLOCK_ID} .sp-di-problem-label {
+        font-size: 12px; font-weight: 700; color: #78350f;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      #${BLOCK_ID} .sp-di-problem-hint {
+        font-size: 10px; color: #a16207; margin-top: 1px;
+      }
+      #${BLOCK_ID} .sp-di-problem-count {
+        font-size: 14px; font-weight: 800; color: #78350f;
+        font-variant-numeric: tabular-nums;
+      }
+      #${BLOCK_ID} .sp-di-problem-arrow {
+        color: #a16207; font-size: 14px; font-weight: 700;
+      }
+      #${BLOCK_ID} .sp-di-empty {
+        padding: 12px; text-align: center;
+        color: #94a3b8; font-size: 12px;
+      }
+
+      /* ---------- Мобильная адаптация ---------- */
+      @media (max-width: 700px) {
+        #${BLOCK_ID} .sp-di-today { grid-template-columns: 1fr 1fr; }
+        #${BLOCK_ID} .sp-di-today-cell:nth-child(3) { grid-column: 1 / -1; }
+        #${BLOCK_ID} .sp-di-week { height: 82px; }
+        #${BLOCK_ID} .sp-di-bar-col { width: 6px; }
+        #${BLOCK_ID} .sp-di-zone-row {
+          grid-template-columns: minmax(60px, 100px) 1fr auto;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  /* ---------- OBSERVER ---------- */
 
   function schedule() {
     if (scheduled) return;
@@ -341,7 +604,7 @@
     requestAnimationFrame(() => {
       scheduled = false;
       try { build(); }
-      catch (e) { console.warn('[DashStatePolish] error:', e); }
+      catch (e) { console.warn('[DashInsights] error:', e); }
     });
   }
 
@@ -349,10 +612,8 @@
     if (observer) return;
     const content = document.getElementById('content');
     if (!content) { setTimeout(startObserver, 300); return; }
-
     observer = new MutationObserver(() => schedule());
     observer.observe(content, { childList: true, subtree: true });
-
     schedule();
   }
 
@@ -370,7 +631,7 @@
 
   init();
 
-  window.spDashStatePolish = {
+  window.spDashboardInsights = {
     rebuild: schedule,
     version: '1.0.0'
   };
