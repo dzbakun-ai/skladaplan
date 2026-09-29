@@ -10072,17 +10072,14 @@ function assemblyView() {
         </div>
 
 
-        <div
-          class="toolbar"
-          style="flex-wrap:wrap;"
-        >
 
-          <button
-            class="sp-btn secondary"
-            id="selectAllAssembly"
-            type="button"
-          >
-            Выбрать все ${pickingGroupsCount ? '(' + pickingBoxes.length + ')' : ''}
+          <div class="toolbar" style="flex-wrap:wrap;">
+          <button class="sp-btn" id="assemblyDispatchBtn" type="button" ${pickingBoxes.length ? '' : 'disabled'}>
+          📤 Собрать пошагово (${pickingBoxes.length})
+          </button>
+
+          <button class="sp-btn secondary" id="selectAllAssembly" type="button">
+          Выбрать все ${pickingGroupsCount ? '(' + pickingBoxes.length + ')' : ''}
           </button>
 
           <button
@@ -10744,6 +10741,58 @@ function setupAssembly() {
     Ручной ввод текущей зоны/ряда.
   */
 
+$('#assemblyDispatchBtn')?.addEventListener('click', async () => {
+  const picking = getPickingBoxes();
+  if (!picking.length) {
+    toast('В подборе нет коробок', 'error');
+    return;
+  }
+
+  // Считаем, на сколько групп разобьётся
+  const groupsMap = new Map();
+  picking.forEach(b => {
+    const key = [
+      String(b.zone_row || '—').trim(),
+      String(b.pallet || '—').trim(),
+      String(b.barcode || '').trim()
+    ].join('|');
+    groupsMap.set(key, (groupsMap.get(key) || 0) + 1);
+  });
+
+  if (!confirm(
+    `Отправить сборку грузчику пошагово?\n\n` +
+    `Коробок: ${picking.length}\n` +
+    `Шагов: ${groupsMap.size}\n\n` +
+    `После каждого «Готово» коробки будут переведены в «Скомплектовано».`
+  )) return;
+
+  const client = supabaseClient;
+  try {
+    const { data: dispatchId, error } = await client.rpc('sp_dispatch_assembly', {
+      p_created_by_email: state.user?.email || null,
+      p_created_by_chat_id: null,
+      p_target_chat_ids: null,
+      p_direction: null,
+      p_zones: null
+    });
+    if (error) throw error;
+
+    if (!dispatchId) {
+      toast('Нет коробок для сборки', 'error');
+      return;
+    }
+
+    await client.functions.invoke('telegram-webhook', {
+      body: { action: 'dispatch_now', dispatch_id: dispatchId }
+    });
+
+    toast(`✓ Отправлено грузчику. Шагов: ${groupsMap.size}`);
+  } catch (e) {
+    console.error('[assembly] dispatch error:', e);
+    toast('Ошибка: ' + (e.message || ''), 'error');
+  }
+});
+   
   $('#assemblyZoneInput')
     ?.addEventListener(
       'change',
