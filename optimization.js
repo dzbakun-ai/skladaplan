@@ -1169,13 +1169,14 @@ function warehouseOptimizationView() {
                   : 'Расчёт ещё не выполнен'}
               </div>
             </div>
-            <div class="optimization-toolbar-actions">
+           <div class="optimization-toolbar-actions">
               <button class="sp-btn secondary" id="optimizationExportBtn" type="button" ${!optimizationActiveMoves().length ? 'disabled' : ''}>Экспорт отчёта</button>
               <button class="sp-btn secondary" id="optimizationSendTgBtn" type="button" ${!optimizationActiveMoves().length ? 'disabled' : ''}>📤 В Telegram</button>
+              <button class="sp-btn" id="optimizationSendToWorkerBtn" type="button" ${!opt.result?.optimization_id ? 'disabled' : ''}>📤 Отправить грузчику</button>
               <button class="sp-btn" id="optimizationApplyBtn" type="button" ${!optimizationActiveMoves().length || opt.applying ? 'disabled' : ''}>
-                ${opt.applying ? 'Закрытие…' : 'Закрыть оптимизацию'}
-              </button>
-            </div>
+              ${opt.applying ? 'Закрытие…' : 'Закрыть оптимизацию'}
+            </button>
+           </div>
           </div>
 
           <div class="optimization-kpis" style="margin-top:16px;">
@@ -1242,6 +1243,37 @@ function setupWarehouseOptimization() {
     opt.loaded = false;
     render();
   });
+
+   $('#optimizationSendToWorkerBtn')?.addEventListener('click', async () => {
+  const optId = state.optimization.result?.optimization_id;
+  if (!optId) {
+    toast('Сначала закройте оптимизацию (кнопка «Закрыть оптимизацию») — затем сможете отправить её грузчику пошагово.', 'error');
+    return;
+  }
+  if (!confirm(`Отправить оптимизацию №${optId} грузчику пошагово?\n\nОн получит первую задачу из списка, остальные — после подтверждения каждой.`)) return;
+
+  const client = getSupabase();
+  if (!client) { toast('Supabase недоступен', 'error'); return; }
+
+  try {
+    const { data: dispatchId, error } = await client.rpc('sp_dispatch_optimization', {
+      p_optimization_id: optId,
+      p_created_by_email: state.user?.email || null,
+      p_created_by_chat_id: null,
+      p_target_chat_ids: null
+    });
+    if (error) throw error;
+
+    await client.functions.invoke('telegram-webhook', {
+      body: { action: 'dispatch_now', dispatch_id: dispatchId }
+    });
+
+    toast('✓ Отправлено грузчику. Он получит первую задачу.');
+  } catch (e) {
+    console.error('[optimization] dispatch error:', e);
+    toast('Ошибка: ' + (e.message || ''), 'error');
+  }
+});
 
   $('#optimizationCapacity')?.addEventListener('change', async event => {
     opt.capacity = Math.max(1, Math.min(1000, Number(event.target.value) || OPTIMIZATION_DEFAULT_CAPACITY));
