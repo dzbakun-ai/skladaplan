@@ -1169,14 +1169,14 @@ function warehouseOptimizationView() {
                   : 'Расчёт ещё не выполнен'}
               </div>
             </div>
-           <div class="optimization-toolbar-actions">
-              <button class="sp-btn secondary" id="optimizationExportBtn" type="button" ${!optimizationActiveMoves().length ? 'disabled' : ''}>Экспорт отчёта</button>
-              <button class="sp-btn secondary" id="optimizationSendTgBtn" type="button" ${!optimizationActiveMoves().length ? 'disabled' : ''}>📤 В Telegram</button>
-              <button class="sp-btn" id="optimizationSendToWorkerBtn" type="button" ${!opt.result?.optimization_id ? 'disabled' : ''}>📤 Отправить грузчику</button>
-              <button class="sp-btn" id="optimizationApplyBtn" type="button" ${!optimizationActiveMoves().length || opt.applying ? 'disabled' : ''}>
-              ${opt.applying ? 'Закрытие…' : 'Закрыть оптимизацию'}
-            </button>
-           </div>
+          <div class="optimization-toolbar-actions">
+          <button class="sp-btn secondary" id="optimizationExportBtn" type="button" ${!optimizationActiveMoves().length ? 'disabled' : ''}>Экспорт отчёта</button>
+          <button class="sp-btn secondary" id="optimizationSendTgBtn" type="button" ${!optimizationActiveMoves().length ? 'disabled' : ''}>📤 В Telegram</button>
+          <button class="sp-btn" id="optimizationSendToWorkerBtn" type="button" ${!optimizationActiveMoves().length ? 'disabled' : ''}>📤 Отправить грузчику</button>
+          <button class="sp-btn" id="optimizationApplyBtn" type="button" ${!optimizationActiveMoves().length || opt.applying ? 'disabled' : ''}>
+          ${opt.applying ? 'Закрытие…' : 'Закрыть самому'}
+          </button>
+          </div>
           </div>
 
           <div class="optimization-kpis" style="margin-top:16px;">
@@ -1244,34 +1244,107 @@ function setupWarehouseOptimization() {
     render();
   });
 
-   $('#optimizationSendToWorkerBtn')?.addEventListener('click', async () => {
-  const optId = state.optimization.result?.optimization_id;
-  if (!optId) {
-    toast('Сначала закройте оптимизацию (кнопка «Закрыть оптимизацию») — затем сможете отправить её грузчику пошагово.', 'error');
+ $('#optimizationSendToWorkerBtn')?.addEventListener('click', async () => {
+  const opt = state.optimization;
+  const moves = optimizationActiveMoves();
+
+  if (!moves.length) {
+    toast('Сначала рассчитайте оптимизацию', 'error');
     return;
   }
-  if (!confirm(`Отправить оптимизацию №${optId} грузчику пошагово?\n\nОн получит первую задачу из списка, остальные — после подтверждения каждой.`)) return;
+
+  const summary = optimizationSummary();
+
+  if (!confirm(
+    `Отправить план грузчику пошагово?\n\n` +
+    `Шагов: ${moves.length}\n` +
+    `Коробок: ${summary.movedBoxes}\n\n` +
+    `Он получит первую задачу. После каждого «Готово» — сразу следующая, ` +
+    `а коробки физически перемещаются в базе.`
+  )) return;
 
   const client = getSupabase();
   if (!client) { toast('Supabase недоступен', 'error'); return; }
 
-  try {
-    const { data: dispatchId, error } = await client.rpc('sp_dispatch_optimization', {
-      p_optimization_id: optId,
-      p_created_by_email: state.user?.email || null,
-      p_created_by_chat_id: null,
-      p_target_chat_ids: null
-    });
-    if (error) throw error;
+  opt.applying = true;
+  render();
 
+  try {
+    /* ---- 1. Сохраняем оптимизацию со статусом 'planned' ---- */
+    const { data: optRow, error: optErr } = await client
+      .from('warehouse_optimizations')
+      .insert({
+        status: 'planned',
+        warehouse: opt.warehouse,
+        target_zone: [...opt.targetZones].join(', '),
+        capacity: Number(opt.capacity),
+        planned_box_count: summary.movedBoxes,
+        planned_move_count: moves.length,
+        source_zones: [...opt.sourceZones],
+        operator: state.user?.email || null
+      })
+      .select('*')
+      .single();
+    if (optErr) throw optErr;
+
+    const optimizationId = optRow.id;
+
+    /* ---- 2. Сохраняем moves ---- */
+    const movesPayload = moves.map(move => ({
+      optimization_id: optimizationId,
+      source_warehouse: move.sourceWarehouse || null,
+      source_zone: move.sourceZone || null,
+      source_pallet: move.sourcePallet || null,
+      target_warehouse: move.targetWarehouse || null,
+      target_zone: move.targetZone || null,
+      target_pallet: move.targetPallet || null,
+      box_count: move.boxCount || 0,
+      box_ids: move.boxIds || [],
+      barcodes: move.barcodes || []
+    }));
+
+    const { error: movesErr } = await client
+      .from('warehouse_optimization_moves')
+      .insert(movesPayload);
+    if (movesErr) throw movesErr;
+
+    /* ---- 3. Создаём dispatch со шагами ---- */
+    const { data: dispatchId, error: dispatchErr } = await client.rpc(
+      'sp_dispatch_optimization',
+      {
+        p_optimization_id: optimizationId,
+        p_created_by_email: state.user?.email || null,
+        p_created_by_chat_id: null,
+        p_target_chat_ids: null
+      }
+    );
+    if (dispatchErr) throw dispatchErr;
+
+    /* ---- 4. Отправляем первый шаг грузчикам ---- */
     await client.functions.invoke('telegram-webhook', {
       body: { action: 'dispatch_now', dispatch_id: dispatchId }
     });
 
-    toast('✓ Отправлено грузчику. Он получит первую задачу.');
+    /* ---- 5. Запоминаем результат, очищаем план ---- */
+    opt.result = {
+      optimization_id: optimizationId,
+      dispatched_to_worker: true,
+      dispatch_id: dispatchId
+    };
+
+    opt.plan = [];
+    opt.excludedMoves = new Set();
+    opt.expandedMoves = new Set();
+    opt.calculatedAt = null;
+
+    toast(`✓ План отправлен грузчику. Он получит первую задачу из ${moves.length}.`);
+
   } catch (e) {
     console.error('[optimization] dispatch error:', e);
     toast('Ошибка: ' + (e.message || ''), 'error');
+  } finally {
+    opt.applying = false;
+    render();
   }
 });
 
