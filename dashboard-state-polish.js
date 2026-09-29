@@ -1,5 +1,8 @@
 /* =========================================================
-   SKLADAPLAN — «ОПЕРАТИВНАЯ СВОДКА» (v3)
+   SKLADAPLAN — «ОПЕРАТИВНАЯ СВОДКА» НА ГЛАВНОЙ (v4)
+   Главное отличие от v3: старую карточку «Состояние коробок»
+   ФИЗИЧЕСКИ УДАЛЯЕМ (не display:none), поэтому перерисовки
+   главной её больше не воскрешают.
    ========================================================= */
 
 (function () {
@@ -8,7 +11,6 @@
 
   const STYLES_ID = 'spDashboardInsightsStyles';
   const BLOCK_ID = 'spDashboardInsights';
-  const HIDE_ATTR = 'data-sp-dash-insights-hidden';
   let scheduled = false;
   let observer = null;
 
@@ -89,7 +91,6 @@
     const max = Math.max(1, ...series.flatMap(d => [d.received, d.collected, d.shipped]));
     return series.map(day => {
       const total = day.received + day.collected + day.shipped;
-      /* Минимальная высота 3% — чтобы нулевые дни давали «точечку», не пустоту */
       const hR = total ? Math.max(3, Math.round((day.received / max) * 100)) : 3;
       const hC = total ? Math.max(3, Math.round((day.collected / max) * 100)) : 3;
       const hS = total ? Math.max(3, Math.round((day.shipped / max) * 100)) : 3;
@@ -228,70 +229,65 @@
     });
   }
 
-  function findOldStateCard() {
-    const allDivs = document.querySelectorAll('#content div');
-    for (const d of allDivs) {
-      if (d.children.length > 0) continue;
-      if ((d.textContent || '').trim() === 'Состояние коробок') {
-        const card = d.closest('.sp-card');
-        if (card) return card;
+  /* ---------- ФИЗИЧЕСКОЕ УДАЛЕНИЕ СТАРОЙ КАРТОЧКИ ---------- */
+
+  function destroyOldStateCards() {
+    /* Удаляем ВСЕ карточки, в которых встречается характерный
+       текст «Распределение по текущему статусу» (это маркер
+       старой карточки «Состояние коробок» из dashboardView()). */
+    const candidates = document.querySelectorAll('#content .sp-card');
+    let removed = 0;
+    candidates.forEach(card => {
+      if (card.id === BLOCK_ID) return;
+      const txt = card.textContent || '';
+      if (txt.indexOf('Состояние коробок') !== -1 &&
+          txt.indexOf('Распределение по текущему статусу') !== -1) {
+        card.remove();
+        removed++;
       }
-    }
-    const allCards = document.querySelectorAll('#content .sp-card');
-    for (const c of allCards) {
-      const t = c.textContent || '';
-      if (t.indexOf('Состояние коробок') !== -1 &&
-          t.indexOf('Распределение по текущему статусу') !== -1) {
-        return c;
-      }
-    }
-    return null;
+    });
+    return removed;
   }
 
   function build() {
     const isDash = !!document.getElementById('spDashboardHeader');
-    if (!isDash) { document.getElementById(BLOCK_ID)?.remove(); return; }
+
+    if (!isDash) {
+      document.getElementById(BLOCK_ID)?.remove();
+      return;
+    }
 
     const st = getAppState();
     if (!st || !Array.isArray(st.boxes)) return;
 
-    const oldCard = findOldStateCard();
-    if (!oldCard) return;
+    /* 1. Убираем все старые карточки «Состояние коробок» */
+    destroyOldStateCards();
 
-    /* 1. Скрываем «Состояние коробок» */
-    if (!oldCard.hasAttribute(HIDE_ATTR)) {
-      oldCard.setAttribute(HIDE_ATTR, '1');
-      oldCard.style.display = 'none';
+    /* 2. Находим .sp-dashboard-columns */
+    const columns = document.querySelector('#content .sp-dashboard-columns');
+    if (!columns) return;
+
+    /* 3. Убираем дубликаты нашей собственной сводки (если были) */
+    const myBlocks = document.querySelectorAll('#' + BLOCK_ID);
+    if (myBlocks.length > 1) {
+      for (let i = 1; i < myBlocks.length; i++) myBlocks[i].remove();
     }
 
-    /* 2. Ищем .sp-dashboard-columns */
-    const columns = oldCard.closest('.sp-dashboard-columns') ||
-                    document.querySelector('#content .sp-dashboard-columns');
-
-    /* 3. Собираем «Оперативную сводку» */
+    /* 4. Собираем свежую сводку */
     const fresh = buildBlock(st.boxes);
     bindHandlers(fresh);
 
     const existing = document.getElementById(BLOCK_ID);
-    if (existing) existing.remove();
-
-    /* 4. Вставляем ВНУТРЬ .sp-dashboard-columns первым ребёнком.
-       «Информация» останется вторым. */
-    if (columns) {
-      /* Убеждаемся, что раскладка стандартная */
-      columns.style.display = 'grid';
-      columns.style.gridTemplateColumns = 'minmax(0, 1.35fr) minmax(280px, .65fr)';
-      columns.style.gap = '12px';
-      columns.insertBefore(fresh, columns.firstChild);
-
-      /* Показываем «Информацию», если её кто-то скрыл */
-      columns.querySelectorAll(':scope > .sp-card').forEach(c => {
-        if (c !== fresh && c.style.display === 'none') c.style.display = '';
-      });
-    } else {
-      /* Резерв: если колонок нет — на место старой карточки */
-      oldCard.parentNode.insertBefore(fresh, oldCard);
+    if (existing) {
+      /* Если уже стоит в правильном месте — не трогаем */
+      if (existing.parentElement === columns && existing === columns.firstElementChild) {
+        return;
+      }
+      existing.remove();
     }
+
+    /* 5. Вставляем сводку первым ребёнком columns */
+    columns.insertBefore(fresh, columns.firstElementChild);
   }
 
   function injectStyles() {
@@ -388,10 +384,10 @@
       startObserver();
     }
     let ticks = 0;
-    const t = setInterval(() => { ticks++; schedule(); if (ticks >= 30) clearInterval(t); }, 500);
+    const t = setInterval(() => { ticks++; schedule(); if (ticks >= 60) clearInterval(t); }, 400);
   }
 
   init();
 
-  window.spDashboardInsights = { rebuild: schedule, version: '3.0.0' };
+  window.spDashboardInsights = { rebuild: schedule, version: '4.0.0' };
 })();
