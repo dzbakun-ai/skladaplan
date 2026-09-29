@@ -1,10 +1,5 @@
 /* =========================================================
-   SKLADAPLAN — «ОПЕРАТИВНАЯ СВОДКА» НА ГЛАВНОЙ (v2)
-   Убирает дубль «Состояние коробок» и ставит на его место:
-     1. Цифры за сегодня (приход / сборка / отгрузка)
-     2. График движения за 7 дней
-     3. Топ-5 зон по загрузке (клик → в Базу)
-     4. «Требует внимания»
+   SKLADAPLAN — «ОПЕРАТИВНАЯ СВОДКА» (v3)
    ========================================================= */
 
 (function () {
@@ -34,11 +29,8 @@
   }
   function todayKey() { return dayKey(new Date()); }
   function isoDayKey(iso) { return iso ? String(iso).slice(0, 10) : ''; }
-  function daysAgoKey(n) {
-    const d = new Date(); d.setDate(d.getDate() - n); return dayKey(d);
-  }
+  function daysAgoKey(n) { const d = new Date(); d.setDate(d.getDate() - n); return dayKey(d); }
 
-  /* ---------- Расчёты ---------- */
   function computeToday(boxes) {
     const t = todayKey();
     let r = 0, c = 0, s = 0;
@@ -93,22 +85,23 @@
     return { noPallet, noZone, stale };
   }
 
-  /* ---------- Вёрстка ---------- */
   function buildWeek(series) {
     const max = Math.max(1, ...series.flatMap(d => [d.received, d.collected, d.shipped]));
     return series.map(day => {
-      const hR = Math.round((day.received / max) * 100);
-      const hC = Math.round((day.collected / max) * 100);
-      const hS = Math.round((day.shipped / max) * 100);
       const total = day.received + day.collected + day.shipped;
+      /* Минимальная высота 3% — чтобы нулевые дни давали «точечку», не пустоту */
+      const hR = total ? Math.max(3, Math.round((day.received / max) * 100)) : 3;
+      const hC = total ? Math.max(3, Math.round((day.collected / max) * 100)) : 3;
+      const hS = total ? Math.max(3, Math.round((day.shipped / max) * 100)) : 3;
+      const isZero = total === 0;
       return `
-        <div class="sp-di-bar-day" title="${esc(day.label)}: приход ${day.received}, собрано ${day.collected}, отгружено ${day.shipped}">
+        <div class="sp-di-bar-day${isZero ? ' is-zero' : ''}" title="${esc(day.label)}: приход ${day.received}, собрано ${day.collected}, отгружено ${day.shipped}">
           <div class="sp-di-bar-cols">
             <div class="sp-di-bar-col sp-di-c-received" style="height:${hR}%"></div>
             <div class="sp-di-bar-col sp-di-c-collected" style="height:${hC}%"></div>
             <div class="sp-di-bar-col sp-di-c-shipped" style="height:${hS}%"></div>
           </div>
-          <div class="sp-di-bar-total">${total || ''}</div>
+          <div class="sp-di-bar-total">${total || '·'}</div>
           <div class="sp-di-bar-label">${esc(day.label)}</div>
         </div>`;
     }).join('');
@@ -204,7 +197,6 @@
     return wrap;
   }
 
-  /* ---------- Обработчики ---------- */
   function bindHandlers(root) {
     root.querySelectorAll('[data-di-zone]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -236,71 +228,78 @@
     });
   }
 
-  /* ---------- Надёжный поиск старой карточки ---------- */
   function findOldStateCard() {
-    /* Ищем div с текстом ровно «Состояние коробок» (без дочерних элементов) */
     const allDivs = document.querySelectorAll('#content div');
     for (const d of allDivs) {
       if (d.children.length > 0) continue;
-      const t = (d.textContent || '').trim();
-      if (t === 'Состояние коробок') {
+      if ((d.textContent || '').trim() === 'Состояние коробок') {
         const card = d.closest('.sp-card');
         if (card) return card;
       }
     }
-    /* Фолбэк: если по какой-то причине текст разбит */
     const allCards = document.querySelectorAll('#content .sp-card');
     for (const c of allCards) {
-      if ((c.textContent || '').indexOf('Состояние коробок') !== -1 &&
-          (c.textContent || '').indexOf('Распределение по текущему статусу') !== -1) {
+      const t = c.textContent || '';
+      if (t.indexOf('Состояние коробок') !== -1 &&
+          t.indexOf('Распределение по текущему статусу') !== -1) {
         return c;
       }
     }
     return null;
   }
 
-  /* ---------- Сборка ---------- */
   function build() {
     const isDash = !!document.getElementById('spDashboardHeader');
-    if (!isDash) {
-      document.getElementById(BLOCK_ID)?.remove();
-      return;
-    }
+    if (!isDash) { document.getElementById(BLOCK_ID)?.remove(); return; }
 
     const st = getAppState();
     if (!st || !Array.isArray(st.boxes)) return;
 
     const oldCard = findOldStateCard();
-    if (!oldCard) {
-      console.log('[DashInsights] старая карточка не найдена');
-      return;
-    }
+    if (!oldCard) return;
 
+    /* 1. Скрываем «Состояние коробок» */
     if (!oldCard.hasAttribute(HIDE_ATTR)) {
       oldCard.setAttribute(HIDE_ATTR, '1');
       oldCard.style.display = 'none';
-      console.log('[DashInsights] старая карточка скрыта');
     }
 
+    /* 2. Ищем .sp-dashboard-columns */
+    const columns = oldCard.closest('.sp-dashboard-columns') ||
+                    document.querySelector('#content .sp-dashboard-columns');
+
+    /* 3. Собираем «Оперативную сводку» */
     const fresh = buildBlock(st.boxes);
     bindHandlers(fresh);
 
     const existing = document.getElementById(BLOCK_ID);
-    if (existing) {
-      existing.replaceWith(fresh);
+    if (existing) existing.remove();
+
+    /* 4. Вставляем ВНУТРЬ .sp-dashboard-columns первым ребёнком.
+       «Информация» останется вторым. */
+    if (columns) {
+      /* Убеждаемся, что раскладка стандартная */
+      columns.style.display = 'grid';
+      columns.style.gridTemplateColumns = 'minmax(0, 1.35fr) minmax(280px, .65fr)';
+      columns.style.gap = '12px';
+      columns.insertBefore(fresh, columns.firstChild);
+
+      /* Показываем «Информацию», если её кто-то скрыл */
+      columns.querySelectorAll(':scope > .sp-card').forEach(c => {
+        if (c !== fresh && c.style.display === 'none') c.style.display = '';
+      });
     } else {
+      /* Резерв: если колонок нет — на место старой карточки */
       oldCard.parentNode.insertBefore(fresh, oldCard);
-      console.log('[DashInsights] блок «Оперативная сводка» вставлен');
     }
   }
 
-  /* ---------- Стили ---------- */
   function injectStyles() {
     if (document.getElementById(STYLES_ID)) return;
     const style = document.createElement('style');
     style.id = STYLES_ID;
     style.textContent = `
-      #${BLOCK_ID}{background:var(--surface,#fff);border:1px solid var(--line,#e2e8f0);border-radius:14px;padding:16px 18px;margin:0;box-shadow:var(--shadow-card);overflow:hidden}
+      #${BLOCK_ID}{background:var(--surface,#fff);border:1px solid var(--line,#e2e8f0);border-radius:14px;padding:16px 18px;margin:0;box-shadow:var(--shadow-card);overflow:hidden;min-width:0}
       #${BLOCK_ID} .sp-di-head{margin-bottom:14px}
       #${BLOCK_ID} .sp-di-title{font-size:15px;font-weight:700;color:#0f172a}
       #${BLOCK_ID} .sp-di-sub{font-size:12px;color:#64748b;margin-top:2px}
@@ -324,15 +323,17 @@
       #${BLOCK_ID} .sp-di-c-received{background:#0ea5e9}
       #${BLOCK_ID} .sp-di-c-collected{background:#10b981}
       #${BLOCK_ID} .sp-di-c-shipped{background:#2563EB}
-      #${BLOCK_ID} .sp-di-week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;height:100px;align-items:end}
+      #${BLOCK_ID} .sp-di-week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;height:110px;align-items:end;padding-top:6px}
       #${BLOCK_ID} .sp-di-bar-day{display:flex;flex-direction:column;height:100%;align-items:center;gap:3px}
       #${BLOCK_ID} .sp-di-bar-cols{display:flex;align-items:flex-end;justify-content:center;gap:2px;flex:1;width:100%}
-      #${BLOCK_ID} .sp-di-bar-col{width:7px;min-height:2px;border-radius:2px 2px 0 0;transition:opacity .15s ease}
+      #${BLOCK_ID} .sp-di-bar-col{width:7px;min-height:3px;border-radius:2px 2px 0 0;transition:opacity .15s ease}
+      #${BLOCK_ID} .sp-di-bar-day.is-zero .sp-di-bar-col{opacity:.28}
       #${BLOCK_ID} .sp-di-bar-day:hover .sp-di-bar-col{opacity:.78}
       #${BLOCK_ID} .sp-di-bar-total{font-size:10px;color:#0f172a;font-weight:700;min-height:12px;line-height:1;font-variant-numeric:tabular-nums}
+      #${BLOCK_ID} .sp-di-bar-day.is-zero .sp-di-bar-total{color:#cbd5e1;font-weight:600}
       #${BLOCK_ID} .sp-di-bar-label{font-size:10px;color:#94a3b8;font-weight:600;text-transform:lowercase}
       #${BLOCK_ID} .sp-di-zones{display:flex;flex-direction:column;gap:3px}
-      #${BLOCK_ID} .sp-di-zone-row{display:grid;grid-template-columns:minmax(80px,130px) 1fr auto;align-items:center;gap:10px;padding:5px 6px;border:0;background:transparent;border-radius:7px;cursor:pointer;font-family:inherit;text-align:left;transition:background .12s ease}
+      #${BLOCK_ID} .sp-di-zone-row{display:grid;grid-template-columns:minmax(70px,120px) 1fr auto;align-items:center;gap:10px;padding:5px 6px;border:0;background:transparent;border-radius:7px;cursor:pointer;font-family:inherit;text-align:left;transition:background .12s ease}
       #${BLOCK_ID} .sp-di-zone-row:hover{background:#f8fafc}
       #${BLOCK_ID} .sp-di-zone-name{font-size:12px;font-weight:700;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       #${BLOCK_ID} .sp-di-zone-bar{display:block;height:8px;background:#f1f5f9;border-radius:999px;overflow:hidden}
@@ -349,17 +350,18 @@
       #${BLOCK_ID} .sp-di-problem-count{font-size:14px;font-weight:800;color:#78350f;font-variant-numeric:tabular-nums}
       #${BLOCK_ID} .sp-di-problem-arrow{color:#a16207;font-size:14px;font-weight:700}
       #${BLOCK_ID} .sp-di-empty{padding:12px;text-align:center;color:#94a3b8;font-size:12px}
-      @media (max-width:700px){
+      @media (max-width:1000px){
         #${BLOCK_ID} .sp-di-today{grid-template-columns:1fr 1fr}
         #${BLOCK_ID} .sp-di-today-cell:nth-child(3){grid-column:1/-1}
-        #${BLOCK_ID} .sp-di-week{height:82px}
+      }
+      @media (max-width:700px){
+        #${BLOCK_ID} .sp-di-week{height:88px}
         #${BLOCK_ID} .sp-di-bar-col{width:6px}
       }
     `;
     document.head.appendChild(style);
   }
 
-  /* ---------- Observer + ретрай ---------- */
   function schedule() {
     if (scheduled) return;
     scheduled = true;
@@ -380,22 +382,16 @@
 
   function init() {
     injectStyles();
-    let ticks = 0;
-    const pollTimer = setInterval(() => {
-      ticks++; schedule();
-      if (ticks >= 30) clearInterval(pollTimer);
-    }, 500);
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', startObserver, { once: true });
     } else {
       startObserver();
     }
+    let ticks = 0;
+    const t = setInterval(() => { ticks++; schedule(); if (ticks >= 30) clearInterval(t); }, 500);
   }
 
   init();
 
-  window.spDashboardInsights = {
-    rebuild: schedule,
-    version: '2.0.0'
-  };
+  window.spDashboardInsights = { rebuild: schedule, version: '3.0.0' };
 })();
