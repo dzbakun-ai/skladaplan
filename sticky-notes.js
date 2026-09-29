@@ -1,25 +1,16 @@
 /* =========================================================
-   SKLADAPLAN — СТИКЕР-ЗАМЕТКИ С ДОКОМ (v3)
+   SKLADAPLAN — СТИКЕР-ЗАМЕТКИ С ДОКОМ (v4, sync)
    =========================================================
 
-   Внешний вид заметки — как было:
-     жёлтая бумага, скотч сверху, загнутый угол,
-     цветные точки, крестик удаления, resize.
-   Никакого сжатия: если заметка в доке — она такая же,
-   только стоит ровно, одна под другой, и не двигается.
+   v4: заметки синхронизируются между устройствами через Supabase.
+   - Мгновенный рендер из локального кэша
+   - Затем bootstrap с сервера (источник правды — Supabase)
+   - Realtime-подписка — изменения приходят с других устройств
+     без перезагрузки
+   - Если Realtime/сети нет — работаем локально, при появлении
+     сети всё синкается
 
-   Док (правая колонка) — это «зарезервированное место»:
-     • все новые заметки появляются в доке
-     • заметку можно вытащить из дока на рабочий стол (↗)
-       и она ведёт себя как раньше — drag/resize
-     • заметку можно положить обратно в док (⬇)
-     • 📌 у заголовков блоков на главной — прикрепить
-       заметку к конкретному блоку
-
-   Совместимость данных:
-     Тот же ключ localStorage 'sp-sticky-notes-v2'.
-     Старые заметки при первом запуске автоматически
-     «переезжают» в док (флаг docked = true).
+   Внешний вид и логика дока — как в v3.
    ========================================================= */
 
 (function () {
@@ -82,34 +73,213 @@
   let observer  = null;
   let saveTimer = null;
   let scheduled = false;
+  let supabaseChannel = null;
+  let syncInProgress = false;
+  let bootstrapDone = false;
+
+  /* ============ SUPABASE-ХЕЛПЕР ============ */
+
+  function getSupabase() {
+    try { if (typeof supabaseClient !== 'undefined' && supabaseClient) return supabaseClient; } catch (e) {}
+    if (window.supabaseClient) return window.supabaseClient;
+    return null;
+  }
 
   /* ============ ХРАНИЛИЩЕ ============ */
 
-  function load() {
+  function loadFromCache() {
     try {
       const raw = localStorage.getItem(LS_KEY);
       const arr = raw ? JSON.parse(raw) : [];
-      /* Миграция: старые заметки без флага docked — в док */
       let migrated = false;
       arr.forEach(n => {
         if (typeof n.docked !== 'boolean') { n.docked = true; migrated = true; }
         if (!('anchorKey' in n)) { n.anchorKey = null; migrated = true; }
       });
-      if (migrated) save(arr);
+      if (migrated) saveToCache(arr);
       return arr;
     } catch (e) { return []; }
   }
 
-  function save(arr) {
+  function saveToCache(arr) {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(arr || notes)); }
+    catch (e) { console.warn('[StickyNotes] saveToCache:', e); }
+  }
+
+  function rowToNote(row) {
+    return {
+      id: row.id,
+      text: row.text || '',
+      color: row.color || 'yellow',
+      docked: row.docked !== false,
+      anchorKey: row.anchor_key || null,
+      x: row.x, y: row.y, w: row.w, h: row.h,
+      _updatedAt: row.updated_at
+    };
+  }
+
+  function noteToRow(n) {
+    return {
+      id: n.id,
+      text: n.text || '',
+      color: n.color || 'yellow',
+      docked: n.docked !== false,
+      anchor_key: n.anchorKey || null,
+      x: n.x ?? null,
+      y: n.y ?? null,
+      w: n.w ?? null,
+      h: n.h ?? null,
+      updated_at: new Date().toISOString(),
+      updated_by: (window.state?.user?.email) || null
+    };
+  }
+
+  async function loadFromSupabase() {
+    const client = getSupabase();
+    if (!client) return null;
     try {
-      const data = arr || notes;
-      localStorage.setItem(LS_KEY, JSON.stringify(data));
-    } catch (e) { console.warn('[StickyNotes] save:', e); }
+      const { data, error } = await client
+        .from('sticky_notes')
+        .select('*')
+        .order('updated_at', { ascending: true });
+      if (error) throw error;
+      return (data || []).map(rowToNote);
+    } catch (e) {
+      console.warn('[StickyNotes] loadFromSupabase error:', e);
+      return null;
+    }
+  }
+
+  async function syncAllToSupabase() {
+    if (syncInProgress) return;
+    syncInProgress = true;
+    const client = getSupabase();
+    if (!client) { syncInProgress = false; return; }
+
+    try {
+      /* 1. Удаляем из БД те, которых больше нет локально */
+      const { data: remote, error: rErr } = await client
+        .from('sticky_notes').select('id');
+      if (rErr) throw rErr;
+
+      const remoteIds = new Set((remote || []).map(r => r.id));
+      const localIds = new Set(notes.map(n => n.id));
+      const toDelete = [...remoteIds].filter(id => !localIds.has(id));
+
+      if (toDelete.length) {
+        await client.from('sticky_notes').delete().in('id', toDelete);
+      }
+
+      /* 2. Апсертим все локальные */
+      if (notes.length) {
+        const payload = notes.map(noteToRow);
+        const { error: uErr } = await client
+          .from('sticky_notes')
+          .upsert(payload, { onConflict: 'id' });
+        if (uErr) throw uErr;
+      }
+    } catch (e) {
+      console.warn('[StickyNotes] syncAll error:', e);
+    } finally {
+      syncInProgress = false;
+    }
+  }
+
+  async function deleteNoteFromSupabase(id) {
+    const client = getSupabase();
+    if (!client) return;
+    try {
+      await client.from('sticky_notes').delete().eq('id', id);
+    } catch (e) {
+      console.warn('[StickyNotes] deleteNoteFromSupabase error:', e);
+    }
+  }
+
+  function load() {
+    return loadFromCache();
+  }
+
+  function save(arr) {
+    saveToCache(arr || notes);
+    /* Дебаунс — не долбим сервер при каждом нажатии клавиши */
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      syncAllToSupabase().catch(e => console.warn(e));
+    }, 600);
   }
 
   function saveDebounced() {
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => save(), 400);
+    save();
+  }
+
+  /* ============ REALTIME ============ */
+
+  function userIsEditingText() {
+    const ae = document.activeElement;
+    return !!(ae && ae.classList && ae.classList.contains('sp-sn-text'));
+  }
+
+  function startRealtime() {
+    const client = getSupabase();
+    if (!client || supabaseChannel) return;
+
+    try {
+      supabaseChannel = client
+        .channel('sticky-notes-sync')
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table: 'sticky_notes' },
+          async () => {
+            /* Если пользователь печатает — не перебиваем его,
+               отложим синхронизацию до потери фокуса. */
+            if (userIsEditingText()) {
+              setTimeout(async () => {
+                if (userIsEditingText()) return;
+                const fresh = await loadFromSupabase();
+                if (fresh) {
+                  notes = fresh;
+                  saveToCache(notes);
+                  renderAll();
+                }
+              }, 1500);
+              return;
+            }
+
+            const fresh = await loadFromSupabase();
+            if (!fresh) return;
+            notes = fresh;
+            saveToCache(notes);
+            renderAll();
+          })
+        .subscribe();
+    } catch (e) {
+      console.warn('[StickyNotes] realtime error:', e);
+    }
+  }
+
+  async function bootstrapFromServer() {
+    if (bootstrapDone) return;
+    bootstrapDone = true;
+
+    const fresh = await loadFromSupabase();
+
+    if (fresh === null) {
+      /* Не смогли — работаем на локальном */
+      console.warn('[StickyNotes] сервер недоступен, работаем локально');
+      startRealtime();
+      return;
+    }
+
+    if (fresh.length === 0 && notes.length > 0) {
+      /* Первый запуск после миграции: локальные → на сервер */
+      console.log('[StickyNotes] перенос локальных заметок в Supabase:', notes.length);
+      await syncAllToSupabase();
+    } else if (fresh.length > 0) {
+      notes = fresh;
+      saveToCache(notes);
+      renderAll();
+    }
+
+    startRealtime();
   }
 
   function uid() {
@@ -134,9 +304,6 @@
     const style = document.createElement('style');
     style.id = STYLES_ID;
     style.textContent = `
-      /* =====================================================
-         КОНТЕЙНЕР ДЛЯ «ПЛАВАЮЩИХ» ЗАМЕТОК (не в доке)
-         ===================================================== */
       #${FLOAT_ID} {
         position: fixed;
         inset: 0;
@@ -144,10 +311,6 @@
         z-index: 500;
       }
 
-      /* =====================================================
-         ВНЕШНИЙ ВИД ЗАМЕТКИ — ОДИН И ТОТ ЖЕ
-         (для плавающей и для докнутой)
-         ===================================================== */
       .sp-sn-note {
         position: relative;
         display: flex;
@@ -162,7 +325,6 @@
         user-select: none;
       }
 
-      /* Загнутый нижний край «бумаги» */
       .sp-sn-note::after {
         content: '';
         position: absolute;
@@ -176,7 +338,6 @@
         pointer-events: none;
       }
 
-      /* Скотч сверху */
       .sp-sn-note .sp-sn-tape {
         position: absolute;
         top: -10px;
@@ -191,7 +352,6 @@
         pointer-events: none;
       }
 
-      /* Шапка «📌 Заметка» + действия */
       .sp-sn-note .sp-sn-top {
         display: flex;
         align-items: center;
@@ -257,7 +417,6 @@
         box-shadow: 0 0 0 2px rgba(0,0,0,.35);
       }
 
-      /* Текст */
       .sp-sn-note .sp-sn-text {
         flex: 1;
         width: 100%;
@@ -280,7 +439,6 @@
         font-style: italic;
       }
 
-      /* Уголок resize — только для плавающих */
       .sp-sn-note .sp-sn-resize {
         position: absolute;
         right: 0;
@@ -306,9 +464,6 @@
         border-bottom: 2px solid var(--sn-head);
       }
 
-      /* =====================================================
-         ПЛАВАЮЩАЯ ЗАМЕТКА — конкретные x/y/w/h
-         ===================================================== */
       #${FLOAT_ID} .sp-sn-note {
         position: absolute;
         pointer-events: auto;
@@ -320,9 +475,6 @@
           0 4px 10px rgba(60,50,0,.18);
       }
 
-      /* =====================================================
-         ДОКНУТАЯ ЗАМЕТКА — обычный блок в колонке дока
-         ===================================================== */
       #${DOCK_BODY_ID} .sp-sn-note.is-docked {
         position: relative;
         width: 100%;
@@ -337,9 +489,6 @@
         resize: none;
       }
 
-      /* =====================================================
-         ДОК — «ЗАРЕЗЕРВИРОВАННОЕ МЕСТО» СПРАВА
-         ===================================================== */
       #${DOCK_ID} {
         position: fixed;
         top: 90px;
@@ -416,7 +565,6 @@
         padding: 16px 14px 20px;
         display: flex;
         flex-direction: column;
-        /* Заметки «висят» на своих тенях, gap побольше */
         gap: 0;
       }
       #${DOCK_ID} .sp-sd-body::-webkit-scrollbar { width: 8px; }
@@ -442,9 +590,6 @@
         line-height: 1.55;
       }
 
-      /* =====================================================
-         КНОПКА-ТРИГГЕР (когда док закрыт)
-         ===================================================== */
       #${DOCK_TOGGLE_ID} {
         position: fixed;
         right: 16px;
@@ -485,9 +630,6 @@
         justify-content: center;
       }
 
-      /* =====================================================
-         FAB «+» — создать заметку
-         ===================================================== */
       #${FAB_ID} {
         position: fixed;
         right: 22px;
@@ -517,9 +659,6 @@
       #${FAB_ID}:hover { transform: scale(1.06); background: #ffd633; }
       #${FAB_ID}:active { transform: scale(.96); }
 
-      /* =====================================================
-         📌 АНКОР У ЗАГОЛОВКА БЛОКА
-         ===================================================== */
       .sp-note-anchor {
         display: inline-flex;
         align-items: center;
@@ -550,7 +689,6 @@
         color: #6b5a00;
       }
 
-      /* Мобильная адаптация */
       @media (max-width: 900px) {
         #${DOCK_ID} {
           top: auto;
@@ -612,7 +750,7 @@
         </div>
         <div class="sp-sd-body" id="${DOCK_BODY_ID}"></div>
         <div class="sp-sd-hint">
-          Заметки хранятся на этом устройстве. Нажмите <b>📌</b>
+          Заметки синхронизируются между устройствами. Нажмите <b>📌</b>
           у заголовка блока, чтобы прикрепить заметку к нему.
           <br>Кнопка <b>↗</b> на заметке — «вынуть» её на рабочий стол.
         </div>
@@ -670,7 +808,6 @@
     const fab    = ensureFab();
     const float  = ensureFloatContainer();
 
-    /* Док и его спутники видны только на главной */
     if (dash) {
       dock.style.display = '';
       float.style.display = '';
@@ -706,7 +843,6 @@
     el.className = 'sp-sn-note' + (note.docked ? ' is-docked' : '');
     el.dataset.noteId = note.id;
 
-    /* Стили: общие CSS-переменные + (для плавающей) координаты */
     let styleStr = `
       --sn-bg:${colors.bg};
       --sn-paper:${colors.paper};
@@ -717,7 +853,6 @@
     `;
 
     if (!note.docked) {
-      /* Плавающая: абсолютное позиционирование */
       note.w = clamp(note.w || 300, MIN_W, Math.min(MAX_W, window.innerWidth - 20));
       note.h = clamp(note.h || 220, MIN_H, Math.min(MAX_H, window.innerHeight - 20));
       note.x = clamp(note.x ?? 100, 4, Math.max(4, window.innerWidth - note.w - 4));
@@ -727,7 +862,6 @@
 
     el.style.cssText = styleStr;
 
-    /* Кнопки-действия */
     const isDocked = !!note.docked;
     const dockBtn = isDocked
       ? `<button type="button" class="sp-sn-btn" data-sn-undock="1" title="Вынуть на рабочий стол">↗</button>`
@@ -755,19 +889,16 @@
       <div class="sp-sn-resize" data-sn-resize="1" title="Потяните, чтобы изменить размер"></div>
     `;
 
-    /* ---- Текст ---- */
     const ta = el.querySelector('.sp-sn-text');
     ta.addEventListener('input', () => {
       note.text = ta.value || '';
       autoResizeTextarea(ta);
       saveDebounced();
     });
-    /* Первичный авторазмер, если заметка в доке */
     if (isDocked) {
       requestAnimationFrame(() => autoResizeTextarea(ta));
     }
 
-    /* ---- Цвета ---- */
     el.querySelectorAll('[data-sn-color]').forEach(btn => {
       btn.addEventListener('click', () => {
         note.color = btn.getAttribute('data-sn-color') || DEFAULT_COLOR;
@@ -776,18 +907,16 @@
       });
     });
 
-    /* ---- Удалить ---- */
-    el.querySelector('[data-sn-del]').addEventListener('click', () => {
+    el.querySelector('[data-sn-del]').addEventListener('click', async () => {
       if (!confirm('Удалить заметку?')) return;
       notes = notes.filter(n => n.id !== note.id);
-      save();
+      saveToCache(notes);
+      await deleteNoteFromSupabase(note.id);
       renderAll();
     });
 
-    /* ---- Док/Анлок ---- */
     el.querySelector('[data-sn-undock]')?.addEventListener('click', () => {
       note.docked = false;
-      /* Ставим её около правого края, но не под доком */
       const dockRect = document.getElementById(DOCK_ID)?.getBoundingClientRect();
       note.w = note.w || 300;
       note.h = note.h || 220;
@@ -804,7 +933,6 @@
       renderAll();
     });
 
-    /* ---- Drag (только для плавающей) ---- */
     if (!isDocked) {
       const top = el.querySelector('.sp-sn-top');
       top.addEventListener('pointerdown', e => {
@@ -829,7 +957,7 @@
     ta.style.height = next + 'px';
   }
 
-  /* ============ DRAG / RESIZE (для плавающих) ============ */
+  /* ============ DRAG / RESIZE ============ */
 
   function startDrag(e, el, note) {
     if (e.button !== undefined && e.button !== 0) return;
@@ -905,17 +1033,14 @@
     const float = ensureFloatContainer();
     const dockBody = document.getElementById(DOCK_BODY_ID);
 
-    /* Очищаем оба контейнера */
     float.innerHTML = '';
     if (dockBody) dockBody.innerHTML = '';
 
     const dockedNotes = notes.filter(n => n.docked);
     const floatingNotes = notes.filter(n => !n.docked);
 
-    /* Плавающие — как раньше */
     floatingNotes.forEach(n => float.appendChild(buildNoteEl(n)));
 
-    /* Докнутые — в колонке дока */
     if (dockBody) {
       if (!dockedNotes.length) {
         dockBody.innerHTML = `
@@ -929,7 +1054,6 @@
       }
     }
 
-    /* Счётчики */
     const countEl = document.getElementById('spStickyDockCount');
     if (countEl) {
       countEl.textContent = dockedNotes.length ? `· ${dockedNotes.length}` : '';
@@ -944,15 +1068,11 @@
     injectAnchors();
   }
 
-  /* ============ АНКОРЫ 📌 У ЗАГОЛОВКОВ БЛОКОВ ============ */
+  /* ============ АНКОРЫ ============ */
 
   function injectAnchors() {
     if (!onDashboard()) return;
 
-    /*
-      Ищем заголовки блоков дашборда. Ключ анкора делаем
-      стабильным: префикс + нормализованный текст заголовка.
-    */
     const candidates = [
       ...document.querySelectorAll('.sp-dashboard-block .sp-dashboard-block-head'),
       ...document.querySelectorAll('#spDashboardHeader .sp-dash-block-head'),
@@ -962,16 +1082,13 @@
     candidates.forEach(head => {
       if (head.querySelector('.sp-note-anchor')) return;
 
-      /* Определяем видимый текст заголовка */
       const textEl = head.querySelector('h2, h3, b, span');
       const titleText = (textEl?.textContent || head.textContent || '').trim();
       if (!titleText) return;
       const key = 'dh:' + titleText.toLowerCase().replace(/\s+/g, ' ').slice(0, 60);
 
-      /* Куда физически вставляем кнопку */
       let host = head;
       if (head.tagName === 'H3') {
-        /* .sp-card > h3 — обернём в span с flex */
         if (!head.dataset.spAnchorWrapped) {
           head.dataset.spAnchorWrapped = '1';
           head.style.display = 'flex';
@@ -1006,7 +1123,6 @@
   }
 
   function toggleAnchor(key, btn) {
-    /* Если уже привязана — отвязать */
     const existing = notes.find(n => n.anchorKey === key);
     if (existing) {
       existing.anchorKey = null;
@@ -1016,7 +1132,6 @@
       return;
     }
 
-    /* Ищем свободную заметку (в доке, без анкора) */
     const free = notes.find(n => n.docked && !n.anchorKey);
 
     if (free) {
@@ -1024,13 +1139,11 @@
       save();
       btn.classList.add('has-note');
       renderAll();
-      /* Прокрутим док к этой заметке */
       const noteEl = document.querySelector(`#${DOCK_BODY_ID} [data-note-id="${free.id}"]`);
       noteEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
     }
 
-    /* Свободных нет — предложить создать */
     if (confirm('Нет свободной заметки в доке. Создать новую и прикрепить?')) {
       const id = uid();
       notes.push({
@@ -1122,7 +1235,6 @@
     injectStyles();
     notes = load();
 
-    /* Восстанавливаем состояние дока */
     try {
       const v = localStorage.getItem(LS_DOCK_OPEN);
       dockOpen = v === null ? true : v === '1';
@@ -1136,20 +1248,22 @@
     const dock = document.getElementById(DOCK_ID);
     if (dock) dock.classList.toggle('is-closed', !dockOpen);
 
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        renderAll();
-        startObserver();
-      }, { once: true });
-    } else {
+    const boot = () => {
       renderAll();
       startObserver();
+      bootstrapFromServer().catch(e => console.warn('[StickyNotes] bootstrap:', e));
+    };
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', boot, { once: true });
+    } else {
+      boot();
     }
 
     setTimeout(() => { renderAll(); startObserver(); }, 500);
     setTimeout(() => { renderAll(); startObserver(); }, 2000);
 
-    console.log('[StickyNotes v3] Модуль инициализирован. Заметок:', notes.length);
+    console.log('[StickyNotes v4] Модуль инициализирован. Заметок:', notes.length);
   }
 
   init();
@@ -1162,13 +1276,19 @@
     openDock,
     closeDock,
     rebuild: renderAll,
-    clearAll: () => {
-      if (!confirm('Удалить ВСЕ заметки?')) return;
+    syncNow: () => syncAllToSupabase(),
+    clearAll: async () => {
+      if (!confirm('Удалить ВСЕ заметки (на всех устройствах)?')) return;
+      const client = getSupabase();
+      if (client) {
+        try { await client.from('sticky_notes').delete().neq('id', ''); }
+        catch (e) { console.warn(e); }
+      }
       notes = [];
-      save();
+      saveToCache(notes);
       renderAll();
     },
-    version: '3.0.0'
+    version: '4.0.0'
   };
 
 })();
