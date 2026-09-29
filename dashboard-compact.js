@@ -1,6 +1,5 @@
 /* =========================================================
-   SKLADAPLAN — КОМПАКТНАЯ ГЛАВНАЯ (v1.2)
-   Надёжная версия: observer + поллинг + диагностика.
+   SKLADAPLAN — КОМПАКТНАЯ ГЛАВНАЯ (v1.3)
    ========================================================= */
 
 (function () {
@@ -15,23 +14,19 @@
   let scheduled = false;
   let observer = null;
   let activeLogTab = 'events';
-  let log = (...a) => console.log('[CompactDash]', ...a);
 
   function el(id) { return document.getElementById(id); }
   function onDashboard() { return !!document.getElementById('spDashboardHeader'); }
 
-  /* ---------- Новая заявка: просто помечаем классом ---------- */
   function tagRequestCard() {
     const textarea = document.getElementById('requestBarcodes');
     if (!textarea) return;
     const card = textarea.closest('.sp-card');
     if (card && !card.classList.contains('sp-request-card')) {
       card.classList.add('sp-request-card');
-      log('карточка заявки помечена классом .sp-request-card');
     }
   }
 
-  /* ---------- Quick-strip ---------- */
   function buildQuickStrip() {
     const wrap = document.createElement('div');
     wrap.id = WRAP_ID;
@@ -75,7 +70,6 @@
     return wrap;
   }
 
-  /* ---------- Калькуляторы ---------- */
   function buildCalcBlock() {
     const details = document.createElement('details');
     details.id = CALC_ID;
@@ -140,7 +134,6 @@
     }
   }
 
-  /* ---------- Логи с табами ---------- */
   function buildLogsBlock() {
     const wrap = document.createElement('div');
     wrap.id = LOGS_ID;
@@ -148,14 +141,12 @@
       <div class="sp-cl-nav">
         <button type="button" class="sp-cl-tab is-active" data-sp-cl-tab="events">🕓 События</button>
         <button type="button" class="sp-cl-tab" data-sp-cl-tab="operations">📋 Операции</button>
-        <button type="button" class="sp-cl-tab" data-sp-cl-tab="info">ℹ️ Информация</button>
       </div>
       <div class="sp-cl-body">
         <div class="sp-cl-panel is-active" data-sp-cl-panel="events">
           <div id="spDashEvents" class="sp-dash-events"></div>
         </div>
         <div class="sp-cl-panel" data-sp-cl-panel="operations"></div>
-        <div class="sp-cl-panel" data-sp-cl-panel="info"></div>
       </div>
     `;
     wrap.querySelectorAll('[data-sp-cl-tab]').forEach(btn => {
@@ -167,7 +158,8 @@
     });
     try {
       const saved = localStorage.getItem(LS_LOG_TAB);
-      if (saved) activeLogTab = saved;
+      if (saved === 'events' || saved === 'operations') activeLogTab = saved;
+      else activeLogTab = 'events';
     } catch (e) {}
     applyLogTab(activeLogTab);
     return wrap;
@@ -188,7 +180,6 @@
     const wrap = el(LOGS_ID);
     if (!wrap) return;
 
-    /* Ищем «Последние операции» */
     const allCards = document.querySelectorAll('#content > .sp-card');
     let opsCard = null;
     allCards.forEach(card => {
@@ -200,66 +191,41 @@
       const tw = opsCard.querySelector('.sp-table-wrap');
       if (tw) opsPanel.appendChild(tw.cloneNode(true));
       opsCard.style.display = 'none';
-      log('«Последние операции» перемещены в таб «Операции»');
     }
-
-    /* Ищем «Информация» внутри .sp-dashboard-columns */
-    const infoPanel = wrap.querySelector('[data-sp-cl-panel="info"]');
-    if (infoPanel && !infoPanel.hasChildNodes()) {
-      let infoCard = null;
-      document.querySelectorAll('#content .sp-dashboard-columns .sp-card').forEach(card => {
-        const head = card.firstElementChild;
-        if (head && /Информация/i.test(head.textContent || '')) infoCard = card;
-      });
-      if (infoCard) {
-        const clone = infoCard.cloneNode(true);
-        const firstHead = clone.firstElementChild;
-        if (firstHead && /Информация/i.test(firstHead.textContent || '')) firstHead.remove();
-        infoPanel.appendChild(clone);
-        infoCard.style.display = 'none';
-        log('«Информация» перемещена в таб «Информация»');
-      }
-    }
+    /* ВАЖНО: «Информацию» НЕ ТРОГАЕМ — она должна остаться
+       в правой колонке .sp-dashboard-columns. */
   }
 
-  /* ---------- Сборка ---------- */
   function build() {
     if (!onDashboard()) return;
-
     document.body.classList.add('sp-compact-dash');
+
     const header = document.getElementById('spDashboardHeader');
     if (!header) return;
 
     tagRequestCard();
 
-    /* 1. Quick-strip */
     if (!el(WRAP_ID)) {
       const shiftHost = document.getElementById('spShiftHost');
       const anchor = shiftHost || header;
       if (anchor.parentNode) {
         anchor.parentNode.insertBefore(buildQuickStrip(), anchor.nextSibling);
-        log('quick-strip вставлен после', anchor.id || anchor.tagName);
       }
     }
 
-    /* 2. Калькуляторы */
     if (!el(CALC_ID)) {
       const quick = el(WRAP_ID);
       if (quick) {
         quick.parentNode.insertBefore(buildCalcBlock(), quick.nextSibling);
         bindCalcHandlers();
-        log('калькуляторы вставлены');
       }
     }
 
-    /* 3. Логи */
     if (!el(LOGS_ID)) {
       header.parentNode.insertBefore(buildLogsBlock(), header.nextSibling);
-      log('логи с табами вставлены');
     }
     migrateLogContent();
 
-    /* 4. Скрытие дублей */
     hideDuplicates();
   }
 
@@ -272,10 +238,7 @@
       if (!h2) return;
       const text = (h2.textContent || '').trim();
       if (text === 'Рабочие процессы' || text === 'Инструменты') {
-        if (block.style.display !== 'none') {
-          block.style.display = 'none';
-          log('скрыт дубль:', text);
-        }
+        block.style.display = 'none';
       }
     });
 
@@ -283,15 +246,11 @@
       const text = (h3.textContent || '').trim();
       if (/Калькулятор коробок|Быстрый калькулятор/.test(text)) {
         const card = h3.closest('.sp-card');
-        if (card && card.style.display !== 'none') {
-          card.style.display = 'none';
-          log('скрыт оригинальный калькулятор');
-        }
+        if (card) card.style.display = 'none';
       }
     });
   }
 
-  /* ---------- Observer + ретрай ---------- */
   function schedule() {
     if (scheduled) return;
     scheduled = true;
@@ -311,34 +270,16 @@
   }
 
   function init() {
-    injectStyles();
-
-    /* Ретрай: 30 попыток каждые 500мс в первые 15 сек */
-    let ticks = 0;
-    const pollTimer = setInterval(() => {
-      ticks++;
-      schedule();
-      if (ticks >= 30) clearInterval(pollTimer);
-    }, 500);
-
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', startObserver, { once: true });
     } else {
       startObserver();
     }
-  }
-
-  function injectStyles() {
-    if (document.getElementById('spCompactDashStyles')) return;
-    const style = document.createElement('style');
-    style.id = 'spCompactDashStyles';
-    document.head.appendChild(style);
+    let ticks = 0;
+    const t = setInterval(() => { ticks++; schedule(); if (ticks >= 30) clearInterval(t); }, 500);
   }
 
   init();
 
-  window.spCompactDashboard = {
-    rebuild: schedule,
-    version: '1.2.0'
-  };
+  window.spCompactDashboard = { rebuild: schedule, version: '1.3.0' };
 })();
