@@ -325,6 +325,8 @@
        перерисовывает внутренности, а не #content целиком */
     contentObserver.observe(content, { childList: true, subtree: true });
 
+  }
+
   /* ============== ИНИЦИАЛИЗАЦИЯ ============== */
 
   function init() {
