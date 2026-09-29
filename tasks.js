@@ -480,16 +480,22 @@ function taskCardHtml(task) {
 
       </div>
 
-      <div class="task-card-actions">
+<div class="task-card-actions">
+  <button
+    type="button"
+    class="task-icon-btn"
+    data-send-task-to-bot="${escapeHtml(task.id)}"
+    title="Отправить в бот"
+  >📤</button>
 
-        <button
-          type="button"
-          class="task-icon-btn ${task.favorite ? 'is-active' : ''}"
-          data-favorite-task="${escapeHtml(task.id)}"
-          title="Избранное"
-        >
-          <svg class="icon"><use href="#icon-${task.favorite ? 'star-filled' : 'star'}"></use></svg>
-        </button>
+  <button
+    type="button"
+    class="task-icon-btn ${task.favorite ? 'is-active' : ''}"
+    data-favorite-task="${escapeHtml(task.id)}"
+    title="Избранное"
+  >
+    <svg class="icon"><use href="#icon-${task.favorite ? 'star-filled' : 'star'}"></use></svg>
+  </button>
 
         <button
           type="button"
@@ -1768,6 +1774,79 @@ function setupTasks() {
 
   });
 
+$all('[data-send-task-to-bot]').forEach(button => {
+  button.addEventListener('click', async () => {
+    const id = button.dataset.sendTaskToBot;
+    const task = tasksState.items.find(t => String(t.id) === String(id));
+    if (!task) return;
+
+    const when = prompt(
+      `Когда отправить задачу «${task.title}» в бот?\n\n` +
+      `• Оставь пустым — отправить сейчас\n` +
+      `• Или введи дату/время: 2026-09-30 09:00`,
+      ''
+    );
+    if (when === null) return;
+
+    let scheduledAt = null;
+    if (when.trim()) {
+      try {
+        const d = new Date(when.trim().replace(' ', 'T'));
+        if (isNaN(d.getTime())) throw new Error('invalid');
+        scheduledAt = d.toISOString();
+      } catch (e) {
+        alert('Неверный формат. Пример: 2026-09-30 09:00');
+        return;
+      }
+    }
+
+    const client = supabaseClient;
+    try {
+      const { data: dispatch, error } = await client
+        .from('task_dispatch')
+        .insert({
+          kind: 'task',
+          title: task.title,
+          description: task.description || '',
+          payload: { task },
+          target_chat_ids: null,
+          scheduled_at: scheduledAt,
+          status: 'pending',
+          created_by_email: state.user?.email || null
+        })
+        .select('*')
+        .single();
+      if (error) throw error;
+
+      await client.from('task_steps').insert({
+        dispatch_id: dispatch.id,
+        step_index: 0,
+        step_data: {
+          type: 'task',
+          title: task.title,
+          description: task.description || '',
+          priority: task.priority || '',
+          due_time: task.due_time || ''
+        },
+        status: 'pending'
+      });
+
+      if (!scheduledAt) {
+        await client.functions.invoke('telegram-webhook', {
+          body: { action: 'dispatch_now', dispatch_id: dispatch.id }
+        });
+        toast('✓ Задача отправлена всем');
+      } else {
+        const dt = new Date(scheduledAt).toLocaleString('ru-RU');
+        toast(`✓ Задача отправлена по расписанию: ${dt}`);
+      }
+    } catch (e) {
+      console.error('[task dispatch] error:', e);
+      toast('Ошибка: ' + (e.message || ''), 'error');
+    }
+  });
+});
+   
   $all('[data-favorite-task]').forEach(button => {
 
     button.addEventListener('click', () => {
