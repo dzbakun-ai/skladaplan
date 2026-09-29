@@ -353,8 +353,45 @@
   }
 
   /* =========================================================
-     ОБЁРТКА FETCH
+     ИДЕМПОТЕНТНЫЕ RPC
      ========================================================= */
+
+  function prepareIdempotentRpc(input, init) {
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    const match = url.match(/\/rest\/v1\/rpc\/(sp_move_boxes)(?:[?#]|$)/);
+    if (!match || !init || typeof init.body !== 'string') {
+      return { input: input, init: init, operationId: null };
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(init.body);
+    } catch (_) {
+      return { input: input, init: init, operationId: null };
+    }
+
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return { input: input, init: init, operationId: null };
+    }
+
+    const operationId = payload.p_operation_id ||
+      (window.crypto && typeof window.crypto.randomUUID === 'function'
+        ? window.crypto.randomUUID()
+        : null);
+
+    if (!operationId) {
+      return { input: input, init: init, operationId: null };
+    }
+
+    if (payload.p_operation_id === operationId) {
+      return { input: input, init: init, operationId: operationId };
+    }
+
+    const nextInit = Object.assign({}, init, {
+      body: JSON.stringify(Object.assign({}, payload, { p_operation_id: operationId }))
+    });
+    return { input: input, init: nextInit, operationId: operationId };
+  }
 
   function installFetchWrapper() {
     if (installed) return;
@@ -363,10 +400,13 @@
     originalFetch = window.fetch.bind(window);
 
     window.fetch = async function spOfflineFetch(input, init) {
-      const queueable = isQueueable(input, init);
+      const prepared = prepareIdempotentRpc(input, init);
+      const requestInput = prepared.input;
+      const requestInit = prepared.init;
+      const queueable = isQueueable(requestInput, requestInit);
 
       try {
-        const response = await originalFetch(input, init);
+        const response = await originalFetch(requestInput, requestInit);
         if (!isOnline) markOnline();
         return response;
       } catch (error) {
@@ -382,23 +422,23 @@
         markOffline();
 
         try {
-          const url = typeof input === 'string' ? input : input.url;
+          const url = typeof requestInput === 'string' ? requestInput : requestInput.url;
           const method = (
-            (init && init.method) ||
-            (typeof input !== 'string' && input && input.method) ||
+            (requestInit && requestInit.method) ||
+            (typeof requestInput !== 'string' && requestInput && requestInput.method) ||
             'GET'
           ).toUpperCase();
 
           const headers = {};
-          if (init && init.headers) {
-            if (typeof Headers !== 'undefined' && init.headers instanceof Headers) {
-              init.headers.forEach((v, k) => { headers[k] = v; });
-            } else if (typeof init.headers === 'object') {
-              Object.assign(headers, init.headers);
+          if (requestInit && requestInit.headers) {
+            if (typeof Headers !== 'undefined' && requestInit.headers instanceof Headers) {
+              requestInit.headers.forEach((v, k) => { headers[k] = v; });
+            } else if (typeof requestInit.headers === 'object') {
+              Object.assign(headers, requestInit.headers);
             }
           }
 
-          const body = init && init.body;
+          const body = requestInit && requestInit.body;
           let bodyText = null;
           if (typeof body === 'string') bodyText = body;
           else if (body && typeof body.text === 'function') bodyText = await body.text();
@@ -463,18 +503,25 @@
 
     for (const item of items) {
       try {
-        await retryEntry(item);
+        const response = await retryEntry(item);
+
+        if (!response.ok) {
+          /* Запрос дошёл до сервера, но операция не подтверждена. Сохраняем её. */
+          remaining++;
+          console.warn(
+            `[OfflineQueue] HTTP ${response.status}; операция оставлена в очереди`,
+            item.label
+          );
+          break;
+        }
+
         await dbDelete(item.id);
         ok++;
       } catch (e) {
-        if (isNetworkError(e)) {
-          remaining++;
-          break;
-        } else {
-          /* Сервер ответил ошибкой — считаем операцию отработанной */
-          await dbDelete(item.id);
-          console.warn('[OfflineQueue] Операция убрана из очереди:', e.message);
-        }
+        remaining++;
+        if (isNetworkError(e)) break;
+        console.warn('[OfflineQueue] Ошибка повтора; операция оставлена в очереди:', e.message);
+        break;
       }
     }
 
@@ -488,15 +535,19 @@
     if (!item) return;
 
     try {
-      await retryEntry(item);
-      await dbDelete(id);
-      toast('Операция отправлена');
+      const response = await retryEntry(item);
+
+      if (!response.ok) {
+        toast(`Сервер вернул HTTP ${response.status}. Операция оставлена в очереди`, 'error');
+      } else {
+        await dbDelete(id);
+        toast('Операция отправлена');
+      }
     } catch (e) {
       if (isNetworkError(e)) {
         toast('Сеть всё ещё недоступна', 'error');
       } else {
-        await dbDelete(id);
-        toast('Сервер вернул ошибку — операция убрана', 'error');
+        toast('Ошибка повторной отправки. Операция оставлена в очереди', 'error');
       }
     }
     await refreshPendingCount();
