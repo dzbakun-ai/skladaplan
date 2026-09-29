@@ -1,7 +1,6 @@
 /* =========================================================
-   SKLADAPLAN — КОМПАКТНАЯ ГЛАВНАЯ (JS-патч)
-   Не трогает app.js / dashboard.js / shifts.js.
-   Работает через MutationObserver на #content.
+   SKLADAPLAN — КОМПАКТНАЯ ГЛАВНАЯ (v1.2)
+   Надёжная версия: observer + поллинг + диагностика.
    ========================================================= */
 
 (function () {
@@ -16,30 +15,23 @@
   let scheduled = false;
   let observer = null;
   let activeLogTab = 'events';
+  let log = (...a) => console.log('[CompactDash]', ...a);
 
   function el(id) { return document.getElementById(id); }
+  function onDashboard() { return !!document.getElementById('spDashboardHeader'); }
 
-  function onDashboard() {
-    return !!document.getElementById('spDashboardHeader');
-  }
-
-  /* =========================================================
-     1. НОВАЯ ЗАЯВКА — теперь не пересоздаём.
-     Просто находим оригинальную карточку (#requestBarcodes)
-     и помечаем классом .sp-request-card, чтобы её стилизовал CSS.
-     ========================================================= */
+  /* ---------- Новая заявка: просто помечаем классом ---------- */
   function tagRequestCard() {
     const textarea = document.getElementById('requestBarcodes');
     if (!textarea) return;
     const card = textarea.closest('.sp-card');
     if (card && !card.classList.contains('sp-request-card')) {
       card.classList.add('sp-request-card');
+      log('карточка заявки помечена классом .sp-request-card');
     }
   }
 
-  /* =========================================================
-     2. ОБЪЕДИНЁННЫЙ QUICK-STRIP
-     ========================================================= */
+  /* ---------- Quick-strip ---------- */
   function buildQuickStrip() {
     const wrap = document.createElement('div');
     wrap.id = WRAP_ID;
@@ -83,10 +75,7 @@
     return wrap;
   }
 
-  /* =========================================================
-     3. КАЛЬКУЛЯТОРЫ — уникальные ID, свои обработчики,
-     оригинальные скрыты через CSS.
-     ========================================================= */
+  /* ---------- Калькуляторы ---------- */
   function buildCalcBlock() {
     const details = document.createElement('details');
     details.id = CALC_ID;
@@ -121,13 +110,13 @@
     const quick = document.getElementById('spCalcQuickInput');
     const quickOut = document.getElementById('spCalcQuickResult');
 
-    if (qty && per && out) {
+    if (qty && per && out && !qty.dataset.spBound) {
+      qty.dataset.spBound = '1';
       const update = () => {
         const q = parseFloat(qty.value.replace(',', '.'));
         const p = parseFloat(per.value.replace(',', '.'));
         if (!isFinite(q) || !isFinite(p) || q <= 0 || p <= 0) {
-          out.textContent = 'Коробок: —';
-          return;
+          out.textContent = 'Коробок: —'; return;
         }
         const boxes = Math.ceil(q / p);
         const tail = q % p === 0 ? p : q % p;
@@ -137,26 +126,21 @@
       per.addEventListener('input', update);
     }
 
-    if (quick && quickOut) {
+    if (quick && quickOut && !quick.dataset.spBound) {
+      quick.dataset.spBound = '1';
       quick.addEventListener('input', () => {
         const val = quick.value.trim();
         if (!val) { quickOut.textContent = 'Результат: —'; return; }
-        /* Используем глобальный safeEvaluateExpression из app.js, если он есть */
         const res = (typeof window.safeEvaluateExpression === 'function')
-          ? window.safeEvaluateExpression(val)
-          : null;
-        if (res === null) {
-          quickOut.textContent = 'Результат: ошибка в выражении';
-        } else {
-          quickOut.textContent = `Результат: ${Number(res.toFixed(6))}`;
-        }
+          ? window.safeEvaluateExpression(val) : null;
+        quickOut.textContent = res === null
+          ? 'Результат: ошибка в выражении'
+          : `Результат: ${Number(res.toFixed(6))}`;
       });
     }
   }
 
-  /* =========================================================
-     4. ЛОГИ С ТАБАМИ
-     ========================================================= */
+  /* ---------- Логи с табами ---------- */
   function buildLogsBlock() {
     const wrap = document.createElement('div');
     wrap.id = LOGS_ID;
@@ -174,7 +158,6 @@
         <div class="sp-cl-panel" data-sp-cl-panel="info"></div>
       </div>
     `;
-
     wrap.querySelectorAll('[data-sp-cl-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
         activeLogTab = btn.getAttribute('data-sp-cl-tab');
@@ -182,47 +165,45 @@
         applyLogTab(activeLogTab);
       });
     });
-
     try {
       const saved = localStorage.getItem(LS_LOG_TAB);
       if (saved) activeLogTab = saved;
     } catch (e) {}
     applyLogTab(activeLogTab);
-
     return wrap;
   }
 
   function applyLogTab(key) {
     const wrap = el(LOGS_ID);
     if (!wrap) return;
-    wrap.querySelectorAll('[data-sp-cl-tab]').forEach(btn => {
-      btn.classList.toggle('is-active', btn.getAttribute('data-sp-cl-tab') === key);
-    });
-    wrap.querySelectorAll('[data-sp-cl-panel]').forEach(p => {
-      p.classList.toggle('is-active', p.getAttribute('data-sp-cl-panel') === key);
-    });
+    wrap.querySelectorAll('[data-sp-cl-tab]').forEach(btn =>
+      btn.classList.toggle('is-active', btn.getAttribute('data-sp-cl-tab') === key)
+    );
+    wrap.querySelectorAll('[data-sp-cl-panel]').forEach(p =>
+      p.classList.toggle('is-active', p.getAttribute('data-sp-cl-panel') === key)
+    );
   }
 
   function migrateLogContent() {
     const wrap = el(LOGS_ID);
     if (!wrap) return;
 
+    /* Ищем «Последние операции» */
     const allCards = document.querySelectorAll('#content > .sp-card');
-    let lastOpsCard = null;
+    let opsCard = null;
     allCards.forEach(card => {
       const h3 = card.querySelector('h3');
-      if (h3 && /Последние операции/i.test(h3.textContent || '')) {
-        lastOpsCard = card;
-      }
+      if (h3 && /Последние операции/i.test(h3.textContent || '')) opsCard = card;
     });
-
-    const operationsPanel = wrap.querySelector('[data-sp-cl-panel="operations"]');
-    if (lastOpsCard && operationsPanel && !operationsPanel.hasChildNodes()) {
-      const tableWrap = lastOpsCard.querySelector('.sp-table-wrap');
-      if (tableWrap) operationsPanel.appendChild(tableWrap.cloneNode(true));
-      lastOpsCard.style.display = 'none';
+    const opsPanel = wrap.querySelector('[data-sp-cl-panel="operations"]');
+    if (opsCard && opsPanel && !opsPanel.hasChildNodes()) {
+      const tw = opsCard.querySelector('.sp-table-wrap');
+      if (tw) opsPanel.appendChild(tw.cloneNode(true));
+      opsCard.style.display = 'none';
+      log('«Последние операции» перемещены в таб «Операции»');
     }
 
+    /* Ищем «Информация» внутри .sp-dashboard-columns */
     const infoPanel = wrap.querySelector('[data-sp-cl-panel="info"]');
     if (infoPanel && !infoPanel.hasChildNodes()) {
       let infoCard = null;
@@ -233,52 +214,52 @@
       if (infoCard) {
         const clone = infoCard.cloneNode(true);
         const firstHead = clone.firstElementChild;
-        if (firstHead && /Информация/i.test(firstHead.textContent || '')) {
-          firstHead.remove();
-        }
+        if (firstHead && /Информация/i.test(firstHead.textContent || '')) firstHead.remove();
         infoPanel.appendChild(clone);
         infoCard.style.display = 'none';
+        log('«Информация» перемещена в таб «Информация»');
       }
     }
   }
 
-  /* =========================================================
-     СБОРКА
-     ========================================================= */
+  /* ---------- Сборка ---------- */
   function build() {
     if (!onDashboard()) return;
 
     document.body.classList.add('sp-compact-dash');
-
     const header = document.getElementById('spDashboardHeader');
     if (!header) return;
 
-    /* 1. Помечаем оригинальную карточку заявки — её не трогаем */
     tagRequestCard();
 
-    /* 2. Quick-strip — после виджета Смены (или после header) */
+    /* 1. Quick-strip */
     if (!el(WRAP_ID)) {
       const shiftHost = document.getElementById('spShiftHost');
       const anchor = shiftHost || header;
-      anchor.parentNode.insertBefore(buildQuickStrip(), anchor.nextSibling);
+      if (anchor.parentNode) {
+        anchor.parentNode.insertBefore(buildQuickStrip(), anchor.nextSibling);
+        log('quick-strip вставлен после', anchor.id || anchor.tagName);
+      }
     }
 
-    /* 3. Калькуляторы — после quick-strip */
+    /* 2. Калькуляторы */
     if (!el(CALC_ID)) {
       const quick = el(WRAP_ID);
       if (quick) {
         quick.parentNode.insertBefore(buildCalcBlock(), quick.nextSibling);
         bindCalcHandlers();
+        log('калькуляторы вставлены');
       }
     }
 
-    /* 4. Логи с табами — сразу после header */
+    /* 3. Логи */
     if (!el(LOGS_ID)) {
       header.parentNode.insertBefore(buildLogsBlock(), header.nextSibling);
+      log('логи с табами вставлены');
     }
     migrateLogContent();
 
-    /* 5. Скрываем дубли-блоки */
+    /* 4. Скрытие дублей */
     hideDuplicates();
   }
 
@@ -291,7 +272,10 @@
       if (!h2) return;
       const text = (h2.textContent || '').trim();
       if (text === 'Рабочие процессы' || text === 'Инструменты') {
-        block.style.display = 'none';
+        if (block.style.display !== 'none') {
+          block.style.display = 'none';
+          log('скрыт дубль:', text);
+        }
       }
     });
 
@@ -299,26 +283,21 @@
       const text = (h3.textContent || '').trim();
       if (/Калькулятор коробок|Быстрый калькулятор/.test(text)) {
         const card = h3.closest('.sp-card');
-        if (card) card.style.display = 'none';
+        if (card && card.style.display !== 'none') {
+          card.style.display = 'none';
+          log('скрыт оригинальный калькулятор');
+        }
       }
-    });
-
-    content.querySelectorAll(':scope > .sp-grid').forEach(grid => {
-      const visible = [...grid.children].some(c => c.style.display !== 'none');
-      if (!visible) grid.style.display = 'none';
     });
   }
 
-  /* =========================================================
-     OBSERVER
-     ========================================================= */
+  /* ---------- Observer + ретрай ---------- */
   function schedule() {
     if (scheduled) return;
     scheduled = true;
     requestAnimationFrame(() => {
       scheduled = false;
-      try { build(); }
-      catch (e) { console.warn('[CompactDashboard] error:', e); }
+      try { build(); } catch (e) { console.warn('[CompactDash] error:', e); }
     });
   }
 
@@ -326,39 +305,40 @@
     if (observer) return;
     const content = document.getElementById('content');
     if (!content) { setTimeout(startObserver, 300); return; }
-
     observer = new MutationObserver(() => schedule());
     observer.observe(content, { childList: true, subtree: true });
-
     schedule();
   }
 
   function init() {
     injectStyles();
+
+    /* Ретрай: 30 попыток каждые 500мс в первые 15 сек */
+    let ticks = 0;
+    const pollTimer = setInterval(() => {
+      ticks++;
+      schedule();
+      if (ticks >= 30) clearInterval(pollTimer);
+    }, 500);
+
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', startObserver, { once: true });
     } else {
       startObserver();
     }
-    setTimeout(startObserver, 500);
-    setTimeout(startObserver, 2000);
-    setTimeout(schedule, 3000);
   }
 
   function injectStyles() {
     if (document.getElementById('spCompactDashStyles')) return;
     const style = document.createElement('style');
     style.id = 'spCompactDashStyles';
-    style.textContent = window.__SP_COMPACT_DASH_CSS__ || '';
     document.head.appendChild(style);
   }
-
-  window.__SP_COMPACT_DASH_CSS__ = window.__SP_COMPACT_DASH_CSS__ || '';
 
   init();
 
   window.spCompactDashboard = {
     rebuild: schedule,
-    version: '1.1.0'
+    version: '1.2.0'
   };
 })();
