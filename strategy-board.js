@@ -1,7 +1,8 @@
 /* =========================================================
-   SKLADAPLAN — СТРАТЕГИЧЕСКАЯ КАРТА (v2)
-   Интеграция через DOM-наблюдение — БЕЗ обёрток tasksView.
-   Не конфликтует с unified-planner.js.
+   SKLADAPLAN — СТРАТЕГИЧЕСКАЯ КАРТА (v3)
+   - Pointer Events вместо Mouse Events (работает и на тач)
+   - Пинч-зум двумя пальцами
+   - touch-action: none на нодах/портах/холсте
    ========================================================= */
 
 (function () {
@@ -137,7 +138,7 @@
           </div>
         </div>
         <div class="sp-sb-hint-row">
-          Клик по ✎ — редактировать · Тяните от правой ● к левой ● другой ноды — связать · Ctrl + колесо — зум
+          Клик по ✎ — редактировать · Тяните от правой ● к левой ● другой ноды — связать · Два пальца — зум
         </div>
       </div>
     `;
@@ -332,11 +333,12 @@
 
   function closeEditor() { document.getElementById('spSbModal')?.remove(); }
 
-  /* ============ DRAG / PAN / CONNECT ============ */
+  /* ============ DRAG / PAN / CONNECT (Pointer Events) ============ */
   function bindNodeHandlers() {
     document.querySelectorAll('.sp-sb-node').forEach(el => {
       const id = el.getAttribute('data-node-id');
-      el.addEventListener('mousedown', ev => {
+
+      el.addEventListener('pointerdown', ev => {
         if (ev.target.closest('[data-node-del]')) return;
         if (ev.target.closest('[data-node-edit]')) return;
         if (ev.target.closest('[data-port-out]')) return;
@@ -344,13 +346,16 @@
         const head = ev.target.closest('[data-drag-handle]');
         if (head || ev.target === el) startNodeDrag(ev, el, id);
       });
-      el.querySelector('[data-node-edit]')?.addEventListener('click', ev => {
-        ev.stopPropagation(); openEditor(id);
+
+      el.querySelector('[data-node-edit]')?.addEventListener('pointerup', ev => {
+        ev.stopPropagation(); ev.preventDefault();
+        openEditor(id);
       });
-      el.querySelector('[data-node-del]')?.addEventListener('click', ev => {
-        ev.stopPropagation(); deleteNode(id);
+      el.querySelector('[data-node-del]')?.addEventListener('pointerup', ev => {
+        ev.stopPropagation(); ev.preventDefault();
+        deleteNode(id);
       });
-      el.querySelector('[data-port-out]')?.addEventListener('mousedown', ev => {
+      el.querySelector('[data-port-out]')?.addEventListener('pointerdown', ev => {
         ev.stopPropagation(); ev.preventDefault();
         startConnect(ev, id);
       });
@@ -363,50 +368,141 @@
     const zoom = st.viewport.zoom;
     const startX = ev.clientX, startY = ev.clientY;
     const sx = n.x, sy = n.y;
+    const pid = ev.pointerId;
+
     el.classList.add('is-dragging');
+    try { el.setPointerCapture(pid); } catch (e) {}
+
     function onMove(e) {
+      if (e.pointerId !== pid) return;
       n.x = Math.round(sx + (e.clientX - startX) / zoom);
       n.y = Math.round(sy + (e.clientY - startY) / zoom);
       el.style.left = n.x + 'px';
       el.style.top  = n.y + 'px';
       renderEdges();
     }
-    function onUp() {
+    function onUp(e) {
+      if (e.pointerId !== pid) return;
       el.classList.remove('is-dragging');
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
       save();
     }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
   }
 
+  /* -------------------- CANVAS PAN + PINCH -------------------- */
   function bindCanvasPan() {
     const canvas = document.querySelector('[data-sb-canvas]');
     if (!canvas) return;
-    canvas.addEventListener('mousedown', ev => {
+
+    const pointers = new Map();   /* pointerId -> {x,y} */
+    let panStart = null;           /* { pid, x, y, vx, vy } */
+    let pinchStart = null;         /* { dist, cx, cy, zoom, vx, vy } */
+
+    function getPinch() {
+      const pts = [...pointers.values()];
+      if (pts.length < 2) return null;
+      const [a, b] = pts;
+      return {
+        dist: Math.hypot(b.x - a.x, b.y - a.y),
+        cx: (a.x + b.x) / 2,
+        cy: (a.y + b.y) / 2
+      };
+    }
+
+    canvas.addEventListener('pointerdown', ev => {
       if (ev.target.closest('.sp-sb-node')) return;
       if (ev.target.closest('.sp-sb-empty')) return;
-      if (ev.button !== 0) return;
-      ev.preventDefault();
-      const sx = ev.clientX, sy = ev.clientY;
-      const vx = st.viewport.x, vy = st.viewport.y;
-      canvas.classList.add('is-panning');
-      function onMove(e) {
-        st.viewport.x = vx + (e.clientX - sx);
-        st.viewport.y = vy + (e.clientY - sy);
-        applyViewport();
-      }
-      function onUp() {
+      if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+
+      try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
+      pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+
+      if (pointers.size === 1) {
+        panStart = {
+          pid: ev.pointerId,
+          x: ev.clientX, y: ev.clientY,
+          vx: st.viewport.x, vy: st.viewport.y
+        };
+        canvas.classList.add('is-panning');
+        pinchStart = null;
+      } else if (pointers.size === 2) {
+        panStart = null;
         canvas.classList.remove('is-panning');
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        save();
+        const info = getPinch();
+        if (info) {
+          pinchStart = {
+            dist: info.dist,
+            cx: info.cx, cy: info.cy,
+            zoom: st.viewport.zoom,
+            vx: st.viewport.x, vy: st.viewport.y
+          };
+        }
       }
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
     });
 
+    canvas.addEventListener('pointermove', ev => {
+      if (!pointers.has(ev.pointerId)) return;
+      pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+
+      /* Один палец — панорамирование */
+      if (pointers.size === 1 && panStart && ev.pointerId === panStart.pid) {
+        st.viewport.x = panStart.vx + (ev.clientX - panStart.x);
+        st.viewport.y = panStart.vy + (ev.clientY - panStart.y);
+        applyViewport();
+      }
+      /* Два пальца — пинч-зум + панорамирование от центра жеста */
+      else if (pointers.size >= 2 && pinchStart) {
+        const info = getPinch();
+        if (!info) return;
+        const rect = canvas.getBoundingClientRect();
+        const mx = pinchStart.cx - rect.left;
+        const my = pinchStart.cy - rect.top;
+        const factor = info.dist / pinchStart.dist;
+        const newZoom = Math.max(0.3, Math.min(2, pinchStart.zoom * factor));
+
+        st.viewport.x =
+          mx -
+          (mx - pinchStart.vx) * (newZoom / pinchStart.zoom) +
+          (info.cx - pinchStart.cx);
+        st.viewport.y =
+          my -
+          (my - pinchStart.vy) * (newZoom / pinchStart.zoom) +
+          (info.cy - pinchStart.cy);
+        st.viewport.zoom = newZoom;
+        applyViewport();
+      }
+    });
+
+    function endPointer(ev) {
+      if (!pointers.has(ev.pointerId)) return;
+      pointers.delete(ev.pointerId);
+
+      if (pointers.size === 0) {
+        panStart = null;
+        pinchStart = null;
+        canvas.classList.remove('is-panning');
+        save();
+      } else if (pointers.size === 1) {
+        /* Остался один палец — продолжаем панорамирование от него */
+        pinchStart = null;
+        const [pid, pt] = [...pointers.entries()][0];
+        panStart = {
+          pid,
+          x: pt.x, y: pt.y,
+          vx: st.viewport.x, vy: st.viewport.y
+        };
+        canvas.classList.add('is-panning');
+      }
+    }
+    canvas.addEventListener('pointerup', endPointer);
+    canvas.addEventListener('pointercancel', endPointer);
+
+    /* Колесо мыши — десктоп */
     canvas.addEventListener('wheel', ev => {
       if (!ev.ctrlKey && !ev.metaKey && Math.abs(ev.deltaY) < 20) return;
       ev.preventDefault();
@@ -423,6 +519,7 @@
     }, { passive: false });
   }
 
+  /* -------------------- CONNECT (тач+мышь) -------------------- */
   function startConnect(ev, fromId) {
     ev.preventDefault();
     const svg = document.querySelector('[data-sb-svg]');
@@ -430,8 +527,11 @@
     if (!tempLine) return;
     tempLine.style.display = '';
     const fromNode = nodeById(fromId); if (!fromNode) return;
+
     const rect = svg.getBoundingClientRect();
     const zoom = st.viewport.zoom;
+    const pid = ev.pointerId;
+
     function toLocal(cx, cy) {
       return {
         x: (cx - rect.left - st.viewport.x) / zoom,
@@ -439,15 +539,20 @@
       };
     }
     const p1 = { x: fromNode.x + fromNode.w, y: fromNode.y + fromNode.h / 2 };
+
     function onMove(e) {
+      if (e.pointerId !== pid) return;
       const p2 = toLocal(e.clientX, e.clientY);
       const dx = p2.x - p1.x;
       tempLine.setAttribute('d', `M${p1.x},${p1.y} C${p1.x + dx * 0.4},${p1.y} ${p2.x - dx * 0.4},${p2.y} ${p2.x},${p2.y}`);
     }
     function onUp(e) {
+      if (e.pointerId !== pid) return;
       tempLine.style.display = 'none';
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const inPort = el?.closest('[data-port-in]');
       if (!inPort) return;
@@ -457,8 +562,9 @@
       st.edges.push({ id: uid('e'), from: fromId, to: toId });
       save(); renderEdges();
     }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
   }
 
   function fitView() {
@@ -492,7 +598,6 @@
     root.querySelector('[data-sb-new]')?.addEventListener('click', () => createNode());
     root.querySelector('[data-sb-new-empty]')?.addEventListener('click', () => createNode());
     root.querySelector('[data-sb-fit]')?.addEventListener('click', fitView);
-
     root.querySelector('[data-sb-zoom-in]')?.addEventListener('click', () => {
       st.viewport.zoom = Math.min(2, st.viewport.zoom * 1.15);
       applyViewport(); save();
@@ -501,7 +606,6 @@
       st.viewport.zoom = Math.max(0.3, st.viewport.zoom / 1.15);
       applyViewport(); save();
     });
-
     root.querySelector('[data-sb-template]')?.addEventListener('click', () => {
       if (st.nodes.length && !confirm('Заменить текущую карту примером?')) return;
       loadTemplate();
@@ -515,7 +619,7 @@
     });
   }
 
-  /* ============ КНОПКА В SWITCHER + КЛИКИ ============ */
+  /* ============ SWITCHER + КЛИКИ ============ */
   function findSwitcher() { return document.querySelector('#content .sp-up-modes'); }
 
   function ensureStrategyButton() {
@@ -544,7 +648,6 @@
     return btn;
   }
 
-  /* Глобальный перехватчик кликов по переключателю вкладок */
   document.addEventListener('click', ev => {
     const btn = ev.target.closest('[data-sp-up-mode]');
     if (!btn) return;
@@ -556,8 +659,8 @@
       if (isActive()) {
         setActiveFlag(false);
         removeStrategyView();
-        const st2 = findSwitcher();
-        st2?.querySelectorAll('.sp-up-mode').forEach(x => {
+        const sw = findSwitcher();
+        sw?.querySelectorAll('.sp-up-mode').forEach(x => {
           if (x.getAttribute('data-sp-up-mode') === 'tasks') {
             x.classList.add('is-active'); x.setAttribute('aria-selected', 'true');
           } else {
@@ -571,32 +674,26 @@
       return;
     }
 
-    /* Клик по любой другой вкладке — сбрасываем наш флаг.
-       НЕ preventDefault: даём unified-planner'у обработать. */
     if (isActive()) {
       setActiveFlag(false);
       removeStrategyView();
     }
   }, true);
 
-  /* ============ ПРИМЕНЕНИЕ / УДАЛЕНИЕ ============ */
   function applyStrategyView() {
     const switcher = findSwitcher();
     if (!switcher) return;
     const parent = switcher.parentElement;
     if (!parent) return;
 
-    /* Подсветить наш таб */
     ensureStrategyButton();
 
-    /* Скрыть все родственные блоки, кроме switcher */
     [...parent.children].forEach(el => {
       if (el === switcher) return;
       if (el.id === CONTENT_ID) return;
       el.style.display = 'none';
     });
 
-    /* Вставить/показать нашу доску */
     let board = document.getElementById(CONTENT_ID);
     if (!board) {
       board = document.createElement('div');
@@ -606,7 +703,6 @@
       board.innerHTML = buildView();
     } else {
       board.style.display = '';
-      /* Перестроим view, если вдруг было пусто */
       if (!board.querySelector('.sp-sb-wrap')) {
         board.innerHTML = buildView();
       }
@@ -617,7 +713,6 @@
   function removeStrategyView() {
     const board = document.getElementById(CONTENT_ID);
     if (board) board.remove();
-    /* Показать спрятанные блоки */
     const switcher = findSwitcher();
     if (switcher?.parentElement) {
       [...switcher.parentElement.children].forEach(el => {
@@ -628,25 +723,19 @@
     }
   }
 
-  /* ============ SYNC ПО MUTATION ============ */
   function syncDOM() {
     const switcher = findSwitcher();
     if (!switcher) {
-      /* Не на странице Планирования — если наша доска где-то осталась, убрать */
       if (document.getElementById(CONTENT_ID)) {
         document.getElementById(CONTENT_ID).remove();
       }
       return;
     }
-
     ensureStrategyButton();
-
     if (isActive()) {
-      /* Убедиться, что доска в правильном состоянии */
       if (!document.getElementById(CONTENT_ID)) {
         applyStrategyView();
       } else {
-        /* Спрятать чужие блоки, если они вдруг проявились после re-render */
         const parent = switcher.parentElement;
         if (parent) {
           [...parent.children].forEach(el => {
@@ -712,6 +801,7 @@
         border-radius: 9px;
         font-family: inherit; font-size: 12px; font-weight: 600;
         cursor: pointer;
+        touch-action: manipulation;
         transition: background .12s ease, border-color .12s ease;
       }
       .sp-sb-btn:hover { background: #f8fafc; border-color: #cbd5e1; }
@@ -736,12 +826,16 @@
           radial-gradient(circle at 20px 20px, #e2e8f0 1px, transparent 1.2px) 0 0/24px 24px,
           linear-gradient(180deg, #fbfcfd, #f5f7fa);
         user-select: none;
+        -webkit-user-select: none;
+        /* ГЛАВНОЕ: не даём браузеру перехватывать жесты */
         touch-action: none;
+        -ms-touch-action: none;
       }
       .sp-sb-canvas.is-panning { cursor: grabbing; }
       .sp-sb-pan {
         position: absolute; left: 0; top: 0;
         width: 1px; height: 1px;
+        will-change: transform;
       }
       .sp-sb-svg {
         position: absolute; left: -20000px; top: -20000px;
@@ -763,6 +857,9 @@
         cursor: move;
         min-width: 180px;
         transition: box-shadow .12s ease;
+        /* Важно: нода — тоже тач-элемент */
+        touch-action: none;
+        -ms-touch-action: none;
       }
       .sp-sb-node:hover { box-shadow: 0 8px 22px rgba(15,23,42,.12); }
       .sp-sb-node.is-dragging { box-shadow: 0 14px 32px rgba(15,23,42,.2); z-index: 100; }
@@ -780,6 +877,7 @@
         cursor: pointer; border-radius: 5px;
         font-size: 12px; line-height: 1;
         display: inline-flex; align-items: center; justify-content: center;
+        touch-action: manipulation;
       }
       .sp-sb-node-edit:hover, .sp-sb-node-del:hover { opacity: 1; background: rgba(0,0,0,.06); }
       .sp-sb-node-del:hover { color: #b42318; background: rgba(180,35,24,.12); }
@@ -793,10 +891,13 @@
       }
       .sp-sb-port {
         position: absolute; top: 50%; transform: translateY(-50%);
-        width: 14px; height: 14px; border-radius: 50%;
+        width: 16px; height: 16px; border-radius: 50%;
         background: #fff; border: 2px solid #94a3b8;
         cursor: crosshair; z-index: 3;
         transition: all .12s ease;
+        /* Увеличиваем на тач-устройствах зону касания */
+        touch-action: none;
+        -ms-touch-action: none;
       }
       .sp-sb-port:hover { border-color: var(--primary, #2563EB); background: #eff6ff; transform: translateY(-50%) scale(1.3); }
       .sp-sb-port-in  { left: -8px; }
@@ -818,7 +919,6 @@
         border-top: 1px solid #f1f5f9;
         background: #fafbfc;
       }
-      /* Редактор */
       .sp-sb-modal-backdrop {
         position: fixed; inset: 0;
         background: rgba(15,23,42,.55);
@@ -898,13 +998,17 @@
         .sp-sb-hint-row { display: none; }
         .sp-sb-canvas { min-height: 55vh; }
         .sp-sb-node { min-width: 140px; }
+        /* На тач-увеличиваем кнопки-действия и порты */
+        .sp-sb-node-edit, .sp-sb-node-del { width: 28px; height: 28px; font-size: 14px; }
+        .sp-sb-port { width: 20px; height: 20px; }
+        .sp-sb-port-in  { left: -10px; }
+        .sp-sb-port-out { right: -10px; }
         .sp-sb-modal-backdrop { padding: 0; align-items: flex-end; }
         .sp-sb-modal { border-radius: 18px 18px 0 0; max-height: 88vh; }
       }
     `;
     document.head.appendChild(s);
 
-    /* Ховер-крестик на связях */
     if (!document.getElementById('spSbEdgeHoverCss')) {
       const s2 = document.createElement('style');
       s2.id = 'spSbEdgeHoverCss';
@@ -929,7 +1033,6 @@
     setTimeout(startObserver, 400);
     setTimeout(startObserver, 1500);
 
-    /* Догоняющие тики на случай позднего рендера */
     let ticks = 0;
     const t = setInterval(() => {
       ticks++;
@@ -937,7 +1040,7 @@
       if (ticks >= 20) clearInterval(t);
     }, 500);
 
-    console.log('[StrategyBoard v2] Модуль инициализирован');
+    console.log('[StrategyBoard v3] Модуль инициализирован');
   }
 
   init();
@@ -946,6 +1049,6 @@
     rebuild: scheduleSync,
     clear: () => { st.nodes = []; st.edges = []; save(); },
     isActive,
-    version: '2.0.0'
+    version: '3.0.0'
   };
 })();
