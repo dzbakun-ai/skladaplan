@@ -4,7 +4,7 @@
 
    Что делает:
    - Ctrl+K (Cmd+K) — открывает поиск по всему приложению.
-   - На телефоне — кнопка «🔍» в шапке + свайп сверху.
+   - На телефоне — кнопка «🔍» в шапке + свайп от самой верхней кромки.
    - Ищет по разделам, коробкам, задачам, партнёрам.
    - Стрелки ↑↓ — навигация, Enter — выбор, Esc — закрыть.
 
@@ -285,8 +285,6 @@
      ========================================================= */
 
   function getPages() {
-    /* Список разделов с ключами — совпадает с PAGE_META + активные инструменты.
-       Названия — человекочитаемые. */
     return [
       { key: 'dashboard',    label: 'Главная',              icon: '🏠' },
       { key: 'base',         label: 'База коробок',         icon: '📦' },
@@ -413,14 +411,10 @@
     const needle = normalize(q);
     if (!haystack.includes(needle)) return -1;
 
-    /* Чем раньше совпадение и чем короче строка — тем выше */
     const pos = haystack.indexOf(needle);
     let score = 1000 - pos * 3 - haystack.length * 0.1;
 
-    /* Точное совпадение в начале — бонус */
     if (haystack.startsWith(needle)) score += 500;
-
-    /* Совпадение в label важнее, чем в meta */
     if (normalize(item.label).includes(needle)) score += 200;
 
     return score;
@@ -429,7 +423,6 @@
   function buildAll() {
     const out = [];
 
-    /* Разделы */
     getPages().forEach(p => {
       out.push({
         kind: 'page',
@@ -442,7 +435,6 @@
       });
     });
 
-    /* Инструменты */
     getToolCommands().forEach(t => {
       out.push({
         kind: 'tool',
@@ -458,7 +450,6 @@
       });
     });
 
-    /* Быстрые действия */
     getQuickActions().forEach(a => {
       out.push({
         kind: 'action',
@@ -471,7 +462,6 @@
       });
     });
 
-    /* Коробки — только если данные уже загружены */
     if (window.state && Array.isArray(state.boxes)) {
       const seen = new Set();
       let count = 0;
@@ -515,7 +505,6 @@
       }
     }
 
-    /* Задачи (раздел «Задачи» — tasksState) */
     if (window.tasksState && Array.isArray(tasksState.items)) {
       tasksState.items.forEach(t => {
         if (!t || !t.title) return;
@@ -533,8 +522,6 @@
           keywords: [t.title, t.description, t.priority].filter(Boolean).join(' '),
           run: () => {
             if (window.state) {
-              /* Показать только эту задачу — через встроенный фильтр не получится,
-                 но можно подсветить: открываем раздел «Задачи». */
               state.activeTool = '';
             }
             window.goToPage && window.goToPage('tasks');
@@ -543,7 +530,6 @@
       });
     }
 
-    /* Задачи Планировщика */
     if (window.plannerState && Array.isArray(plannerState.tasks)) {
       plannerState.tasks.forEach(t => {
         if (!t || !t.title) return;
@@ -565,7 +551,6 @@
         });
       });
 
-      /* Отгрузки планировщика */
       if (Array.isArray(plannerState.shipments)) {
         plannerState.shipments.forEach(s => {
           if (!s || !s.title) return;
@@ -589,7 +574,6 @@
       }
     }
 
-    /* Партнёры */
     if (window.partnersState && Array.isArray(partnersState.items)) {
       partnersState.items.forEach(p => {
         if (!p || !p.name) return;
@@ -628,7 +612,6 @@
     let all = items;
 
     if (q) {
-      /* Сккорим и сортируем по релевантности */
       const scored = [];
       for (let i = 0; i < all.length; i++) {
         const s = scoreItem(all[i], q);
@@ -636,11 +619,8 @@
       }
       scored.sort((a, b) => b.score - a.score);
 
-      /* Берём первые 60 — не рендерим сотни */
       all = scored.slice(0, 60).map(x => x.item);
     } else {
-      /* Без запроса показываем только самое полезное:
-         быстрые действия + разделы + первые задачи. */
       const preferred = ['action', 'page', 'tool', 'task'];
       all = all.filter(it => preferred.includes(it.kind)).slice(0, 40);
     }
@@ -655,7 +635,6 @@
       return;
     }
 
-    /* Группировка по group */
     const grouped = new Map();
     all.forEach(it => {
       const g = it.group || 'Прочее';
@@ -663,7 +642,6 @@
       grouped.get(g).push(it);
     });
 
-    /* Плоский список для навигации + HTML с группами */
     const flat = [];
     let html = '';
     grouped.forEach((list, groupName) => {
@@ -685,14 +663,11 @@
 
     container.innerHTML = html;
 
-    /* Синхронизируем текущий список с flat */
     items._flat = flat;
 
-    /* Устанавливаем активный элемент */
     if (activeIndex < 0 || activeIndex >= flat.length) activeIndex = 0;
     setActive(activeIndex, true);
 
-    /* Обработчики кликов */
     container.querySelectorAll('.sp-cp-item').forEach(el => {
       el.addEventListener('mouseenter', () => {
         const i = Number(el.getAttribute('data-idx'));
@@ -731,8 +706,6 @@
     const it = flat[index];
     if (!it) return;
 
-    /* Закрываем палитру до выполнения действия — чтобы если
-       действие откроет модалку, не было конфликта z-index. */
     close();
 
     setTimeout(() => {
@@ -826,12 +799,10 @@
 
     renderResults('');
 
-    /* Фокус на поле — с задержкой, чтобы избежать автозума на iOS */
     setTimeout(() => {
       const i = document.getElementById(INPUT_ID);
       if (i) {
         i.focus();
-        /* На Android фокус открывает клавиатуру — это ожидаемо. */
       }
     }, 30);
   }
@@ -854,11 +825,6 @@
     const topActions = document.getElementById('topActions');
     const mobileHeader = document.querySelector('.topbar');
 
-    /* Куда вставлять: в .top-actions (обычно desktop), но
-       .top-actions скрыт на мобильном. Поэтому попробуем
-       вставить в .topbar в начало — так он будет виден
-       и на десктопе, и на мобильном. */
-
     if (!mobileHeader) return;
     if (existing) return;
 
@@ -874,12 +840,10 @@
       open();
     });
 
-    /* Вставляем перед .topbar-title, если он есть */
     const title = mobileHeader.querySelector('.topbar-title');
     if (title && title.parentNode === mobileHeader) {
       mobileHeader.insertBefore(btn, title);
     } else {
-      /* На крайний случай — просто первым ребёнком */
       mobileHeader.insertBefore(btn, mobileHeader.firstChild);
     }
   }
@@ -890,10 +854,7 @@
 
   function setupHotkeys() {
     document.addEventListener('keydown', e => {
-      /* Ctrl+K / Cmd+K */
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
-        /* Не перехватываем, если пользователь печатает в поле
-           поиска внутри палитры — иначе потеряется ввод. */
         const active = document.activeElement;
         if (active && active.id === INPUT_ID) return;
 
@@ -903,7 +864,6 @@
         return;
       }
 
-      /* Глобальный Esc — закрывает палитру, если она открыта */
       if (e.key === 'Escape' && isOpen) {
         e.preventDefault();
         close();
@@ -911,10 +871,28 @@
     }, true);
   }
 
+  /* =========================================================
+     СВАЙП (ИСПРАВЛЕНО)
+     =========================================================
+
+     Раньше палитра открывалась при любом свайпе вниз из верхних
+     40% экрана — это конфликтовало со скроллом страницы вверх
+     на телефоне: пользователь тянул палец вниз, чтобы прокрутить
+     содержимое, а открывался поиск.
+
+     Теперь открываем ТОЛЬКО если:
+       1. страница реально в самом верху (scrollY < 5);
+       2. палец начал касание у самой верхней кромки (первые 60px);
+       3. свайп строго вертикальный вниз (dx < 30), длиной 100–300px;
+       4. не дольше 400мс — то есть это резкий осознанный жест,
+          а не медленный скролл.
+     ========================================================= */
+
   function setupSwipe() {
     let touchStartY = 0;
     let touchStartX = 0;
     let touchStartTime = 0;
+    let scrollYAtStart = 0;
 
     document.addEventListener('touchstart', e => {
       if (isOpen) return;
@@ -923,6 +901,10 @@
       touchStartY = t.clientY;
       touchStartX = t.clientX;
       touchStartTime = Date.now();
+      scrollYAtStart =
+        window.scrollY ||
+        document.documentElement.scrollTop ||
+        0;
     }, { passive: true });
 
     document.addEventListener('touchend', e => {
@@ -934,13 +916,12 @@
       const dx = Math.abs(t.clientX - touchStartX);
       const dt = Date.now() - touchStartTime;
 
-      /* Свайп сверху вниз, короткий, вертикальный:
-         старт в верхней половине экрана, длина >80px, <500ms, dx<40 */
       if (
-        touchStartY < window.innerHeight * 0.4 &&
-        dy > 80 && dy < 260 &&
-        dx < 40 &&
-        dt < 500
+        scrollYAtStart < 5 &&          /* страница в самом верху */
+        touchStartY < 60 &&            /* палец начал от верхней кромки */
+        dy > 100 && dy < 300 &&        /* заметный свайп вниз */
+        dx < 30 &&                     /* но строго вертикальный */
+        dt < 400                       /* резкий жест, а не медленный скролл */
       ) {
         open();
       }
@@ -967,9 +948,6 @@
       start();
     }
 
-    /* Кнопка в шапке может отсутствовать при первой отрисовке
-       (topbar рендерится app.js), поэтому повторим попытку
-       через небольшой интервал. Только дважды — не циклим. */
     setTimeout(ensureTriggerButton, 800);
     setTimeout(ensureTriggerButton, 2500);
   }
@@ -984,7 +962,7 @@
     open,
     close,
     isOpen: () => isOpen,
-    version: '1.0.0'
+    version: '1.1.0'
   };
 
 })();
