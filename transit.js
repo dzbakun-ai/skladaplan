@@ -69,6 +69,20 @@
       .replace(/'/g, '&#039;');
   }
 
+  /*
+    Возвращает HTML для штрихкода, в котором последние 4 цифры
+    визуально выделены (крупнее + темнее) — удобно проверять глазами.
+  */
+  function barcodeHtml(bc) {
+    const s = String(bc == null ? '' : bc);
+    if (s.length <= 4) {
+      return `<span class="sp-tr-bc-suffix">${esc(s)}</span>`;
+    }
+    const prefix = s.slice(0, s.length - 4);
+    const suffix = s.slice(-4);
+    return `<span class="sp-tr-bc-prefix">${esc(prefix)}</span><span class="sp-tr-bc-suffix">${esc(suffix)}</span>`;
+  }
+   
   function toastMsg(msg, type) {
     try { if (typeof toast === 'function') return toast(msg, type || 'success'); } catch (e) {}
     if (typeof window.toast === 'function') return window.toast(msg, type || 'success');
