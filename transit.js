@@ -4,17 +4,11 @@
 
    Отдельный раздел, не пересекается с public.boxes.
 
-   Что делает:
-   - Список заявок (карточки с прогрессом).
-   - Создание заявки: вставка из Excel или вручную.
-   - Экран заявки: список позиций + прогресс.
-   - Сканер: как в «Сборке», но проверяет по заявке.
-   - Каждый скан = 1 коробка. Направление = клиент заявки.
-
-   Изоляция:
-   - app.js, tasks.js, planner.js не трогаем.
-   - Раздел «Транзит» вставляется в sidebar через JS.
-   - Страницы рендерятся сами, не через goToPage/render из app.js.
+   Версия 1.1:
+   - Парсер Excel больше не считает миллион пустых строк.
+   - Если в файле несколько колонок с количеством —
+     появляется селектор, можно выбрать нужную.
+   - Кнопка «Скачать шаблон заявки».
    ========================================================= */
 
 (function () {
@@ -35,21 +29,16 @@
      ========================================================= */
 
   const tr = {
-    /* список заявок */
     requests: [],
     loadingList: false,
 
-    /* текущая открытая заявка: null | { request, items, scans } */
     currentRequestId: null,
     current: null,
     loadingCurrent: false,
 
-    /* состояние оверлея сканера */
     scannerOpen: false,
-    currentItemIdForScan: null,   /* не используется, сканируем по barcode */
     lastScanView: null,
-    recentScans: [],              /* последние 6 сканов в текущей сессии */
-    audioUnlocked: false
+    recentScans: []
   };
 
   /* =========================================================
@@ -212,7 +201,6 @@
     }
   }
 
-  /* Пересчёт scanned_boxes из transit_scans — чтобы не разойтись */
   function recalcScannedFromScans(items, scans) {
     const counts = new Map();
     (scans || []).forEach(s => {
@@ -226,7 +214,7 @@
   }
 
   /* =========================================================
-     СОЗДАНИЕ ЗАЯВКИ
+     CRUD
      ========================================================= */
 
   async function createRequest({ client_name, request_name, request_date, comment, items }) {
@@ -266,7 +254,6 @@
         .from('transit_request_items')
         .insert(payload);
       if (itemsErr) {
-        // Откатить заявку, чтобы не осталось пустой
         await client.from('transit_requests').delete().eq('id', reqRow.id);
         throw itemsErr;
       }
@@ -310,23 +297,10 @@
   }
 
   /* =========================================================
-     ПАРСЕР ЗАЯВКИ (Excel / вставка)
-     =========================================================
-
-     Ищем колонки по названию:
-       ШК / Штрихкод / Barcode        → barcode
-       Артикул / Article              → article
-       Название / Title               → title
-       Характеристика                 → title (если нет «Название»)
-       Заказ / Кол-во / Количество    → requested_units
-
-     Пустые значения наследуются от предыдущей строки
-     (как в файле «21 век» — Артикул/Название заданы только
-     у 1,5-спального варианта).
+     ПАРСЕР ТЕКСТА
      ========================================================= */
 
   function parseBarcodeText(raw) {
-    // Возвращает { rows: [{barcode, article, title, requested_units}], skipped }
     const lines = String(raw || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const rows = [];
     let skipped = 0;
@@ -352,7 +326,10 @@
     return { rows, skipped };
   }
 
-  /* Для Excel берём SheetJS (XLSX уже подключён в index.html) */
+  /* =========================================================
+     ПАРСЕР EXCEL — шаг 1 (просто разобрать файл)
+     ========================================================= */
+
   async function parseExcelFile(file) {
     if (typeof XLSX === 'undefined') throw new Error('Библиотека XLSX не загружена');
 
@@ -362,10 +339,33 @@
     if (!sheetName) throw new Error('В файле нет листов');
     const sheet = wb.Sheets[sheetName];
 
-    const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+    /*
+      SheetJS иногда возвращает массив длиной во весь лист
+      (до 1 048 576 строк) из-за широкого used range.
+      Обрезаем пустой хвост.
+    */
+    let aoa = XLSX.utils.sheet_to_json(sheet, {
+      header: 1,
+      defval: '',
+      raw: false,
+      blankrows: false
+    });
+
+    if (aoa.length > 1) {
+      let lastIdx = aoa.length - 1;
+      while (lastIdx > 0) {
+        const row = aoa[lastIdx];
+        const isEmpty = !row || row.every(c => c === '' || c == null || String(c).trim() === '');
+        if (!isEmpty) break;
+        lastIdx--;
+      }
+      if (lastIdx < aoa.length - 1) {
+        aoa = aoa.slice(0, lastIdx + 1);
+      }
+    }
+
     if (!aoa.length) throw new Error('Файл пустой');
 
-    // Ищем строку-заголовок: где есть «ШК» или «Штрихкод»
     let headerRow = -1;
     for (let i = 0; i < Math.min(aoa.length, 10); i++) {
       const row = aoa[i].map(c => normText(c).toLowerCase());
@@ -377,6 +377,7 @@
     if (headerRow === -1) headerRow = 0;
 
     const headers = aoa[headerRow].map(c => normText(c).toLowerCase());
+    const headersRaw = aoa[headerRow].map(c => normText(c));
 
     const findCol = (regexes) => {
       for (let i = 0; i < headers.length; i++) {
@@ -388,42 +389,77 @@
     };
 
     const colBarcode = findCol([/^(шк|штрихкод|barcode|баркод)$/i]);
-    const colArticle = findCol([/^(артикул|article|sku)$/i]);
-    const colTitle   = findCol([/^(название|наименование|title)$/i]);
+    const colArticle = findCol([/^(артикул|article|sku)/i]);
+    const colTitle   = findCol([/^(название|наименование|title)/i]);
     const colChar    = findCol([/^(характеристика|описание|характер)/i]);
-    const colQty     = findCol([/^(заказ|кол[- ]?во|количество)/i]);
 
     if (colBarcode === -1) throw new Error('Не найдена колонка «ШК» / «Штрихкод»');
-    if (colQty === -1) throw new Error('Не найдена колонка «Заказ» / «Количество»');
 
+    const qtyCandidates = [];
+    for (let i = 0; i < headers.length; i++) {
+      if (/^(заказ|кол[- ]?во|количество)/i.test(headers[i])) {
+        qtyCandidates.push({
+          index: i,
+          displayName: headersRaw[i] || ('Колонка ' + (i + 1))
+        });
+      }
+    }
+
+    if (!qtyCandidates.length) {
+      throw new Error('Не найдена колонка «Заказ» / «Количество»');
+    }
+
+    return {
+      aoa,
+      headerRow,
+      headers,
+      headersRaw,
+      cols: { barcode: colBarcode, article: colArticle, title: colTitle, char: colChar },
+      qtyCandidates,
+      sheetName
+    };
+  }
+
+  /* =========================================================
+     ПАРСЕР EXCEL — шаг 2 (извлечь строки по выбранной колонке)
+     ========================================================= */
+
+  function extractExcelRows(parsed, qtyColIndex) {
+    const { aoa, headerRow, cols } = parsed;
     const rows = [];
+    let skipped = 0;
+
     let lastArticle = '';
     let lastName = '';
-    let skipped = 0;
 
     for (let i = headerRow + 1; i < aoa.length; i++) {
       const r = aoa[i];
-      const barcodeRaw = r[colBarcode];
-      const barcode = normBarcode(barcodeRaw);
+      if (!r) continue;
 
-      // Не прерываемся на пропуске: могут быть пустые строки
-      if (!barcode) { skipped++; continue; }
+      const isCompletelyEmpty = r.every(c => c === '' || c == null || String(c).trim() === '');
+      if (isCompletelyEmpty) continue;
 
-      const qtyRaw = r[colQty];
-      const qty = toNum(qtyRaw);
+      const barcode = normBarcode(r[cols.barcode]);
+
+      if (!barcode) {
+        const rowJoined = r.map(c => String(c == null ? '' : c)).join(' ').toLowerCase();
+        if (/итог|total/.test(rowJoined)) continue;
+        skipped++;
+        continue;
+      }
+
+      const qty = toNum(r[qtyColIndex]);
       if (qty <= 0) { skipped++; continue; }
 
-      let article = colArticle >= 0 ? normText(r[colArticle]) : '';
+      let article = cols.article >= 0 ? normText(r[cols.article]) : '';
       let title =
-        (colTitle >= 0 ? normText(r[colTitle]) : '') ||
-        (colChar >= 0 ? normText(r[colChar]) : '');
+        (cols.title >= 0 ? normText(r[cols.title]) : '') ||
+        (cols.char  >= 0 ? normText(r[cols.char])  : '');
 
-      // Наследование по колонке «Название»
-      if (colTitle >= 0) {
+      if (cols.title >= 0) {
         if (!title) title = lastName;
         else lastName = title;
       }
-      // Наследование по артикулу
       if (article) lastArticle = article;
       else article = lastArticle;
 
@@ -435,7 +471,7 @@
       });
     }
 
-    return { rows, skipped, sheetName, headerRow };
+    return { rows, skipped };
   }
 
   /* =========================================================
@@ -448,7 +484,6 @@
     const style = document.createElement('style');
     style.id = STYLES_ID;
     style.textContent = `
-      /* ---------- Общая страница ---------- */
       .sp-tr-page {
         max-width: 1180px;
         margin: 0 auto;
@@ -507,7 +542,6 @@
       }
       .sp-tr-btn-danger:hover { background: #fef2f2; }
 
-      /* ---------- Список заявок ---------- */
       .sp-tr-requests {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
@@ -590,7 +624,6 @@
         border-radius: 14px;
       }
 
-      /* ---------- Экран заявки ---------- */
       .sp-tr-back {
         display: inline-flex;
         align-items: center;
@@ -654,11 +687,6 @@
         font-variant-numeric: tabular-nums;
       }
       .sp-tr-kpi-value.is-done { color: #18794e; }
-      .sp-tr-kpi-sub {
-        font-size: 11px;
-        color: #94a3b8;
-        margin-top: 4px;
-      }
 
       .sp-tr-actions {
         display: flex;
@@ -667,7 +695,6 @@
         margin-bottom: 16px;
       }
 
-      /* ---------- Таблица позиций ---------- */
       .sp-tr-items-wrap {
         background: #fff;
         border: 1px solid #e2e8f0;
@@ -767,7 +794,6 @@
         box-shadow: 0 0 0 3px rgba(37,99,235,.1);
       }
 
-      /* ---------- Оверлей сканера ---------- */
       #${OVERLAY_ID} {
         position: fixed;
         inset: 0;
@@ -962,7 +988,6 @@
       }
       #${OVERLAY_ID} .sp-tr-ov-foot .sp-tr-btn { flex: 1; justify-content: center; }
 
-      /* ---------- Модалка создания заявки ---------- */
       #${MODAL_ID} {
         position: fixed; inset: 0;
         background: rgba(15,23,42,.55);
@@ -1012,7 +1037,8 @@
         margin-bottom: 5px;
       }
       #${MODAL_ID} .sp-tr-field input,
-      #${MODAL_ID} .sp-tr-field textarea {
+      #${MODAL_ID} .sp-tr-field textarea,
+      #${MODAL_ID} .sp-tr-field select {
         width: 100%;
         box-sizing: border-box;
         border: 1px solid #dfe3e8;
@@ -1024,7 +1050,8 @@
         font-family: inherit;
       }
       #${MODAL_ID} .sp-tr-field input:focus,
-      #${MODAL_ID} .sp-tr-field textarea:focus {
+      #${MODAL_ID} .sp-tr-field textarea:focus,
+      #${MODAL_ID} .sp-tr-field select:focus {
         border-color: var(--primary, #2563EB);
         box-shadow: 0 0 0 3px rgba(37,99,235,.1);
       }
@@ -1139,25 +1166,12 @@
      РЕНДЕР — СПИСОК ЗАЯВОК
      ========================================================= */
 
-  function progressForRequest(req, itemsCache) {
-    // itemsCache — необязательный, если уже загружены. Иначе грузим.
-    if (!itemsCache) return null;
-    let total = 0, done = 0;
-    itemsCache.forEach(it => {
-      total += ceilBoxes(it.requested_units, it.units_per_box);
-      done  += Number(it.scanned_boxes) || 0;
-    });
-    return { total, done, pct: total ? Math.min(100, Math.round(done / total * 100)) : 0 };
-  }
-
   async function renderListPage() {
     const content = document.getElementById('content');
     if (!content) return;
 
-    // Активная навигация
     markSidebarActive();
 
-    // Мета в topbar
     const pt = document.getElementById('pageTitle');
     const h = document.getElementById('heading');
     if (pt) pt.textContent = 'Транзит';
@@ -1167,8 +1181,6 @@
       await loadRequests();
     }
 
-    // Считаем прогресс по всем заявкам — параллельным лёгким запросом
-    // (можно оптимизировать в один запрос, но тут наглядно)
     const progressMap = new Map();
     if (tr.requests.length) {
       try {
@@ -1281,7 +1293,6 @@
       return;
     }
 
-    // Пересчитаем scanned_boxes из сканов (чтобы данные всегда были свежими)
     const items = recalcScannedFromScans(tr.current.items, tr.current.scans);
 
     const pt = document.getElementById('pageTitle');
@@ -1411,7 +1422,6 @@
 
     content.innerHTML = html;
 
-    /* --- Обработчики --- */
     document.getElementById('spTrBackBtn')?.addEventListener('click', () => backToList());
 
     document.getElementById('spTrScanBtn')?.addEventListener('click', () => openScanner());
@@ -1442,14 +1452,12 @@
       }
     });
 
-    /* Редактирование units_per_box */
     content.querySelectorAll('[data-units-input]').forEach(inp => {
       inp.addEventListener('change', async (e) => {
         const itemId = Number(e.target.getAttribute('data-units-input'));
         const value = toNum(e.target.value) || DEFAULT_UNITS_PER_BOX;
         try {
           await updateItemUnits(itemId, value);
-          // Пересчитываем локально, без перезагрузки всей страницы
           const it = tr.current.items.find(x => x.id === itemId);
           if (it) it.units_per_box = value;
           await renderRequestPage();
@@ -1461,7 +1469,7 @@
   }
 
   /* =========================================================
-     СКАНЕР (оверлей)
+     СКАНЕР
      ========================================================= */
 
   function openScanner() {
@@ -1533,7 +1541,6 @@
     const overlay = document.getElementById(OVERLAY_ID);
     if (overlay) overlay.remove();
 
-    // Обновим экран заявки, если он открыт
     if (tr.currentRequestId) {
       renderRequestPage();
     }
@@ -1623,7 +1630,6 @@
     el.innerHTML = esc(data.message) + extra;
   }
 
-  /* Основная логика скана */
   async function processScan(rawBarcode) {
     const raw = String(rawBarcode || '').trim();
     if (!raw) { refocusInput(); return; }
@@ -1645,7 +1651,6 @@
 
     const items = recalcScannedFromScans(tr.current.items, tr.current.scans);
 
-    // Ищем позицию с этим ШК
     const item = items.find(it => normBarcode(it.barcode) === barcode);
 
     if (!item) {
@@ -1676,7 +1681,6 @@
       return;
     }
 
-    // Записываем скан
     try {
       const client = sb();
       if (!client) throw new Error('Supabase недоступен');
@@ -1697,14 +1701,12 @@
 
       tr.current.scans.unshift(scanRow);
 
-      // Обновим счётчик scanned_boxes у позиции
       const newCount = scanned + 1;
       await client
         .from('transit_request_items')
         .update({ scanned_boxes: newCount, updated_at: new Date().toISOString() })
         .eq('id', item.id);
 
-      // Обновим локально
       const localItem = tr.current.items.find(x => x.id === item.id);
       if (localItem) localItem.scanned_boxes = newCount;
 
@@ -1738,16 +1740,25 @@
      ========================================================= */
 
   let createState = {
-    source: 'text',   // text | excel
-    parsed: [],       // распарсенные позиции
+    source: 'text',
+    parsed: [],
     parsedSkipped: 0,
-    filename: ''
+    filename: '',
+    excelParsed: null,
+    selectedQtyColumn: null
   };
 
   function openCreateModal() {
     if (document.getElementById(MODAL_ID)) return;
 
-    createState = { source: 'text', parsed: [], parsedSkipped: 0, filename: '' };
+    createState = {
+      source: 'text',
+      parsed: [],
+      parsedSkipped: 0,
+      filename: '',
+      excelParsed: null,
+      selectedQtyColumn: null
+    };
 
     const overlay = document.createElement('div');
     overlay.id = MODAL_ID;
@@ -1804,6 +1815,18 @@
               <span>Excel-файл (лист с колонками: ШК, Артикул, Название/Характеристика, Заказ)</span>
               <input id="spTrExcelFile" type="file" accept=".xlsx,.xls">
             </label>
+
+            <div id="spTrQtyColumnWrap" style="display:none;margin-top:10px;">
+              <label class="sp-tr-field">
+                <span>Колонка с количеством</span>
+                <select id="spTrQtyColumnSelect"></select>
+              </label>
+            </div>
+
+            <button type="button" class="sp-tr-btn sp-tr-btn-secondary" id="spTrDownloadTemplateBtn"
+                    style="margin-top:12px;">
+              📋 Скачать шаблон заявки
+            </button>
           </div>
 
           <div id="spTrPreviewWrap" style="display:none;">
@@ -1839,7 +1862,6 @@
 
     document.addEventListener('keydown', onCreateKeydown);
 
-    // Табы
     overlay.querySelectorAll('[data-src]').forEach(tab => {
       tab.addEventListener('click', () => {
         const src = tab.getAttribute('data-src');
@@ -1850,7 +1872,6 @@
       });
     });
 
-    // Парсинг текста
     document.getElementById('spTrParseTextBtn')?.addEventListener('click', () => {
       const raw = document.getElementById('spTrTextInput').value;
       const { rows, skipped } = parseBarcodeText(raw);
@@ -1859,23 +1880,48 @@
       renderCreatePreview();
     });
 
-    // Excel
     document.getElementById('spTrExcelFile')?.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
       try {
-        const { rows, skipped, sheetName } = await parseExcelFile(file);
-        createState.parsed = rows;
-        createState.parsedSkipped = skipped;
+        const parsed = await parseExcelFile(file);
+        createState.excelParsed = parsed;
         createState.filename = file.name;
-        renderCreatePreview();
+
+        const wrap = document.getElementById('spTrQtyColumnWrap');
+        const sel = document.getElementById('spTrQtyColumnSelect');
+
+        if (parsed.qtyCandidates.length > 1) {
+          wrap.style.display = '';
+          sel.innerHTML = parsed.qtyCandidates.map(c =>
+            `<option value="${c.index}">${esc(c.displayName)}</option>`
+          ).join('');
+          sel.value = parsed.qtyCandidates[0].index;
+          sel.onchange = () => applyExcelColumn(Number(sel.value));
+        } else {
+          wrap.style.display = 'none';
+        }
+
+        applyExcelColumn(parsed.qtyCandidates[0].index);
+
       } catch (err) {
         console.error('[Transit] parse excel error:', err);
         showModalError(err.message || 'Не удалось прочитать файл');
       }
     });
 
+    document.getElementById('spTrDownloadTemplateBtn')?.addEventListener('click', downloadTransitTemplate);
+
     document.getElementById('spTrModalSave')?.addEventListener('click', saveNewRequest);
+  }
+
+  function applyExcelColumn(qtyColIndex) {
+    if (!createState.excelParsed) return;
+    const { rows, skipped } = extractExcelRows(createState.excelParsed, qtyColIndex);
+    createState.parsed = rows;
+    createState.parsedSkipped = skipped;
+    createState.selectedQtyColumn = qtyColIndex;
+    renderCreatePreview();
   }
 
   function closeCreateModal() {
@@ -1913,10 +1959,13 @@
     if (saveBtn) saveBtn.disabled = false;
 
     const totalBoxes = rows.reduce((s, r) => s + ceilBoxes(r.requested_units, DEFAULT_UNITS_PER_BOX), 0);
+    const totalUnits = rows.reduce((s, r) => s + toNum(r.requested_units), 0);
+
     if (summary) {
       summary.innerHTML = `
         Позиций: <b>${rows.length}</b>
-        · Всего коробок (при 4 шт/кор): <b>${totalBoxes}</b>
+        · Всего штук: <b>${totalUnits}</b>
+        · Коробок (при 4 шт/кор): <b>${totalBoxes}</b>
         ${createState.parsedSkipped > 0 ? `· Пропущено строк: <b>${createState.parsedSkipped}</b>` : ''}
       `;
     }
@@ -1964,6 +2013,64 @@
       showModalError('Ошибка: ' + (e.message || ''));
       if (btn) { btn.disabled = false; btn.textContent = 'Создать заявку'; }
     }
+  }
+
+  /* =========================================================
+     СКАЧАТЬ ШАБЛОН ЗАЯВКИ
+     ========================================================= */
+
+  function downloadTransitTemplate() {
+    if (typeof XLSX === 'undefined') {
+      toastMsg('Библиотека XLSX не загружена', 'error');
+      return;
+    }
+
+    const aoa = [
+      ['ШК', 'Артикул', 'Название', 'Заказ'],
+      ['4810122736840', '453372', 'Восточная роскошь', 150],
+      ['4810122736857', '', '', 750],
+      ['4810122736864', '474601', 'Василиса', 350]
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [
+      { wch: 18 },
+      { wch: 14 },
+      { wch: 30 },
+      { wch: 12 }
+    ];
+
+    /* Делаем колонку A текстовой — чтобы Excel не портил штрихкод */
+    for (let r = 0; r < aoa.length; r++) {
+      const ref = XLSX.utils.encode_cell({ r, c: 0 });
+      if (ws[ref]) {
+        ws[ref].t = 's';
+        ws[ref].z = '@';
+      }
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Заявка');
+
+    const helpRows = [
+      ['Как заполнять заявку'],
+      [''],
+      ['Колонка', 'Что писать'],
+      ['ШК', 'Обязательно. Только цифры. 13 знаков. Если Excel превращает в 4.81E+12 — установите текстовый формат для колонки.'],
+      ['Артикул', 'Необязательно. Если у нескольких строк одинаковый — можно заполнить только первую, остальные оставить пустыми.'],
+      ['Название', 'Необязательно. Действует то же правило наследования: если пусто, берётся из строки выше.'],
+      ['Заказ', 'Обязательно. Целое число — сколько штук нужно.'],
+      [''],
+      ['Пример с наследованием:'],
+      ['В строке 2 указаны «Артикул 453372 / Восточная роскошь»,'],
+      ['в строке 3 оба поля пустые — они автоматически унаследуются от строки 2.']
+    ];
+    const wsHelp = XLSX.utils.aoa_to_sheet(helpRows);
+    wsHelp['!cols'] = [{ wch: 16 }, { wch: 100 }];
+    XLSX.utils.book_append_sheet(wb, wsHelp, 'Как заполнять');
+
+    XLSX.writeFile(wb, 'shablon-zayavki-transit.xlsx');
+    toastMsg('Шаблон скачан');
   }
 
   /* =========================================================
@@ -2027,7 +2134,7 @@
   }
 
   /* =========================================================
-     SIDEBAR — ВСТАВКА ПУНКТА
+     SIDEBAR
      ========================================================= */
 
   function insertSidebarItem() {
@@ -2036,7 +2143,6 @@
     const sidebarNav = document.querySelector('.sidebar-nav');
     if (!sidebarNav) return;
 
-    // Вставим после «База» или в конце первой секции
     const baseNav = sidebarNav.querySelector('.nav[data-page="base"]');
     const anchor = baseNav || sidebarNav.querySelector('.nav[data-page="assembly"]');
     if (!anchor) return;
@@ -2051,7 +2157,6 @@
     `;
 
     btn.addEventListener('click', () => {
-      // Гарантированно уводим из обычных страниц app.js
       try {
         if (typeof state !== 'undefined') {
           state.currentPage = PAGE_KEY;
@@ -2070,13 +2175,11 @@
     const mine = document.querySelector(`.nav[${NAV_ATTR}]`);
     if (mine) mine.classList.add('active');
 
-    // То же для мобильной навигации — не подсвечиваем ничего
     document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
   }
 
   /* =========================================================
-     ХУК: ПЕРЕХВАТ render() И goToPage() — если пользователь
-     ушёл на другую страницу, скрываем нашу кнопку активной.
+     ХУК
      ========================================================= */
 
   function installRenderHook() {
@@ -2086,12 +2189,9 @@
     const orig = window.render;
     window.render = function () {
       const result = orig.apply(this, arguments);
-      // Если мы НЕ на транзите — просто ничего. Если на транзите —
-      // app.js мог перерисовать наш контент, но у него нет такого
-      // случая, потому что currentPage = 'transit' ему неизвестна.
       try {
         if (window.state?.currentPage === PAGE_KEY) {
-          // Ничего не делаем — страница транзита уже отрисована
+          /* Ничего */
         }
       } catch (e) {}
       return result;
@@ -2111,7 +2211,6 @@
       insertSidebarItem();
       installRenderHook();
 
-      // Наблюдаем за sidebar на случай перерисовки
       const sidebarObserver = new MutationObserver(() => {
         try { insertSidebarItem(); } catch (e) {}
       });
@@ -2139,7 +2238,7 @@
   window.spTransit = {
     open: openListPage,
     openRequest: openRequestPage,
-    version: '1.0.0'
+    version: '1.1.0'
   };
 
 })();
