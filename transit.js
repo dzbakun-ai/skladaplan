@@ -4,10 +4,12 @@
 
    Отдельный раздел, не пересекается с public.boxes.
 
-   Версия 1.1:
-   - Парсер Excel больше не считает миллион пустых строк.
-   - Если в файле несколько колонок с количеством —
-     появляется селектор, можно выбрать нужную.
+   Версия 1.2:
+   - Парсер Excel читает истинные значения ячеек (raw: true) —
+     штрихкоды больше не превращаются в 4810120000000.
+   - Последние 4 цифры штрихкода выделены жирнее — удобно
+     проверять глазами.
+   - Селектор колонки количества (если их несколько в файле).
    - Кнопка «Скачать шаблон заявки».
    ========================================================= */
 
@@ -71,7 +73,8 @@
 
   /*
     Возвращает HTML для штрихкода, в котором последние 4 цифры
-    визуально выделены (крупнее + темнее) — удобно проверять глазами.
+    визуально выделены (темнее и жирнее) — удобно проверять
+    глазами при сканировании.
   */
   function barcodeHtml(bc) {
     const s = String(bc == null ? '' : bc);
@@ -82,7 +85,7 @@
     const suffix = s.slice(-4);
     return `<span class="sp-tr-bc-prefix">${esc(prefix)}</span><span class="sp-tr-bc-suffix">${esc(suffix)}</span>`;
   }
-   
+
   function toastMsg(msg, type) {
     try { if (typeof toast === 'function') return toast(msg, type || 'success'); } catch (e) {}
     if (typeof window.toast === 'function') return window.toast(msg, type || 'success');
@@ -354,17 +357,19 @@
     const sheet = wb.Sheets[sheetName];
 
     /*
-      SheetJS иногда возвращает массив длиной во весь лист
-      (до 1 048 576 строк) из-за широкого used range.
-      Обрезаем пустой хвост.
+      raw: true — берём ИСТИННЫЕ значения ячеек.
+      Иначе Excel-числа вроде 4810122736840 превращаются
+      в строку «4.81E+12» и штрихкод портится.
     */
     let aoa = XLSX.utils.sheet_to_json(sheet, {
       header: 1,
       defval: '',
-      raw: false,
+      raw: true,
       blankrows: false
     });
 
+    /* Обрезаем пустой хвост — SheetJS иногда отдаёт
+       массив длиной во весь лист (до 1 048 576 строк). */
     if (aoa.length > 1) {
       let lastIdx = aoa.length - 1;
       while (lastIdx > 0) {
@@ -751,12 +756,23 @@
         white-space: nowrap;
       }
       .sp-tr-items-table tr:last-child td { border-bottom: 0; }
-      .sp-tr-items-table .sp-tr-bc {
+
+      /* -------- Штрихкод: последние 4 цифры выделены -------- */
+
+      .sp-tr-bc {
         font-family: ui-monospace, Menlo, Consolas, monospace;
-        font-weight: 600;
-        color: #0f172a;
         white-space: nowrap;
       }
+      .sp-tr-bc-prefix {
+        color: #64748b;
+        font-weight: 500;
+      }
+      .sp-tr-bc-suffix {
+        color: #0f172a;
+        font-weight: 800;
+        letter-spacing: .02em;
+      }
+
       .sp-tr-items-table .sp-tr-num {
         text-align: right;
         font-variant-numeric: tabular-nums;
@@ -964,12 +980,6 @@
       }
       #${OVERLAY_ID} .sp-tr-ov-item:last-child { border-bottom: 0; }
       #${OVERLAY_ID} .sp-tr-ov-item.is-done { background: #f0fdf4; }
-      #${OVERLAY_ID} .sp-tr-ov-bc {
-        font-family: ui-monospace, Menlo, Consolas, monospace;
-        font-weight: 600;
-        color: #0f172a;
-        white-space: nowrap;
-      }
       #${OVERLAY_ID} .sp-tr-ov-title-cell {
         color: #64748b;
         font-size: 12px;
@@ -1131,10 +1141,6 @@
         letter-spacing: .04em;
         position: sticky;
         top: 0;
-      }
-      #${MODAL_ID} .sp-tr-preview .sp-tr-bc {
-        font-family: ui-monospace, Menlo, Consolas, monospace;
-        font-weight: 600;
       }
       #${MODAL_ID} .sp-tr-preview-summary {
         padding: 8px 12px;
@@ -1404,7 +1410,7 @@
         const done = planned > 0 && scanned >= planned;
         html += `
           <tr data-item-id="${esc(it.id)}">
-            <td class="sp-tr-bc">${esc(it.barcode)}</td>
+            <td class="sp-tr-bc">${barcodeHtml(it.barcode)}</td>
             <td>${esc(it.title || it.article || '')}</td>
             <td class="sp-tr-num">${esc(it.requested_units)}</td>
             <td class="sp-tr-num">
@@ -1618,7 +1624,7 @@
           const done = planned > 0 && scanned >= planned;
           return `
             <div class="sp-tr-ov-item ${done ? 'is-done' : ''}">
-              <span class="sp-tr-ov-bc">${esc(it.barcode)}</span>
+              <span class="sp-tr-bc">${barcodeHtml(it.barcode)}</span>
               <span class="sp-tr-ov-title-cell">${esc(it.title || it.article || '')}</span>
               <span class="sp-tr-ov-num ${done ? 'is-done' : ''}">${scanned} / ${planned}</span>
             </div>
@@ -1987,7 +1993,7 @@
     if (body) {
       body.innerHTML = rows.slice(0, 200).map(r => `
         <tr>
-          <td class="sp-tr-bc">${esc(r.barcode)}</td>
+          <td class="sp-tr-bc">${barcodeHtml(r.barcode)}</td>
           <td>${esc(r.title || r.article || '')}</td>
           <td style="text-align:right;">${esc(r.requested_units)}</td>
         </tr>
@@ -2252,7 +2258,7 @@
   window.spTransit = {
     open: openListPage,
     openRequest: openRequestPage,
-    version: '1.1.0'
+    version: '1.2.0'
   };
 
 })();
