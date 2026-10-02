@@ -1,14 +1,8 @@
 /* =========================================================
    SKLADAPLAN — ТРАНЗИТ (cross-dock по заявкам клиентов)
-   =========================================================
-
-   Отдельный раздел, не пересекается с public.boxes.
-
-   Версия 1.4:
-   - ФИКС: счётчики «Отсканировано» больше не «падают».
-   - НОВОЕ: печать A4-листов на поддоны (кнопка «🖨 Печать»).
-   - Парсер Excel читает истинные значения ячеек (raw: true).
-   - Последние 4 цифры штрихкода выделены.
+   Версия 1.5:
+   - Печать: отдельный лист на каждый поддон, одна позиция.
+   - Коробок можно оставить пустым — впишут маркером.
    ========================================================= */
 
 (function () {
@@ -25,26 +19,16 @@
 
   const DEFAULT_UNITS_PER_BOX = 4;
 
-  /* =========================================================
-     СОСТОЯНИЕ
-     ========================================================= */
-
   const tr = {
     requests: [],
     loadingList: false,
-
     currentRequestId: null,
     current: null,
     loadingCurrent: false,
-
     scannerOpen: false,
     lastScanView: null,
     recentScans: []
   };
-
-  /* =========================================================
-     ДОСТУП К SUPABASE
-     ========================================================= */
 
   function sb() {
     try { if (typeof supabaseClient !== 'undefined' && supabaseClient) return supabaseClient; } catch (e) {}
@@ -57,10 +41,6 @@
     if (window.state?.user?.email) return window.state.user.email;
     return null;
   }
-
-  /* =========================================================
-     УТИЛИТЫ
-     ========================================================= */
 
   function esc(v) {
     if (v == null) return '';
@@ -132,10 +112,6 @@
     });
   }
 
-  /* =========================================================
-     ЗВУК
-     ========================================================= */
-
   function beep(success) {
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -154,21 +130,16 @@
     } catch (e) {}
   }
 
-  /* =========================================================
-     ЗАГРУЗКА ДАННЫХ
-     ========================================================= */
+  /* ============ ЗАГРУЗКА ============ */
 
   async function loadRequests() {
     const client = sb();
     if (!client) return;
     tr.loadingList = true;
-
     try {
       const { data, error } = await client
-        .from('transit_requests')
-        .select('*')
+        .from('transit_requests').select('*')
         .order('created_at', { ascending: false });
-
       if (error) throw error;
       tr.requests = Array.isArray(data) ? data : [];
     } catch (e) {
@@ -184,14 +155,12 @@
     const client = sb();
     if (!client) return null;
     tr.loadingCurrent = true;
-
     try {
       const [reqRes, itemsRes, scansRes] = await Promise.all([
         client.from('transit_requests').select('*').eq('id', id).maybeSingle(),
         client.from('transit_request_items').select('*').eq('request_id', id).order('position_order', { ascending: true }).order('id', { ascending: true }),
         client.from('transit_scans').select('*').eq('request_id', id).order('scanned_at', { ascending: false }).limit(50)
       ]);
-
       if (reqRes.error) throw reqRes.error;
       if (itemsRes.error) throw itemsRes.error;
       if (scansRes.error) throw scansRes.error;
@@ -213,40 +182,28 @@
   }
 
   function recalcScannedFromScans(items, scans) {
-    /*
-      Доверяем полю scanned_boxes, а НЕ пересчитываем из массива
-      scans — иначе при накоплении старые сканы не попадают
-      в выборку и счётчик «падает».
-    */
     return items.map(it => ({
       ...it,
       scanned_boxes: Number(it.scanned_boxes) || 0
     }));
   }
 
-  /* =========================================================
-     CRUD
-     ========================================================= */
+  /* ============ CRUD ============ */
 
   async function createRequest({ client_name, request_name, request_date, comment, items }) {
     const client = sb();
     if (!client) throw new Error('Supabase недоступен');
-
     const op = operatorEmail();
 
     const { data: reqRow, error: reqErr } = await client
       .from('transit_requests')
       .insert({
-        client_name,
-        request_name,
+        client_name, request_name,
         request_date: request_date || new Date().toISOString().slice(0, 10),
         comment: comment || null,
-        status: 'active',
-        created_by: op,
-        updated_by: op
+        status: 'active', created_by: op, updated_by: op
       })
-      .select('*')
-      .single();
+      .select('*').single();
 
     if (reqErr) throw reqErr;
 
@@ -262,14 +219,12 @@
 
     if (payload.length) {
       const { error: itemsErr } = await client
-        .from('transit_request_items')
-        .insert(payload);
+        .from('transit_request_items').insert(payload);
       if (itemsErr) {
         await client.from('transit_requests').delete().eq('id', reqRow.id);
         throw itemsErr;
       }
     }
-
     return reqRow;
   }
 
@@ -286,7 +241,7 @@
     const { error } = await client
       .from('transit_requests')
       .update({
-        status: status,
+        status,
         updated_at: new Date().toISOString(),
         updated_by: operatorEmail()
       })
@@ -307,25 +262,19 @@
     if (error) throw error;
   }
 
-  /* =========================================================
-     ПАРСЕР ТЕКСТА
-     ========================================================= */
+  /* ============ ПАРСЕР ТЕКСТА ============ */
 
   function parseBarcodeText(raw) {
     const lines = String(raw || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const rows = [];
     let skipped = 0;
-
     for (const line of lines) {
       const parts = line.split(/\t|\s{2,}|;|\|/).map(p => p.trim()).filter(p => p !== '');
       if (parts.length < 2) { skipped++; continue; }
-
       const barcode = normBarcode(parts[0]);
       if (!barcode) { skipped++; continue; }
-
       const qty = toNum(parts[parts.length - 1]);
       if (qty <= 0) { skipped++; continue; }
-
       rows.push({
         barcode,
         article: parts[1] && !/^\d+$/.test(parts[1]) ? normText(parts[1]) : '',
@@ -333,17 +282,13 @@
         requested_units: qty
       });
     }
-
     return { rows, skipped };
   }
 
-  /* =========================================================
-     ПАРСЕР EXCEL
-     ========================================================= */
+  /* ============ ПАРСЕР EXCEL ============ */
 
   async function parseExcelFile(file) {
     if (typeof XLSX === 'undefined') throw new Error('Библиотека XLSX не загружена');
-
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: 'array', cellDates: true });
     const sheetName = wb.SheetNames[0];
@@ -351,10 +296,7 @@
     const sheet = wb.Sheets[sheetName];
 
     let aoa = XLSX.utils.sheet_to_json(sheet, {
-      header: 1,
-      defval: '',
-      raw: true,
-      blankrows: false
+      header: 1, defval: '', raw: true, blankrows: false
     });
 
     if (aoa.length > 1) {
@@ -365,20 +307,14 @@
         if (!isEmpty) break;
         lastIdx--;
       }
-      if (lastIdx < aoa.length - 1) {
-        aoa = aoa.slice(0, lastIdx + 1);
-      }
+      if (lastIdx < aoa.length - 1) aoa = aoa.slice(0, lastIdx + 1);
     }
-
     if (!aoa.length) throw new Error('Файл пустой');
 
     let headerRow = -1;
     for (let i = 0; i < Math.min(aoa.length, 10); i++) {
       const row = aoa[i].map(c => normText(c).toLowerCase());
-      if (row.some(c => /^(шк|штрихкод|barcode|баркод)$/i.test(c))) {
-        headerRow = i;
-        break;
-      }
+      if (row.some(c => /^(шк|штрихкод|barcode|баркод)$/i.test(c))) { headerRow = i; break; }
     }
     if (headerRow === -1) headerRow = 0;
 
@@ -387,9 +323,7 @@
 
     const findCol = (regexes) => {
       for (let i = 0; i < headers.length; i++) {
-        for (const r of regexes) {
-          if (r.test(headers[i])) return i;
-        }
+        for (const r of regexes) if (r.test(headers[i])) return i;
       }
       return -1;
     };
@@ -410,19 +344,12 @@
         });
       }
     }
-
-    if (!qtyCandidates.length) {
-      throw new Error('Не найдена колонка «Заказ» / «Количество»');
-    }
+    if (!qtyCandidates.length) throw new Error('Не найдена колонка «Заказ» / «Количество»');
 
     return {
-      aoa,
-      headerRow,
-      headers,
-      headersRaw,
+      aoa, headerRow, headers, headersRaw,
       cols: { barcode: colBarcode, article: colArticle, title: colTitle, char: colChar },
-      qtyCandidates,
-      sheetName
+      qtyCandidates, sheetName
     };
   }
 
@@ -430,26 +357,22 @@
     const { aoa, headerRow, cols } = parsed;
     const rows = [];
     let skipped = 0;
-
     let lastArticle = '';
     let lastName = '';
 
     for (let i = headerRow + 1; i < aoa.length; i++) {
       const r = aoa[i];
       if (!r) continue;
-
       const isCompletelyEmpty = r.every(c => c === '' || c == null || String(c).trim() === '');
       if (isCompletelyEmpty) continue;
 
       const barcode = normBarcode(r[cols.barcode]);
-
       if (!barcode) {
         const rowJoined = r.map(c => String(c == null ? '' : c)).join(' ').toLowerCase();
         if (/итог|total/.test(rowJoined)) continue;
         skipped++;
         continue;
       }
-
       const qty = toNum(r[qtyColIndex]);
       if (qty <= 0) { skipped++; continue; }
 
@@ -465,793 +388,182 @@
       if (article) lastArticle = article;
       else article = lastArticle;
 
-      rows.push({
-        barcode,
-        article,
-        title,
-        requested_units: qty
-      });
+      rows.push({ barcode, article, title, requested_units: qty });
     }
-
     return { rows, skipped };
   }
 
-  /* =========================================================
-     СТИЛИ
-     ========================================================= */
+  /* ============ СТИЛИ ============ */
 
   function injectStyles() {
     if (document.getElementById(STYLES_ID)) return;
-
     const style = document.createElement('style');
     style.id = STYLES_ID;
     style.textContent = `
-      .sp-tr-page {
-        max-width: 1180px;
-        margin: 0 auto;
-        padding-bottom: 40px;
-      }
-
-      .sp-tr-head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-        flex-wrap: wrap;
-        margin-bottom: 18px;
-      }
-      .sp-tr-head h2 {
-        margin: 0 0 4px;
-        font-size: 22px;
-        font-weight: 750;
-        color: #0f172a;
-      }
-      .sp-tr-head .sp-muted {
-        font-size: 13px;
-        color: #64748b;
-      }
+      .sp-tr-page { max-width: 1180px; margin: 0 auto; padding-bottom: 40px; }
+      .sp-tr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+      .sp-tr-head h2 { margin: 0 0 4px; font-size: 22px; font-weight: 750; color: #0f172a; }
+      .sp-tr-head .sp-muted { font-size: 13px; color: #64748b; }
 
       .sp-tr-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        border: 0;
-        border-radius: 10px;
-        padding: 11px 18px;
-        font-family: inherit;
-        font-size: 13px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: background .15s ease, transform .1s ease;
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        border: 0; border-radius: 10px; padding: 11px 18px;
+        font-family: inherit; font-size: 13px; font-weight: 700;
+        cursor: pointer; transition: background .15s ease, transform .1s ease;
       }
       .sp-tr-btn:active { transform: scale(.98); }
-      .sp-tr-btn-primary {
-        background: var(--primary, #2563EB);
-        color: #fff;
-      }
+      .sp-tr-btn-primary { background: var(--primary, #2563EB); color: #fff; }
       .sp-tr-btn-primary:hover { background: var(--primary-hover, #1D4ED8); }
-      .sp-tr-btn-secondary {
-        background: #fff;
-        color: #334155;
-        border: 1px solid #cbd5e1;
-      }
+      .sp-tr-btn-secondary { background: #fff; color: #334155; border: 1px solid #cbd5e1; }
       .sp-tr-btn-secondary:hover { background: #f8fafc; }
-      .sp-tr-btn-danger {
-        background: #fff;
-        color: #b42318;
-        border: 1px solid #fecaca;
-      }
+      .sp-tr-btn-danger { background: #fff; color: #b42318; border: 1px solid #fecaca; }
       .sp-tr-btn-danger:hover { background: #fef2f2; }
 
-      .sp-tr-requests {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-        gap: 12px;
-      }
-      .sp-tr-request {
-        background: #fff;
-        border: 1px solid #e2e8f0;
-        border-radius: 14px;
-        padding: 16px 18px;
-        cursor: pointer;
-        transition: border-color .15s ease, box-shadow .15s ease, transform .1s ease;
-      }
-      .sp-tr-request:hover {
-        border-color: #93c5fd;
-        box-shadow: 0 6px 20px rgba(37,99,235,.08);
-        transform: translateY(-1px);
-      }
-      .sp-tr-request-title {
-        font-size: 15px;
-        font-weight: 700;
-        color: #0f172a;
-        margin-bottom: 4px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .sp-tr-request-meta {
-        font-size: 12px;
-        color: #64748b;
-        margin-bottom: 10px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .sp-tr-request-status {
-        display: inline-block;
-        padding: 3px 9px;
-        border-radius: 999px;
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: .02em;
-      }
+      .sp-tr-requests { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+      .sp-tr-request { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px 18px; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .1s ease; }
+      .sp-tr-request:hover { border-color: #93c5fd; box-shadow: 0 6px 20px rgba(37,99,235,.08); transform: translateY(-1px); }
+      .sp-tr-request-title { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .sp-tr-request-meta { font-size: 12px; color: #64748b; margin-bottom: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .sp-tr-request-status { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .02em; }
       .sp-tr-status-active   { background: #dbeafe; color: #1e40af; }
       .sp-tr-status-done     { background: #dcfce7; color: #166534; }
       .sp-tr-status-archived { background: #f1f5f9; color: #64748b; }
 
-      .sp-tr-request-progress {
-        margin-top: 10px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 12px;
-        color: #475569;
-        font-variant-numeric: tabular-nums;
-      }
+      .sp-tr-request-progress { margin-top: 10px; display: flex; align-items: center; gap: 10px; font-size: 12px; color: #475569; font-variant-numeric: tabular-nums; }
       .sp-tr-request-progress b { color: #0f172a; }
-      .sp-tr-progress-bar {
-        flex: 1;
-        height: 8px;
-        background: #f1f5f9;
-        border-radius: 999px;
-        overflow: hidden;
-      }
-      .sp-tr-progress-fill {
-        height: 100%;
-        background: var(--primary, #2563EB);
-        border-radius: 999px;
-        transition: width .25s ease;
-      }
+      .sp-tr-progress-bar { flex: 1; height: 8px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+      .sp-tr-progress-fill { height: 100%; background: var(--primary, #2563EB); border-radius: 999px; transition: width .25s ease; }
       .sp-tr-progress-fill.is-done { background: #18794e; }
 
-      .sp-tr-empty {
-        padding: 60px 20px;
-        text-align: center;
-        color: #94a3b8;
-        font-size: 14px;
-        background: #fff;
-        border: 1px dashed #e2e8f0;
-        border-radius: 14px;
-      }
-
-      .sp-tr-back {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        border: 0;
-        background: transparent;
-        color: #475569;
-        font-family: inherit;
-        font-size: 13px;
-        font-weight: 600;
-        padding: 6px 10px 6px 0;
-        cursor: pointer;
-        margin-bottom: 8px;
-      }
+      .sp-tr-empty { padding: 60px 20px; text-align: center; color: #94a3b8; font-size: 14px; background: #fff; border: 1px dashed #e2e8f0; border-radius: 14px; }
+      .sp-tr-back { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: #475569; font-family: inherit; font-size: 13px; font-weight: 600; padding: 6px 10px 6px 0; cursor: pointer; margin-bottom: 8px; }
       .sp-tr-back:hover { color: #0f172a; }
 
-      .sp-tr-req-head {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-        flex-wrap: wrap;
-        margin-bottom: 16px;
-      }
-      .sp-tr-req-title {
-        margin: 0 0 4px;
-        font-size: 22px;
-        font-weight: 750;
-        color: #0f172a;
-      }
-      .sp-tr-req-sub {
-        font-size: 13px;
-        color: #64748b;
-      }
+      .sp-tr-req-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+      .sp-tr-req-title { margin: 0 0 4px; font-size: 22px; font-weight: 750; color: #0f172a; }
+      .sp-tr-req-sub { font-size: 13px; color: #64748b; }
 
-      .sp-tr-kpis {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
-        margin-bottom: 14px;
-      }
-      .sp-tr-kpi {
-        background: #fff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 12px 14px;
-      }
-      .sp-tr-kpi-label {
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .03em;
-        color: #94a3b8;
-        margin-bottom: 4px;
-      }
-      .sp-tr-kpi-value {
-        font-size: 22px;
-        font-weight: 800;
-        color: #0f172a;
-        line-height: 1;
-        font-variant-numeric: tabular-nums;
-      }
+      .sp-tr-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+      .sp-tr-kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; }
+      .sp-tr-kpi-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #94a3b8; margin-bottom: 4px; }
+      .sp-tr-kpi-value { font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1; font-variant-numeric: tabular-nums; }
       .sp-tr-kpi-value.is-done { color: #18794e; }
 
-      .sp-tr-actions {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-bottom: 16px;
-      }
+      .sp-tr-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 
-      .sp-tr-items-wrap {
-        background: #fff;
-        border: 1px solid #e2e8f0;
-        border-radius: 14px;
-        overflow: hidden;
-        margin-bottom: 16px;
-      }
-      .sp-tr-items-head {
-        padding: 12px 16px;
-        background: #fafbfc;
-        border-bottom: 1px solid #f1f5f9;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-      .sp-tr-items-head b {
-        font-size: 13px;
-        color: #0f172a;
-      }
-      .sp-tr-items-table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-      .sp-tr-items-table th,
-      .sp-tr-items-table td {
-        padding: 10px 12px;
-        text-align: left;
-        font-size: 13px;
-        border-bottom: 1px solid #f1f5f9;
-      }
-      .sp-tr-items-table th {
-        background: #f8fafc;
-        font-size: 10px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .04em;
-        color: #475569;
-        white-space: nowrap;
-      }
+      .sp-tr-items-wrap { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; margin-bottom: 16px; }
+      .sp-tr-items-head { padding: 12px 16px; background: #fafbfc; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+      .sp-tr-items-head b { font-size: 13px; color: #0f172a; }
+      .sp-tr-items-table { width: 100%; border-collapse: collapse; }
+      .sp-tr-items-table th, .sp-tr-items-table td { padding: 10px 12px; text-align: left; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+      .sp-tr-items-table th { background: #f8fafc; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #475569; white-space: nowrap; }
       .sp-tr-items-table tr:last-child td { border-bottom: 0; }
+      .sp-tr-bc { font-family: ui-monospace, Menlo, Consolas, monospace; white-space: nowrap; }
+      .sp-tr-bc-prefix { color: #64748b; font-weight: 500; }
+      .sp-tr-bc-suffix { color: #0f172a; font-weight: 800; letter-spacing: .02em; }
 
-      .sp-tr-bc {
-        font-family: ui-monospace, Menlo, Consolas, monospace;
-        white-space: nowrap;
-      }
-      .sp-tr-bc-prefix {
-        color: #64748b;
-        font-weight: 500;
-      }
-      .sp-tr-bc-suffix {
-        color: #0f172a;
-        font-weight: 800;
-        letter-spacing: .02em;
-      }
-
-      .sp-tr-items-table .sp-tr-num {
-        text-align: right;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-      }
-      .sp-tr-items-table .sp-tr-progress-cell {
-        width: 180px;
-      }
-      .sp-tr-item-progress {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 12px;
-        font-variant-numeric: tabular-nums;
-      }
-      .sp-tr-item-progress-bar {
-        flex: 1;
-        min-width: 60px;
-        height: 6px;
-        background: #f1f5f9;
-        border-radius: 999px;
-        overflow: hidden;
-      }
-      .sp-tr-item-progress-fill {
-        height: 100%;
-        background: var(--primary, #2563EB);
-        border-radius: 999px;
-        transition: width .25s ease;
-      }
+      .sp-tr-items-table .sp-tr-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+      .sp-tr-items-table .sp-tr-progress-cell { width: 180px; }
+      .sp-tr-item-progress { display: flex; align-items: center; gap: 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
+      .sp-tr-item-progress-bar { flex: 1; min-width: 60px; height: 6px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+      .sp-tr-item-progress-fill { height: 100%; background: var(--primary, #2563EB); border-radius: 999px; transition: width .25s ease; }
       .sp-tr-item-progress-fill.is-done { background: #18794e; }
+      .sp-tr-units-edit { display: inline-flex; align-items: center; gap: 4px; }
+      .sp-tr-units-edit input { width: 52px; border: 1px solid #dfe3e8; border-radius: 7px; padding: 5px 7px; font-size: 12px; font-family: inherit; text-align: right; outline: none; }
+      .sp-tr-units-edit input:focus { border-color: var(--primary, #2563EB); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
 
-      .sp-tr-units-edit {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-      }
-      .sp-tr-units-edit input {
-        width: 52px;
-        border: 1px solid #dfe3e8;
-        border-radius: 7px;
-        padding: 5px 7px;
-        font-size: 12px;
-        font-family: inherit;
-        text-align: right;
-        outline: none;
-      }
-      .sp-tr-units-edit input:focus {
-        border-color: var(--primary, #2563EB);
-        box-shadow: 0 0 0 3px rgba(37,99,235,.1);
-      }
-
-      #${OVERLAY_ID} {
-        position: fixed;
-        inset: 0;
-        background: #f8fafc;
-        z-index: 100060;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        font-family: inherit;
-      }
-      #${OVERLAY_ID} .sp-tr-ov-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 12px 16px;
-        background: #fff;
-        border-bottom: 1px solid #e2e8f0;
-        flex-shrink: 0;
-      }
-      #${OVERLAY_ID} .sp-tr-ov-title {
-        font-size: 15px;
-        font-weight: 700;
-        color: #0f172a;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      #${OVERLAY_ID} .sp-tr-ov-close {
-        border: 0;
-        background: #f3f3f3;
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        cursor: pointer;
-        font-size: 20px;
-        line-height: 1;
-        color: #444;
-        flex-shrink: 0;
-      }
+      #${OVERLAY_ID} { position: fixed; inset: 0; background: #f8fafc; z-index: 100060; display: flex; flex-direction: column; overflow: hidden; font-family: inherit; }
+      #${OVERLAY_ID} .sp-tr-ov-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: #fff; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; }
+      #${OVERLAY_ID} .sp-tr-ov-title { font-size: 15px; font-weight: 700; color: #0f172a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #${OVERLAY_ID} .sp-tr-ov-close { border: 0; background: #f3f3f3; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 20px; line-height: 1; color: #444; flex-shrink: 0; }
       #${OVERLAY_ID} .sp-tr-ov-close:hover { background: #e5e5e5; }
-
-      #${OVERLAY_ID} .sp-tr-ov-body {
-        flex: 1;
-        overflow-y: auto;
-        padding: 14px 16px 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-
-      #${OVERLAY_ID} .sp-tr-ov-scan {
-        background: #fff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 12px 14px;
-      }
-      #${OVERLAY_ID} .sp-tr-ov-label {
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .04em;
-        color: #64748b;
-        margin-bottom: 8px;
-      }
-      #${INPUT_ID} {
-        width: 100%;
-        box-sizing: border-box;
-        min-height: 56px;
-        border: 2px solid #0f172a;
-        border-radius: 12px;
-        padding: 0 14px;
-        font-size: 18px;
-        font-weight: 600;
-        font-family: inherit;
-        outline: none;
-        background: #fff;
-        color: #0f172a;
-      }
-      #${INPUT_ID}:focus {
-        border-color: var(--primary, #2563EB);
-        box-shadow: 0 0 0 4px rgba(37,99,235,.12);
-      }
+      #${OVERLAY_ID} .sp-tr-ov-body { flex: 1; overflow-y: auto; padding: 14px 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+      #${OVERLAY_ID} .sp-tr-ov-scan { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; }
+      #${OVERLAY_ID} .sp-tr-ov-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-bottom: 8px; }
+      #${INPUT_ID} { width: 100%; box-sizing: border-box; min-height: 56px; border: 2px solid #0f172a; border-radius: 12px; padding: 0 14px; font-size: 18px; font-weight: 600; font-family: inherit; outline: none; background: #fff; color: #0f172a; }
+      #${INPUT_ID}:focus { border-color: var(--primary, #2563EB); box-shadow: 0 0 0 4px rgba(37,99,235,.12); }
       #${INPUT_ID}::placeholder { color: #94a3b8; font-weight: 500; }
-
-      #${OVERLAY_ID} .sp-tr-ov-last {
-        margin-top: 10px;
-        min-height: 22px;
-        font-size: 14px;
-        line-height: 1.4;
-        color: #64748b;
-        font-weight: 600;
-        word-break: break-word;
-      }
+      #${OVERLAY_ID} .sp-tr-ov-last { margin-top: 10px; min-height: 22px; font-size: 14px; line-height: 1.4; color: #64748b; font-weight: 600; word-break: break-word; }
       #${OVERLAY_ID} .sp-tr-ov-last.is-ok  { color: #18794e; }
       #${OVERLAY_ID} .sp-tr-ov-last.is-err { color: #b42318; }
-      #${OVERLAY_ID} .sp-tr-ov-last-extra {
-        display: block;
-        font-size: 12px;
-        font-weight: 500;
-        color: #64748b;
-        margin-top: 3px;
-      }
-
-      #${OVERLAY_ID} .sp-tr-ov-progress {
-        background: #fff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 12px 14px;
-      }
-      #${OVERLAY_ID} .sp-tr-ov-progress-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 10px;
-        font-size: 13px;
-        color: #475569;
-        margin-bottom: 6px;
-      }
+      #${OVERLAY_ID} .sp-tr-ov-last-extra { display: block; font-size: 12px; font-weight: 500; color: #64748b; margin-top: 3px; }
+      #${OVERLAY_ID} .sp-tr-ov-progress { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; }
+      #${OVERLAY_ID} .sp-tr-ov-progress-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; color: #475569; margin-bottom: 6px; }
       #${OVERLAY_ID} .sp-tr-ov-progress-row:last-child { margin-bottom: 0; }
-      #${OVERLAY_ID} .sp-tr-ov-progress-row b {
-        color: #0f172a;
-        font-variant-numeric: tabular-nums;
-      }
-
-      #${OVERLAY_ID} .sp-tr-ov-list {
-        background: #fff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        overflow: hidden;
-      }
-      #${OVERLAY_ID} .sp-tr-ov-list-head {
-        padding: 10px 14px;
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .04em;
-        color: #64748b;
-        border-bottom: 1px solid #f1f5f9;
-        background: #fafbfc;
-      }
-      #${OVERLAY_ID} .sp-tr-ov-list-body {
-        max-height: 280px;
-        overflow-y: auto;
-      }
-      #${OVERLAY_ID} .sp-tr-ov-item {
-        display: grid;
-        grid-template-columns: auto 1fr auto;
-        align-items: center;
-        gap: 10px;
-        padding: 9px 14px;
-        font-size: 13px;
-        border-bottom: 1px solid #f8fafc;
-      }
+      #${OVERLAY_ID} .sp-tr-ov-progress-row b { color: #0f172a; font-variant-numeric: tabular-nums; }
+      #${OVERLAY_ID} .sp-tr-ov-list { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+      #${OVERLAY_ID} .sp-tr-ov-list-head { padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #64748b; border-bottom: 1px solid #f1f5f9; background: #fafbfc; }
+      #${OVERLAY_ID} .sp-tr-ov-list-body { max-height: 280px; overflow-y: auto; }
+      #${OVERLAY_ID} .sp-tr-ov-item { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 9px 14px; font-size: 13px; border-bottom: 1px solid #f8fafc; }
       #${OVERLAY_ID} .sp-tr-ov-item:last-child { border-bottom: 0; }
       #${OVERLAY_ID} .sp-tr-ov-item.is-done { background: #f0fdf4; }
-      #${OVERLAY_ID} .sp-tr-ov-title-cell {
-        color: #64748b;
-        font-size: 12px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      #${OVERLAY_ID} .sp-tr-ov-num {
-        font-variant-numeric: tabular-nums;
-        font-weight: 700;
-        color: #0f172a;
-        white-space: nowrap;
-      }
+      #${OVERLAY_ID} .sp-tr-ov-title-cell { color: #64748b; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #${OVERLAY_ID} .sp-tr-ov-num { font-variant-numeric: tabular-nums; font-weight: 700; color: #0f172a; white-space: nowrap; }
       #${OVERLAY_ID} .sp-tr-ov-num.is-done { color: #18794e; }
-
-      #${OVERLAY_ID} .sp-tr-ov-empty {
-        padding: 16px;
-        text-align: center;
-        color: #94a3b8;
-        font-size: 13px;
-      }
-
-      #${OVERLAY_ID} .sp-tr-ov-foot {
-        padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-        background: #fff;
-        border-top: 1px solid #e2e8f0;
-        display: flex;
-        gap: 8px;
-        flex-shrink: 0;
-      }
+      #${OVERLAY_ID} .sp-tr-ov-empty { padding: 16px; text-align: center; color: #94a3b8; font-size: 13px; }
+      #${OVERLAY_ID} .sp-tr-ov-foot { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); background: #fff; border-top: 1px solid #e2e8f0; display: flex; gap: 8px; flex-shrink: 0; }
       #${OVERLAY_ID} .sp-tr-ov-foot .sp-tr-btn { flex: 1; justify-content: center; }
 
-      #${MODAL_ID} {
-        position: fixed; inset: 0;
-        background: rgba(15,23,42,.55);
-        z-index: 100070;
-        display: flex; align-items: center; justify-content: center;
-        padding: 20px;
-        backdrop-filter: blur(3px);
-      }
-      #${MODAL_ID} .sp-tr-modal {
-        background: #fff;
-        border-radius: 16px;
-        width: 100%; max-width: 780px;
-        max-height: 92vh;
-        display: flex; flex-direction: column;
-        overflow: hidden;
-        box-shadow: 0 25px 80px rgba(0,0,0,.35);
-      }
-      #${MODAL_ID} .sp-tr-modal-head {
-        padding: 16px 20px;
-        border-bottom: 1px solid #eef1f4;
-        display: flex; align-items: center; justify-content: space-between;
-        flex-shrink: 0;
-      }
-      #${MODAL_ID} h3 {
-        margin: 0; font-size: 17px; font-weight: 700;
-      }
-      #${MODAL_ID} .sp-tr-modal-close {
-        border: 0; background: #f3f3f3;
-        width: 34px; height: 34px;
-        border-radius: 50%; cursor: pointer;
-        font-size: 20px; line-height: 1; color: #444;
-      }
-      #${MODAL_ID} .sp-tr-modal-body {
-        padding: 16px 20px;
-        overflow-y: auto;
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-      }
+      #${MODAL_ID} { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 100070; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(3px); }
+      #${MODAL_ID} .sp-tr-modal { background: #fff; border-radius: 16px; width: 100%; max-width: 780px; max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 80px rgba(0,0,0,.35); }
+      #${MODAL_ID} .sp-tr-modal-head { padding: 16px 20px; border-bottom: 1px solid #eef1f4; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+      #${MODAL_ID} h3 { margin: 0; font-size: 17px; font-weight: 700; }
+      #${MODAL_ID} .sp-tr-modal-close { border: 0; background: #f3f3f3; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: 20px; line-height: 1; color: #444; }
+      #${MODAL_ID} .sp-tr-modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; }
       #${MODAL_ID} .sp-tr-field { display: block; }
-      #${MODAL_ID} .sp-tr-field > span {
-        display: block;
-        font-size: 12px;
-        font-weight: 600;
-        color: #475569;
-        margin-bottom: 5px;
-      }
-      #${MODAL_ID} .sp-tr-field input,
-      #${MODAL_ID} .sp-tr-field textarea,
-      #${MODAL_ID} .sp-tr-field select {
-        width: 100%;
-        box-sizing: border-box;
-        border: 1px solid #dfe3e8;
-        border-radius: 9px;
-        padding: 10px 12px;
-        font-size: 13px;
-        outline: none;
-        background: #fff;
-        font-family: inherit;
-      }
-      #${MODAL_ID} .sp-tr-field input:focus,
-      #${MODAL_ID} .sp-tr-field textarea:focus,
-      #${MODAL_ID} .sp-tr-field select:focus {
-        border-color: var(--primary, #2563EB);
-        box-shadow: 0 0 0 3px rgba(37,99,235,.1);
-      }
-      #${MODAL_ID} .sp-tr-field textarea {
-        min-height: 140px;
-        resize: vertical;
-        font-family: ui-monospace, Menlo, Consolas, monospace;
-        font-size: 12px;
-      }
-      #${MODAL_ID} .sp-tr-grid2 {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-      }
-      #${MODAL_ID} .sp-tr-source-tabs {
-        display: flex;
-        gap: 6px;
-        padding: 4px;
-        background: #f1f5f9;
-        border-radius: 10px;
-      }
-      #${MODAL_ID} .sp-tr-source-tab {
-        flex: 1;
-        border: 0;
-        background: transparent;
-        padding: 9px 12px;
-        border-radius: 8px;
-        font-size: 13px;
-        font-weight: 600;
-        color: #64748b;
-        cursor: pointer;
-        font-family: inherit;
-      }
-      #${MODAL_ID} .sp-tr-source-tab.is-active {
-        background: #fff;
-        color: #0f172a;
-        box-shadow: 0 1px 3px rgba(15,23,42,.08);
-      }
-      #${MODAL_ID} .sp-tr-preview {
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        overflow: hidden;
-        max-height: 240px;
-        overflow-y: auto;
-      }
-      #${MODAL_ID} .sp-tr-preview table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 12px;
-      }
-      #${MODAL_ID} .sp-tr-preview th,
-      #${MODAL_ID} .sp-tr-preview td {
-        padding: 7px 10px;
-        border-bottom: 1px solid #f1f5f9;
-        text-align: left;
-      }
-      #${MODAL_ID} .sp-tr-preview th {
-        background: #f8fafc;
-        font-size: 10px;
-        text-transform: uppercase;
-        color: #64748b;
-        font-weight: 700;
-        letter-spacing: .04em;
-        position: sticky;
-        top: 0;
-      }
-      #${MODAL_ID} .sp-tr-preview-summary {
-        padding: 8px 12px;
-        background: #f8fafc;
-        font-size: 12px;
-        color: #475569;
-        border-radius: 8px;
-      }
-      #${MODAL_ID} .sp-tr-modal-foot {
-        padding: 12px 20px 16px;
-        display: flex; gap: 8px; justify-content: flex-end;
-        border-top: 1px solid #eef1f4; background: #fafbfc;
-        flex-shrink: 0;
-      }
-      #${MODAL_ID} .sp-tr-err {
-        padding: 10px 12px;
-        background: #fef2f2;
-        color: #991b1b;
-        border-radius: 8px;
-        font-size: 12px;
-      }
+      #${MODAL_ID} .sp-tr-field > span { display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 5px; }
+      #${MODAL_ID} .sp-tr-field input, #${MODAL_ID} .sp-tr-field textarea, #${MODAL_ID} .sp-tr-field select { width: 100%; box-sizing: border-box; border: 1px solid #dfe3e8; border-radius: 9px; padding: 10px 12px; font-size: 13px; outline: none; background: #fff; font-family: inherit; }
+      #${MODAL_ID} .sp-tr-field input:focus, #${MODAL_ID} .sp-tr-field textarea:focus, #${MODAL_ID} .sp-tr-field select:focus { border-color: var(--primary, #2563EB); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+      #${MODAL_ID} .sp-tr-field textarea { min-height: 140px; resize: vertical; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+      #${MODAL_ID} .sp-tr-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      #${MODAL_ID} .sp-tr-source-tabs { display: flex; gap: 6px; padding: 4px; background: #f1f5f9; border-radius: 10px; }
+      #${MODAL_ID} .sp-tr-source-tab { flex: 1; border: 0; background: transparent; padding: 9px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: #64748b; cursor: pointer; font-family: inherit; }
+      #${MODAL_ID} .sp-tr-source-tab.is-active { background: #fff; color: #0f172a; box-shadow: 0 1px 3px rgba(15,23,42,.08); }
+      #${MODAL_ID} .sp-tr-preview { border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; max-height: 240px; overflow-y: auto; }
+      #${MODAL_ID} .sp-tr-preview table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      #${MODAL_ID} .sp-tr-preview th, #${MODAL_ID} .sp-tr-preview td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; text-align: left; }
+      #${MODAL_ID} .sp-tr-preview th { background: #f8fafc; font-size: 10px; text-transform: uppercase; color: #64748b; font-weight: 700; letter-spacing: .04em; position: sticky; top: 0; }
+      #${MODAL_ID} .sp-tr-preview-summary { padding: 8px 12px; background: #f8fafc; font-size: 12px; color: #475569; border-radius: 8px; }
+      #${MODAL_ID} .sp-tr-modal-foot { padding: 12px 20px 16px; display: flex; gap: 8px; justify-content: flex-end; border-top: 1px solid #eef1f4; background: #fafbfc; flex-shrink: 0; }
+      #${MODAL_ID} .sp-tr-err { padding: 10px 12px; background: #fef2f2; color: #991b1b; border-radius: 8px; font-size: 12px; }
 
-      /* ---------- Модалка печати ---------- */
-      #${PRINTMOD_ID} {
-        position: fixed; inset: 0;
-        background: rgba(15,23,42,.55);
-        z-index: 100075;
-        display: flex; align-items: center; justify-content: center;
-        padding: 20px;
-        backdrop-filter: blur(3px);
-      }
-      #${PRINTMOD_ID} .sp-tr-modal {
-        background: #fff;
-        border-radius: 16px;
-        width: 100%; max-width: 520px;
-        max-height: 92vh;
-        display: flex; flex-direction: column;
-        overflow: hidden;
-        box-shadow: 0 25px 80px rgba(0,0,0,.35);
-      }
-      #${PRINTMOD_ID} .sp-tr-modal-head {
-        padding: 16px 20px;
-        border-bottom: 1px solid #eef1f4;
-        display: flex; align-items: center; justify-content: space-between;
-      }
+      #${PRINTMOD_ID} { position: fixed; inset: 0; background: rgba(15,23,42,.55); z-index: 100075; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(3px); }
+      #${PRINTMOD_ID} .sp-tr-modal { background: #fff; border-radius: 16px; width: 100%; max-width: 520px; max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 80px rgba(0,0,0,.35); }
+      #${PRINTMOD_ID} .sp-tr-modal-head { padding: 16px 20px; border-bottom: 1px solid #eef1f4; display: flex; align-items: center; justify-content: space-between; }
       #${PRINTMOD_ID} h3 { margin: 0; font-size: 17px; font-weight: 700; }
-      #${PRINTMOD_ID} .sp-tr-modal-body {
-        padding: 16px 20px;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-      }
+      #${PRINTMOD_ID} .sp-tr-modal-body { padding: 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
       #${PRINTMOD_ID} .sp-tr-field { display: block; }
-      #${PRINTMOD_ID} .sp-tr-field > span {
-        display: block; font-size: 12px; font-weight: 600;
-        color: #475569; margin-bottom: 5px;
-      }
-      #${PRINTMOD_ID} .sp-tr-field input,
-      #${PRINTMOD_ID} .sp-tr-field select {
-        width: 100%;
-        box-sizing: border-box;
-        border: 1px solid #dfe3e8;
-        border-radius: 9px;
-        padding: 10px 12px;
-        font-size: 13px;
-        outline: none;
-        background: #fff;
-        font-family: inherit;
-      }
-      #${PRINTMOD_ID} .sp-tr-field input:focus,
-      #${PRINTMOD_ID} .sp-tr-field select:focus {
-        border-color: var(--primary, #2563EB);
-        box-shadow: 0 0 0 3px rgba(37,99,235,.1);
-      }
-      #${PRINTMOD_ID} .sp-tr-grid2 {
-        display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-      }
-      #${PRINTMOD_ID} .sp-tr-check {
-        display: flex; align-items: center; gap: 8px;
-        font-size: 13px; cursor: pointer; user-select: none;
-      }
-      #${PRINTMOD_ID} .sp-tr-check input {
-        width: 16px; height: 16px;
-        accent-color: var(--primary, #2563EB); cursor: pointer;
-      }
-      #${PRINTMOD_ID} .sp-tr-modal-foot {
-        padding: 12px 20px 16px;
-        display: flex; gap: 8px; justify-content: flex-end;
-        border-top: 1px solid #eef1f4; background: #fafbfc;
-      }
-      #${PRINTMOD_ID} .sp-tr-hint {
-        font-size: 11px;
-        color: #94a3b8;
-        line-height: 1.5;
-      }
+      #${PRINTMOD_ID} .sp-tr-field > span { display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 5px; }
+      #${PRINTMOD_ID} .sp-tr-field input, #${PRINTMOD_ID} .sp-tr-field select { width: 100%; box-sizing: border-box; border: 1px solid #dfe3e8; border-radius: 9px; padding: 10px 12px; font-size: 13px; outline: none; background: #fff; font-family: inherit; }
+      #${PRINTMOD_ID} .sp-tr-field input:focus, #${PRINTMOD_ID} .sp-tr-field select:focus { border-color: var(--primary, #2563EB); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+      #${PRINTMOD_ID} .sp-tr-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      #${PRINTMOD_ID} .sp-tr-check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; user-select: none; }
+      #${PRINTMOD_ID} .sp-tr-check input { width: 16px; height: 16px; accent-color: var(--primary, #2563EB); cursor: pointer; }
+      #${PRINTMOD_ID} .sp-tr-modal-foot { padding: 12px 20px 16px; display: flex; gap: 8px; justify-content: flex-end; border-top: 1px solid #eef1f4; background: #fafbfc; }
+      #${PRINTMOD_ID} .sp-tr-hint { font-size: 11px; color: #94a3b8; line-height: 1.5; }
+      #${PRINTMOD_ID} .sp-tr-preview-summary { padding: 10px 12px; background: #f8fafc; font-size: 12px; color: #475569; border-radius: 8px; line-height: 1.5; }
 
       @media (max-width: 640px) {
         #${MODAL_ID} { padding: 0; }
-        #${MODAL_ID} .sp-tr-modal {
-          max-width: none; height: 100vh; max-height: 100vh; border-radius: 0;
-        }
+        #${MODAL_ID} .sp-tr-modal { max-width: none; height: 100vh; max-height: 100vh; border-radius: 0; }
         #${MODAL_ID} .sp-tr-grid2 { grid-template-columns: 1fr; }
         .sp-tr-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .sp-tr-items-table th:nth-child(2),
-        .sp-tr-items-table td:nth-child(2),
-        .sp-tr-items-table th:nth-child(3),
-        .sp-tr-items-table td:nth-child(3) {
-          display: none;
-        }
+        .sp-tr-items-table th:nth-child(2), .sp-tr-items-table td:nth-child(2),
+        .sp-tr-items-table th:nth-child(3), .sp-tr-items-table td:nth-child(3) { display: none; }
         #${OVERLAY_ID} .sp-tr-ov-list-body { max-height: none; }
-
         #${PRINTMOD_ID} { padding: 0; align-items: flex-end; }
-        #${PRINTMOD_ID} .sp-tr-modal {
-          max-width: none; border-radius: 18px 18px 0 0;
-        }
+        #${PRINTMOD_ID} .sp-tr-modal { max-width: none; border-radius: 18px 18px 0 0; }
         #${PRINTMOD_ID} .sp-tr-grid2 { grid-template-columns: 1fr; }
       }
     `;
     document.head.appendChild(style);
   }
 
-  /* =========================================================
-     РЕНДЕР — СПИСОК ЗАЯВОК
-     ========================================================= */
+  /* ============ РЕНДЕР — СПИСОК ЗАЯВОК ============ */
 
   async function renderListPage() {
     const content = document.getElementById('content');
     if (!content) return;
-
     markSidebarActive();
 
     const pt = document.getElementById('pageTitle');
@@ -1259,9 +571,7 @@
     if (pt) pt.textContent = 'Транзит';
     if (h) h.textContent = 'Заявки клиентов (кросс-док)';
 
-    if (!tr.requests.length && !tr.loadingList) {
-      await loadRequests();
-    }
+    if (!tr.requests.length && !tr.loadingList) await loadRequests();
 
     const progressMap = new Map();
     if (tr.requests.length) {
@@ -1283,9 +593,7 @@
             });
           }
         }
-      } catch (e) {
-        console.warn('[Transit] progress aggregate error:', e);
-      }
+      } catch (e) { console.warn('[Transit] progress aggregate error:', e); }
     }
 
     let html = `
@@ -1304,12 +612,7 @@
     if (tr.loadingList) {
       html += `<div class="sp-tr-empty">Загрузка заявок…</div>`;
     } else if (!tr.requests.length) {
-      html += `
-        <div class="sp-tr-empty">
-          Заявок пока нет.<br>
-          <span style="font-size:12px;">Нажмите «+ Новая заявка» — можно вставить данные из Excel или из текста.</span>
-        </div>
-      `;
+      html += `<div class="sp-tr-empty">Заявок пока нет.<br><span style="font-size:12px;">Нажмите «+ Новая заявка» — можно вставить данные из Excel или из текста.</span></div>`;
     } else {
       html += `<div class="sp-tr-requests">`;
       for (const req of tr.requests) {
@@ -1319,14 +622,9 @@
         html += `
           <div class="sp-tr-request" data-request-id="${esc(req.id)}">
             <div class="sp-tr-request-title">${esc(req.client_name)}</div>
-            <div class="sp-tr-request-meta">
-              ${esc(req.request_name)}
-              · ${esc(fmtDate(req.request_date))}
-            </div>
+            <div class="sp-tr-request-meta">${esc(req.request_name)} · ${esc(fmtDate(req.request_date))}</div>
             <span class="sp-tr-request-status sp-tr-status-${esc(req.status)}">
-              ${req.status === 'active' ? 'Активна'
-                : req.status === 'done' ? 'Выполнена'
-                : 'Архив'}
+              ${req.status === 'active' ? 'Активна' : req.status === 'done' ? 'Выполнена' : 'Архив'}
             </span>
             <div class="sp-tr-request-progress">
               <div class="sp-tr-progress-bar">
@@ -1339,12 +637,10 @@
       }
       html += `</div>`;
     }
-
     html += `</div>`;
     content.innerHTML = html;
 
     document.getElementById('spTrNewRequestBtn')?.addEventListener('click', () => openCreateModal());
-
     content.querySelectorAll('[data-request-id]').forEach(card => {
       card.addEventListener('click', () => {
         const id = card.getAttribute('data-request-id');
@@ -1353,14 +649,11 @@
     });
   }
 
-  /* =========================================================
-     РЕНДЕР — ЭКРАН ЗАЯВКИ
-     ========================================================= */
+  /* ============ РЕНДЕР — ЭКРАН ЗАЯВКИ ============ */
 
   async function renderRequestPage() {
     const content = document.getElementById('content');
     if (!content) return;
-
     markSidebarActive();
 
     const req = tr.current?.request;
@@ -1369,8 +662,7 @@
         <div class="sp-tr-page">
           <button class="sp-tr-back" id="spTrBackBtn">← Назад</button>
           <div class="sp-tr-empty">Заявка не найдена</div>
-        </div>
-      `;
+        </div>`;
       document.getElementById('spTrBackBtn')?.addEventListener('click', () => backToList());
       return;
     }
@@ -1413,18 +705,9 @@
         </div>
 
         <div class="sp-tr-kpis">
-          <div class="sp-tr-kpi">
-            <div class="sp-tr-kpi-label">Позиций</div>
-            <div class="sp-tr-kpi-value">${items.length}</div>
-          </div>
-          <div class="sp-tr-kpi">
-            <div class="sp-tr-kpi-label">Коробок план</div>
-            <div class="sp-tr-kpi-value">${totalBoxes}</div>
-          </div>
-          <div class="sp-tr-kpi">
-            <div class="sp-tr-kpi-label">Отсканировано</div>
-            <div class="sp-tr-kpi-value ${isDone ? 'is-done' : ''}">${doneBoxes}</div>
-          </div>
+          <div class="sp-tr-kpi"><div class="sp-tr-kpi-label">Позиций</div><div class="sp-tr-kpi-value">${items.length}</div></div>
+          <div class="sp-tr-kpi"><div class="sp-tr-kpi-label">Коробок план</div><div class="sp-tr-kpi-value">${totalBoxes}</div></div>
+          <div class="sp-tr-kpi"><div class="sp-tr-kpi-label">Отсканировано</div><div class="sp-tr-kpi-value ${isDone ? 'is-done' : ''}">${doneBoxes}</div></div>
           <div class="sp-tr-kpi">
             <div class="sp-tr-kpi-label">Прогресс</div>
             <div class="sp-tr-kpi-value ${isDone ? 'is-done' : ''}">${totalPct}%</div>
@@ -1435,15 +718,9 @@
         </div>
 
         <div class="sp-tr-actions">
-          <button type="button" class="sp-tr-btn sp-tr-btn-primary" id="spTrScanBtn">
-            📷 Сканировать
-          </button>
-          <button type="button" class="sp-tr-btn sp-tr-btn-primary" id="spTrPrintBtn">
-            🖨 Печать листов на поддоны
-          </button>
-          <button type="button" class="sp-tr-btn sp-tr-btn-secondary" id="spTrExportBtn">
-            ⬇ Экспорт CSV
-          </button>
+          <button type="button" class="sp-tr-btn sp-tr-btn-primary" id="spTrScanBtn">📷 Сканировать</button>
+          <button type="button" class="sp-tr-btn sp-tr-btn-primary" id="spTrPrintBtn">🖨 Печать листов на поддоны</button>
+          <button type="button" class="sp-tr-btn sp-tr-btn-secondary" id="spTrExportBtn">⬇ Экспорт CSV</button>
         </div>
 
         <div class="sp-tr-items-wrap">
@@ -1462,8 +739,7 @@
                 <th class="sp-tr-progress-cell">Отсканировано</th>
               </tr>
             </thead>
-            <tbody>
-    `;
+            <tbody>`;
 
     if (!items.length) {
       html += `<tr><td colspan="6" style="text-align:center;color:#94a3b8;">Позиций нет</td></tr>`;
@@ -1480,8 +756,7 @@
             <td class="sp-tr-num">${esc(it.requested_units)}</td>
             <td class="sp-tr-num">
               <span class="sp-tr-units-edit">
-                <input type="number" min="1" step="1" value="${esc(it.units_per_box)}"
-                       data-units-input="${esc(it.id)}">
+                <input type="number" min="1" step="1" value="${esc(it.units_per_box)}" data-units-input="${esc(it.id)}">
               </span>
             </td>
             <td class="sp-tr-num">${planned}</td>
@@ -1493,26 +768,16 @@
                 <b>${scanned}</b> / ${planned}
               </div>
             </td>
-          </tr>
-        `;
+          </tr>`;
       });
     }
 
-    html += `
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
-
+    html += `</tbody></table></div></div>`;
     content.innerHTML = html;
 
     document.getElementById('spTrBackBtn')?.addEventListener('click', () => backToList());
-
     document.getElementById('spTrScanBtn')?.addEventListener('click', () => openScanner());
-
     document.getElementById('spTrPrintBtn')?.addEventListener('click', () => openPrintModal());
-
     document.getElementById('spTrExportBtn')?.addEventListener('click', exportRequestCsv);
 
     document.getElementById('spTrDeleteBtn')?.addEventListener('click', async () => {
@@ -1523,9 +788,7 @@
         tr.current = null;
         tr.currentRequestId = null;
         await backToList(true);
-      } catch (e) {
-        toastMsg('Ошибка: ' + (e.message || ''), 'error');
-      }
+      } catch (e) { toastMsg('Ошибка: ' + (e.message || ''), 'error'); }
     });
 
     document.getElementById('spTrArchiveBtn')?.addEventListener('click', async () => {
@@ -1534,9 +797,7 @@
         await archiveRequest(req.id, newStatus);
         toastMsg(newStatus === 'archived' ? 'Заявка в архиве' : 'Возвращена в работу');
         await openRequestPage(req.id);
-      } catch (e) {
-        toastMsg('Ошибка: ' + (e.message || ''), 'error');
-      }
+      } catch (e) { toastMsg('Ошибка: ' + (e.message || ''), 'error'); }
     });
 
     content.querySelectorAll('[data-units-input]').forEach(inp => {
@@ -1548,16 +809,12 @@
           const it = tr.current.items.find(x => x.id === itemId);
           if (it) it.units_per_box = value;
           await renderRequestPage();
-        } catch (err) {
-          toastMsg('Не удалось сохранить: ' + (err.message || ''), 'error');
-        }
+        } catch (err) { toastMsg('Не удалось сохранить: ' + (err.message || ''), 'error'); }
       });
     });
   }
 
-  /* =========================================================
-     СКАНЕР
-     ========================================================= */
+  /* ============ СКАНЕР ============ */
 
   function openScanner() {
     if (tr.scannerOpen) return;
@@ -1571,9 +828,7 @@
     overlay.id = OVERLAY_ID;
     overlay.innerHTML = `
       <div class="sp-tr-ov-head">
-        <div class="sp-tr-ov-title">
-          📷 ${esc(tr.current.request.client_name)} — сканирование
-        </div>
+        <div class="sp-tr-ov-title">📷 ${esc(tr.current.request.client_name)} — сканирование</div>
         <button type="button" class="sp-tr-ov-close" id="spTrOvClose" aria-label="Закрыть">×</button>
       </div>
       <div class="sp-tr-ov-body">
@@ -1588,18 +843,14 @@
         <div class="sp-tr-ov-list" id="spTrOvList"></div>
       </div>
       <div class="sp-tr-ov-foot">
-        <button type="button" class="sp-tr-btn sp-tr-btn-secondary" id="spTrOvClose2">
-          Закрыть
-        </button>
+        <button type="button" class="sp-tr-btn sp-tr-btn-secondary" id="spTrOvClose2">Закрыть</button>
       </div>
     `;
-
     document.body.appendChild(overlay);
     tr.scannerOpen = true;
 
     document.getElementById('spTrOvClose')?.addEventListener('click', closeScanner);
     document.getElementById('spTrOvClose2')?.addEventListener('click', closeScanner);
-
     document.addEventListener('keydown', onScannerKeydown);
 
     renderScannerProgress();
@@ -1609,28 +860,21 @@
     const input = document.getElementById(INPUT_ID);
     input?.addEventListener('keydown', e => {
       if (e.key !== 'Enter') return;
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       const value = input.value;
       input.value = '';
       processScan(value);
     });
-
     setTimeout(() => refocusInput(), 60);
   }
 
   function closeScanner() {
     if (!tr.scannerOpen) return;
     tr.scannerOpen = false;
-
     document.removeEventListener('keydown', onScannerKeydown);
-
     const overlay = document.getElementById(OVERLAY_ID);
     if (overlay) overlay.remove();
-
-    if (tr.currentRequestId) {
-      renderRequestPage();
-    }
+    if (tr.currentRequestId) renderRequestPage();
   }
 
   function onScannerKeydown(e) {
@@ -1651,7 +895,6 @@
   function renderScannerProgress() {
     const el = document.getElementById('spTrOvProgress');
     if (!el || !tr.current) return;
-
     const items = recalcScannedFromScans(tr.current.items, tr.current.scans);
     let total = 0, done = 0;
     items.forEach(it => {
@@ -1659,7 +902,6 @@
       done  += Number(it.scanned_boxes) || 0;
     });
     const pct = total ? Math.min(100, Math.round(done / total * 100)) : 0;
-
     el.innerHTML = `
       <div class="sp-tr-ov-progress-row">
         <span>Прогресс по заявке</span>
@@ -1667,21 +909,17 @@
       </div>
       <div class="sp-tr-progress-bar">
         <div class="sp-tr-progress-fill ${done >= total && total > 0 ? 'is-done' : ''}" style="width:${pct}%"></div>
-      </div>
-    `;
+      </div>`;
   }
 
   function renderScannerItemsList() {
     const el = document.getElementById('spTrOvList');
     if (!el || !tr.current) return;
-
     const items = recalcScannedFromScans(tr.current.items, tr.current.scans);
-
     if (!items.length) {
       el.innerHTML = `<div class="sp-tr-ov-empty">В заявке нет позиций</div>`;
       return;
     }
-
     el.innerHTML = `
       <div class="sp-tr-ov-list-head">Позиции заявки</div>
       <div class="sp-tr-ov-list-body">
@@ -1694,62 +932,45 @@
               <span class="sp-tr-bc">${barcodeHtml(it.barcode)}</span>
               <span class="sp-tr-ov-title-cell">${esc(it.title || it.article || '')}</span>
               <span class="sp-tr-ov-num ${done ? 'is-done' : ''}">${scanned} / ${planned}</span>
-            </div>
-          `;
+            </div>`;
         }).join('')}
-      </div>
-    `;
+      </div>`;
   }
 
   function setLastScanView(data) {
     tr.lastScanView = data;
     const el = document.getElementById('spTrOvLast');
     if (!el) return;
-    if (!data) {
-      el.className = 'sp-tr-ov-last';
-      el.textContent = '';
-      return;
-    }
+    if (!data) { el.className = 'sp-tr-ov-last'; el.textContent = ''; return; }
     el.className = 'sp-tr-ov-last ' + (data.ok ? 'is-ok' : 'is-err');
-    const extra = data.extra
-      ? `<span class="sp-tr-ov-last-extra">${esc(data.extra)}</span>`
-      : '';
+    const extra = data.extra ? `<span class="sp-tr-ov-last-extra">${esc(data.extra)}</span>` : '';
     el.innerHTML = esc(data.message) + extra;
   }
 
   async function processScan(rawBarcode) {
     const raw = String(rawBarcode || '').trim();
     if (!raw) { refocusInput(); return; }
-
     const barcode = normBarcode(raw);
     if (!barcode) {
       beep(false);
       setLastScanView({ ok: false, message: 'Пустой штрихкод' });
-      refocusInput();
-      return;
+      refocusInput(); return;
     }
-
     if (!tr.current) {
       beep(false);
       setLastScanView({ ok: false, message: 'Заявка не открыта' });
-      refocusInput();
-      return;
+      refocusInput(); return;
     }
 
     const items = recalcScannedFromScans(tr.current.items, tr.current.scans);
-
     const item = items.find(it => normBarcode(it.barcode) === barcode);
 
     if (!item) {
       beep(false);
-      setLastScanView({
-        ok: false,
-        message: `${barcode} — не в заявке`
-      });
+      setLastScanView({ ok: false, message: `${barcode} — не в заявке` });
       tr.recentScans.unshift({ barcode, ok: false, message: 'Не в заявке', time: nowTime() });
       if (tr.recentScans.length > 6) tr.recentScans.length = 6;
-      refocusInput();
-      return;
+      refocusInput(); return;
     }
 
     const planned = ceilBoxes(item.requested_units, item.units_per_box);
@@ -1764,8 +985,7 @@
       });
       tr.recentScans.unshift({ barcode, ok: false, message: 'Сверх плана', time: nowTime() });
       if (tr.recentScans.length > 6) tr.recentScans.length = 6;
-      refocusInput();
-      return;
+      refocusInput(); return;
     }
 
     try {
@@ -1781,9 +1001,7 @@
           direction: tr.current.request.client_name,
           operator_email: operatorEmail()
         })
-        .select('*')
-        .single();
-
+        .select('*').single();
       if (scanErr) throw scanErr;
 
       tr.current.scans.unshift(scanRow);
@@ -1809,43 +1027,26 @@
 
       renderScannerProgress();
       renderScannerItemsList();
-
     } catch (e) {
       console.error('[Transit] scan error:', e);
       beep(false);
-      setLastScanView({
-        ok: false,
-        message: 'Ошибка записи скана',
-        extra: e.message || ''
-      });
+      setLastScanView({ ok: false, message: 'Ошибка записи скана', extra: e.message || '' });
     }
-
     refocusInput();
   }
 
-  /* =========================================================
-     МОДАЛКА СОЗДАНИЯ ЗАЯВКИ
-     ========================================================= */
+  /* ============ СОЗДАНИЕ ЗАЯВКИ ============ */
 
   let createState = {
-    source: 'text',
-    parsed: [],
-    parsedSkipped: 0,
-    filename: '',
-    excelParsed: null,
-    selectedQtyColumn: null
+    source: 'text', parsed: [], parsedSkipped: 0, filename: '',
+    excelParsed: null, selectedQtyColumn: null
   };
 
   function openCreateModal() {
     if (document.getElementById(MODAL_ID)) return;
-
     createState = {
-      source: 'text',
-      parsed: [],
-      parsedSkipped: 0,
-      filename: '',
-      excelParsed: null,
-      selectedQtyColumn: null
+      source: 'text', parsed: [], parsedSkipped: 0, filename: '',
+      excelParsed: null, selectedQtyColumn: null
     };
 
     const overlay = document.createElement('div');
@@ -1858,33 +1059,21 @@
         </div>
         <div class="sp-tr-modal-body">
           <div class="sp-tr-grid2">
-            <label class="sp-tr-field">
-              <span>Клиент *</span>
-              <input id="spTrClientName" type="text" placeholder="Например: 21 век">
-            </label>
-            <label class="sp-tr-field">
-              <span>Название заявки *</span>
-              <input id="spTrRequestName" type="text" placeholder="Например: акция КПБ Бязь">
-            </label>
+            <label class="sp-tr-field"><span>Клиент *</span>
+              <input id="spTrClientName" type="text" placeholder="Например: 21 век"></label>
+            <label class="sp-tr-field"><span>Название заявки *</span>
+              <input id="spTrRequestName" type="text" placeholder="Например: акция КПБ Бязь"></label>
           </div>
           <div class="sp-tr-grid2">
-            <label class="sp-tr-field">
-              <span>Дата заявки</span>
-              <input id="spTrRequestDate" type="date" value="${new Date().toISOString().slice(0, 10)}">
-            </label>
-            <label class="sp-tr-field">
-              <span>Комментарий</span>
-              <input id="spTrComment" type="text" placeholder="Необязательно">
-            </label>
+            <label class="sp-tr-field"><span>Дата заявки</span>
+              <input id="spTrRequestDate" type="date" value="${new Date().toISOString().slice(0, 10)}"></label>
+            <label class="sp-tr-field"><span>Комментарий</span>
+              <input id="spTrComment" type="text" placeholder="Необязательно"></label>
           </div>
 
           <div class="sp-tr-source-tabs">
-            <button type="button" class="sp-tr-source-tab is-active" data-src="text">
-              📋 Вставить из Excel
-            </button>
-            <button type="button" class="sp-tr-source-tab" data-src="excel">
-              📁 Загрузить файл
-            </button>
+            <button type="button" class="sp-tr-source-tab is-active" data-src="text">📋 Вставить из Excel</button>
+            <button type="button" class="sp-tr-source-tab" data-src="excel">📁 Загрузить файл</button>
           </div>
 
           <div id="spTrSourceText">
@@ -1893,9 +1082,7 @@
               <textarea id="spTrTextInput" placeholder="4810122736840	453372	Восточная роскошь	150
 4810122736857		Комплект 2-сп	750"></textarea>
             </label>
-            <button type="button" class="sp-tr-btn sp-tr-btn-secondary" id="spTrParseTextBtn">
-              ↻ Разобрать
-            </button>
+            <button type="button" class="sp-tr-btn sp-tr-btn-secondary" id="spTrParseTextBtn">↻ Разобрать</button>
           </div>
 
           <div id="spTrSourceExcel" style="display:none;">
@@ -1903,16 +1090,13 @@
               <span>Excel-файл (лист с колонками: ШК, Артикул, Название/Характеристика, Заказ)</span>
               <input id="spTrExcelFile" type="file" accept=".xlsx,.xls">
             </label>
-
             <div id="spTrQtyColumnWrap" style="display:none;margin-top:10px;">
               <label class="sp-tr-field">
                 <span>Колонка с количеством</span>
                 <select id="spTrQtyColumnSelect"></select>
               </label>
             </div>
-
-            <button type="button" class="sp-tr-btn sp-tr-btn-secondary" id="spTrDownloadTemplateBtn"
-                    style="margin-top:12px;">
+            <button type="button" class="sp-tr-btn sp-tr-btn-secondary" id="spTrDownloadTemplateBtn" style="margin-top:12px;">
               📋 Скачать шаблон заявки
             </button>
           </div>
@@ -1921,13 +1105,11 @@
             <div class="sp-tr-preview-summary" id="spTrPreviewSummary"></div>
             <div class="sp-tr-preview" style="margin-top:10px;">
               <table>
-                <thead>
-                  <tr>
-                    <th style="width:140px;">ШК</th>
-                    <th>Название</th>
-                    <th style="width:90px;text-align:right;">Кол-во</th>
-                  </tr>
-                </thead>
+                <thead><tr>
+                  <th style="width:140px;">ШК</th>
+                  <th>Название</th>
+                  <th style="width:90px;text-align:right;">Кол-во</th>
+                </tr></thead>
                 <tbody id="spTrPreviewBody"></tbody>
               </table>
             </div>
@@ -1939,15 +1121,12 @@
           <button type="button" class="sp-tr-btn sp-tr-btn-secondary" id="spTrModalCancel">Отмена</button>
           <button type="button" class="sp-tr-btn sp-tr-btn-primary" id="spTrModalSave" disabled>Создать заявку</button>
         </div>
-      </div>
-    `;
+      </div>`;
 
     document.body.appendChild(overlay);
-
     overlay.querySelector('#spTrModalClose')?.addEventListener('click', closeCreateModal);
     overlay.querySelector('#spTrModalCancel')?.addEventListener('click', closeCreateModal);
     overlay.addEventListener('click', e => { if (e.target === overlay) closeCreateModal(); });
-
     document.addEventListener('keydown', onCreateKeydown);
 
     overlay.querySelectorAll('[data-src]').forEach(tab => {
@@ -1975,10 +1154,8 @@
         const parsed = await parseExcelFile(file);
         createState.excelParsed = parsed;
         createState.filename = file.name;
-
         const wrap = document.getElementById('spTrQtyColumnWrap');
         const sel = document.getElementById('spTrQtyColumnSelect');
-
         if (parsed.qtyCandidates.length > 1) {
           wrap.style.display = '';
           sel.innerHTML = parsed.qtyCandidates.map(c =>
@@ -1986,12 +1163,8 @@
           ).join('');
           sel.value = parsed.qtyCandidates[0].index;
           sel.onchange = () => applyExcelColumn(Number(sel.value));
-        } else {
-          wrap.style.display = 'none';
-        }
-
+        } else { wrap.style.display = 'none'; }
         applyExcelColumn(parsed.qtyCandidates[0].index);
-
       } catch (err) {
         console.error('[Transit] parse excel error:', err);
         showModalError(err.message || 'Не удалось прочитать файл');
@@ -1999,7 +1172,6 @@
     });
 
     document.getElementById('spTrDownloadTemplateBtn')?.addEventListener('click', downloadTransitTemplate);
-
     document.getElementById('spTrModalSave')?.addEventListener('click', saveNewRequest);
   }
 
@@ -2019,8 +1191,7 @@
 
   function onCreateKeydown(e) {
     if (e.key === 'Escape' && document.getElementById(MODAL_ID)) {
-      e.preventDefault();
-      closeCreateModal();
+      e.preventDefault(); closeCreateModal();
     }
   }
 
@@ -2031,7 +1202,6 @@
 
   function renderCreatePreview() {
     const rows = createState.parsed;
-
     const wrap = document.getElementById('spTrPreviewWrap');
     const body = document.getElementById('spTrPreviewBody');
     const summary = document.getElementById('spTrPreviewSummary');
@@ -2042,7 +1212,6 @@
       if (saveBtn) saveBtn.disabled = true;
       return;
     }
-
     if (wrap) wrap.style.display = '';
     if (saveBtn) saveBtn.disabled = false;
 
@@ -2054,8 +1223,7 @@
         Позиций: <b>${rows.length}</b>
         · Всего штук: <b>${totalUnits}</b>
         · Коробок (при 4 шт/кор): <b>${totalBoxes}</b>
-        ${createState.parsedSkipped > 0 ? `· Пропущено строк: <b>${createState.parsedSkipped}</b>` : ''}
-      `;
+        ${createState.parsedSkipped > 0 ? `· Пропущено строк: <b>${createState.parsedSkipped}</b>` : ''}`;
     }
 
     if (body) {
@@ -2064,10 +1232,9 @@
           <td class="sp-tr-bc">${barcodeHtml(r.barcode)}</td>
           <td>${esc(r.title || r.article || '')}</td>
           <td style="text-align:right;">${esc(r.requested_units)}</td>
-        </tr>
-      `).join('') + (rows.length > 200
-        ? `<tr><td colspan="3" style="text-align:center;color:#94a3b8;">… ещё ${rows.length - 200}</td></tr>`
-        : '');
+        </tr>`).join('') + (rows.length > 200
+          ? `<tr><td colspan="3" style="text-align:center;color:#94a3b8;">… ещё ${rows.length - 200}</td></tr>`
+          : '');
     }
   }
 
@@ -2085,13 +1252,7 @@
     if (btn) { btn.disabled = true; btn.textContent = 'Создание…'; }
 
     try {
-      await createRequest({
-        client_name,
-        request_name,
-        request_date,
-        comment,
-        items: createState.parsed
-      });
+      await createRequest({ client_name, request_name, request_date, comment, items: createState.parsed });
       closeCreateModal();
       toastMsg('Заявка создана');
       await loadRequests();
@@ -2103,15 +1264,10 @@
     }
   }
 
-  /* =========================================================
-     СКАЧАТЬ ШАБЛОН ЗАЯВКИ
-     ========================================================= */
+  /* ============ ШАБЛОН ============ */
 
   function downloadTransitTemplate() {
-    if (typeof XLSX === 'undefined') {
-      toastMsg('Библиотека XLSX не загружена', 'error');
-      return;
-    }
+    if (typeof XLSX === 'undefined') { toastMsg('Библиотека XLSX не загружена', 'error'); return; }
 
     const aoa = [
       ['ШК', 'Артикул', 'Название', 'Заказ'],
@@ -2119,23 +1275,12 @@
       ['4810122736857', '', '', 750],
       ['4810122736864', '474601', 'Василиса', 350]
     ];
-
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [
-      { wch: 18 },
-      { wch: 14 },
-      { wch: 30 },
-      { wch: 12 }
-    ];
-
+    ws['!cols'] = [{ wch: 18 }, { wch: 14 }, { wch: 30 }, { wch: 12 }];
     for (let r = 0; r < aoa.length; r++) {
       const ref = XLSX.utils.encode_cell({ r, c: 0 });
-      if (ws[ref]) {
-        ws[ref].t = 's';
-        ws[ref].z = '@';
-      }
+      if (ws[ref]) { ws[ref].t = 's'; ws[ref].z = '@'; }
     }
-
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Заявка');
 
@@ -2160,9 +1305,7 @@
     toastMsg('Шаблон скачан');
   }
 
-  /* =========================================================
-     ЭКСПОРТ CSV
-     ========================================================= */
+  /* ============ ЭКСПОРТ CSV ============ */
 
   function exportRequestCsv() {
     if (!tr.current) return;
@@ -2173,13 +1316,8 @@
     const rows = items.map(it => {
       const planned = ceilBoxes(it.requested_units, it.units_per_box);
       return [
-        it.barcode,
-        it.article || '',
-        it.title || '',
-        it.requested_units,
-        it.units_per_box,
-        planned,
-        it.scanned_boxes
+        it.barcode, it.article || '', it.title || '',
+        it.requested_units, it.units_per_box, planned, it.scanned_boxes
       ];
     });
 
@@ -2194,12 +1332,12 @@
     a.download = `transit-${req.client_name}-${req.id}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-
     toastMsg('Экспортировано');
   }
 
   /* =========================================================
-     ПЕЧАТЬ ЛИСТОВ НА ПОДДОНЫ
+     ПЕЧАТЬ ЛИСТОВ НА ПОДДОНЫ (v2)
+     Один лист = один поддон, одна позиция на листе.
      ========================================================= */
 
   function openPrintModal() {
@@ -2207,7 +1345,11 @@
     if (document.getElementById(PRINTMOD_ID)) return;
 
     const items = recalcScannedFromScans(tr.current.items, tr.current.scans);
-    const totalBoxes = items.reduce((s, it) => s + ceilBoxes(it.requested_units, it.units_per_box), 0);
+
+    if (!items.length) {
+      toastMsg('В заявке нет позиций для печати', 'error');
+      return;
+    }
 
     const overlay = document.createElement('div');
     overlay.id = PRINTMOD_ID;
@@ -2218,56 +1360,84 @@
           <button type="button" class="sp-tr-modal-close" id="spTrPrintClose">×</button>
         </div>
         <div class="sp-tr-modal-body">
+
+          <label class="sp-tr-field">
+            <span>Позиция (штрихкод)</span>
+            <select id="spTrPrintItemId">
+              ${items.map(it => {
+                const planned = ceilBoxes(it.requested_units, it.units_per_box);
+                const bc = String(it.barcode || '');
+                const shortTitle = (it.title || it.article || '').slice(0, 40);
+                return `<option value="${esc(it.id)}">${esc(bc)} — ${esc(shortTitle)} · всего ${planned} кор.</option>`;
+              }).join('')}
+            </select>
+          </label>
+
           <div class="sp-tr-grid2">
             <label class="sp-tr-field">
-              <span>Сколько копий (= поддонов)</span>
-              <input id="spTrPrintCopies" type="number" min="1" max="200" value="1">
+              <span>Сколько поддонов (= листов)</span>
+              <input id="spTrPrintCopies" type="number" min="1" max="500" value="1">
             </label>
             <label class="sp-tr-field">
-              <span>Начать с номера поддона</span>
+              <span>Начать с № поддона</span>
               <input id="spTrPrintStart" type="number" min="1" max="9999" value="1">
             </label>
           </div>
 
           <label class="sp-tr-field">
-            <span>Формат листа</span>
-            <select id="spTrPrintMode">
-              <option value="full">Полный лист А4: все позиции заявки</option>
-              <option value="scanned">Только отсканированные позиции</option>
-              <option value="empty">Пустой бланк (заполнять вручную)</option>
-            </select>
+            <span>Коробок на поддон (можно оставить пустым — впишете маркером)</span>
+            <input id="spTrPrintBoxes" type="number" min="1" max="9999" placeholder="Оставьте пустым, если не знаете">
           </label>
 
           <label class="sp-tr-check">
             <input type="checkbox" id="spTrPrintFooter" checked>
-            <span>Печатать поле для подписи и даты внизу</span>
+            <span>Печатать поле для подписи и даты</span>
           </label>
 
+          <div class="sp-tr-preview-summary" id="spTrPrintSummary"></div>
+
           <div class="sp-tr-hint">
-            Откроется новое окно с готовыми листами А4 — по одному на страницу.
-            Нажмите «Печать» в системном диалоге. Одна копия = один лист на один поддон.
+            Откроется новое окно с A4-листами — по одному на страницу.
+            На каждом листе — <b>одна позиция</b> и <b>номер поддона</b>.
           </div>
         </div>
         <div class="sp-tr-modal-foot">
           <button type="button" class="sp-tr-btn sp-tr-btn-secondary" id="spTrPrintCancel">Отмена</button>
           <button type="button" class="sp-tr-btn sp-tr-btn-primary" id="spTrPrintGo">Печать</button>
         </div>
-      </div>
-    `;
+      </div>`;
 
     document.body.appendChild(overlay);
+
+    const updateSummary = () => {
+      const copies = Math.max(1, Math.min(500, Number(document.getElementById('spTrPrintCopies')?.value) || 1));
+      const startNum = Math.max(1, Number(document.getElementById('spTrPrintStart')?.value) || 1);
+      const el = document.getElementById('spTrPrintSummary');
+      if (el) {
+        el.innerHTML = `
+          Будет напечатано листов: <b>${copies}</b>
+          · номера поддонов: <b>${startNum}</b> … <b>${startNum + copies - 1}</b>`;
+      }
+    };
+
+    updateSummary();
+    ['spTrPrintCopies', 'spTrPrintStart'].forEach(id => {
+      document.getElementById(id)?.addEventListener('input', updateSummary);
+    });
 
     document.getElementById('spTrPrintClose')?.addEventListener('click', closePrintModal);
     document.getElementById('spTrPrintCancel')?.addEventListener('click', closePrintModal);
     overlay.addEventListener('click', e => { if (e.target === overlay) closePrintModal(); });
 
     document.getElementById('spTrPrintGo')?.addEventListener('click', () => {
-      const copies = Math.max(1, Math.min(200, Number(document.getElementById('spTrPrintCopies')?.value) || 1));
+      const itemId = Number(document.getElementById('spTrPrintItemId')?.value);
+      const copies = Math.max(1, Math.min(500, Number(document.getElementById('spTrPrintCopies')?.value) || 1));
       const startNum = Math.max(1, Number(document.getElementById('spTrPrintStart')?.value) || 1);
-      const mode = document.getElementById('spTrPrintMode')?.value || 'full';
+      const boxesRaw = document.getElementById('spTrPrintBoxes')?.value || '';
+      const boxesPerPallet = boxesRaw === '' ? null : Math.max(1, Number(boxesRaw) || 0);
       const showFooter = !!document.getElementById('spTrPrintFooter')?.checked;
 
-      doPrint({ copies, startNum, mode, showFooter });
+      doPrint({ itemId, copies, startNum, boxesPerPallet, showFooter });
     });
   }
 
@@ -2275,109 +1445,84 @@
     document.getElementById(PRINTMOD_ID)?.remove();
   }
 
-  function buildPrintPage({ copies, startNum, mode, showFooter }) {
+  function buildPrintPage({ itemId, copies, startNum, boxesPerPallet, showFooter }) {
     if (!tr.current) return '';
 
+    const items = recalcScannedFromScans(tr.current.items, tr.current.scans);
+    const item = items.find(x => Number(x.id) === Number(itemId));
+    if (!item) return '';
+
     const req = tr.current.request;
-    let items = recalcScannedFromScans(tr.current.items, tr.current.scans);
-
-    /* Фильтрация по режиму */
-    if (mode === 'scanned') {
-      items = items.filter(it => (Number(it.scanned_boxes) || 0) > 0);
-    }
-    if (mode === 'empty') {
-      items = [];
-    }
-
-    let totalBoxes = 0, doneBoxes = 0;
-    items.forEach(it => {
-      totalBoxes += ceilBoxes(it.requested_units, it.units_per_box);
-      doneBoxes  += Number(it.scanned_boxes) || 0;
-    });
-
+    const planned = ceilBoxes(item.requested_units, item.units_per_box);
+    const scanned = Number(item.scanned_boxes) || 0;
     const dateStr = fmtDate(new Date());
+    const bc = String(item.barcode || '');
+    const bcPrefix = bc.length > 4 ? bc.slice(0, -4) : '';
+    const bcSuffix = bc.slice(-4);
+    const itemTitle = item.title || item.article || '';
+    const boxesText = boxesPerPallet == null ? '' : String(boxesPerPallet);
 
-    /* Один лист = одна страница A4 */
-    const sheetHtml = (num) => {
-      const rowsHtml = items.length
-        ? items.map(it => {
-            const planned = ceilBoxes(it.requested_units, it.units_per_box);
-            const scanned = Number(it.scanned_boxes) || 0;
-            const done = planned > 0 && scanned >= planned;
-            const bc = String(it.barcode || '');
-            const bcPrefix = bc.length > 4 ? bc.slice(0, -4) : '';
-            const bcSuffix = bc.slice(-4);
-            return `
-              <tr class="${done ? 'is-done' : ''}">
-                <td class="c-bc">
-                  <span class="bc-pre">${esc(bcPrefix)}</span><span class="bc-suf">${esc(bcSuffix)}</span>
-                </td>
-                <td class="c-name">${esc(it.title || it.article || '')}</td>
-                <td class="c-num">${planned}</td>
-                <td class="c-num c-scan">${scanned}</td>
-              </tr>
-            `;
-          }).join('')
-        : `<tr><td colspan="4" class="c-empty">— заполнить вручную —</td></tr>`;
-
-      return `
-        <div class="sheet">
-          <div class="head">
+    const sheetHtml = (num) => `
+      <div class="sheet">
+        <div class="head">
+          <div class="head-top">
             <div class="head-brand">SKLADAPLAN · ТРАНЗИТ</div>
-            <div class="head-client">${esc(req.client_name)}</div>
-            <div class="head-request">${esc(req.request_name)}</div>
+            <div class="head-request">заявка №${esc(req.id)} · ${esc(dateStr)}</div>
           </div>
-
-          <div class="meta">
-            <div class="meta-cell">
-              <div class="meta-label">Поддон №</div>
-              <div class="meta-value meta-value-big">${esc(num)}</div>
-            </div>
-            <div class="meta-cell">
-              <div class="meta-label">Дата</div>
-              <div class="meta-value">${esc(dateStr)}</div>
-            </div>
-            <div class="meta-cell">
-              <div class="meta-label">Заявка №</div>
-              <div class="meta-value">${esc(req.id)}</div>
-            </div>
-            <div class="meta-cell">
-              <div class="meta-label">Позиций</div>
-              <div class="meta-value">${items.length}</div>
-            </div>
-          </div>
-
-          <table class="items">
-            <thead>
-              <tr>
-                <th class="c-bc">Штрихкод</th>
-                <th class="c-name">Название</th>
-                <th class="c-num">Коробок</th>
-                <th class="c-num">Отсканировано</th>
-              </tr>
-            </thead>
-            <tbody>${rowsHtml}</tbody>
-          </table>
-
-          ${showFooter ? `
-            <div class="foot">
-              <div class="foot-cell">
-                <div class="foot-line"></div>
-                <div class="foot-label">Собрал (ФИО, подпись)</div>
-              </div>
-              <div class="foot-cell">
-                <div class="foot-line"></div>
-                <div class="foot-label">Проверил (ФИО, подпись)</div>
-              </div>
-              <div class="foot-cell foot-cell-date">
-                <div class="foot-line"></div>
-                <div class="foot-label">Дата</div>
-              </div>
-            </div>
-          ` : ''}
+          <div class="head-client">${esc(req.client_name)}</div>
+          <div class="head-sub">${esc(req.request_name)}</div>
         </div>
-      `;
-    };
+
+        <div class="barcode-block">
+          <div class="bc-value">
+            <span class="bc-pre">${esc(bcPrefix)}</span><span class="bc-suf">${esc(bcSuffix)}</span>
+          </div>
+          <div class="bc-title">${esc(itemTitle)}</div>
+        </div>
+
+        <div class="meta">
+          <div class="meta-cell">
+            <div class="meta-label">Поддон №</div>
+            <div class="meta-value-big">${esc(num)}</div>
+          </div>
+          <div class="meta-cell">
+            <div class="meta-label">Коробок на поддоне</div>
+            ${boxesText
+              ? `<div class="meta-value-big">${esc(boxesText)}</div>`
+              : `<div class="meta-line"></div>`
+            }
+          </div>
+        </div>
+
+        <div class="info-line">
+          Всего по позиции: <b>${planned}</b> кор. · уже отсканировано: <b>${scanned}</b> кор.
+        </div>
+
+        <div class="notes-box">
+          <div class="notes-label">Примечания</div>
+          <div class="notes-lines">
+            <div></div><div></div><div></div><div></div>
+          </div>
+        </div>
+
+        ${showFooter ? `
+          <div class="foot">
+            <div class="foot-cell">
+              <div class="foot-line"></div>
+              <div class="foot-label">Собрал (ФИО, подпись)</div>
+            </div>
+            <div class="foot-cell">
+              <div class="foot-line"></div>
+              <div class="foot-label">Проверил (ФИО, подпись)</div>
+            </div>
+            <div class="foot-cell foot-cell-date">
+              <div class="foot-line"></div>
+              <div class="foot-label">Дата</div>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    `;
 
     const sheets = [];
     for (let i = 0; i < copies; i++) {
@@ -2390,17 +1535,12 @@
 <meta charset="UTF-8">
 <title>Листы на поддоны — ${esc(req.client_name)}</title>
 <style>
-  @page {
-    size: A4;
-    margin: 12mm;
-  }
+  @page { size: A4; margin: 12mm; }
   * { box-sizing: border-box; }
   html, body {
-    margin: 0;
-    padding: 0;
+    margin: 0; padding: 0;
     font-family: Arial, Helvetica, sans-serif;
-    color: #000;
-    background: #fff;
+    color: #000; background: #fff;
   }
 
   .sheet {
@@ -2423,96 +1563,119 @@
     padding-bottom: 6mm;
     margin-bottom: 6mm;
   }
+  .head-top {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 3mm;
+  }
   .head-brand {
-    font-size: 10pt;
-    letter-spacing: 2pt;
-    color: #444;
-    margin-bottom: 2mm;
+    font-size: 10pt; letter-spacing: 2pt; color: #444;
+  }
+  .head-request {
+    font-size: 10pt; color: #444;
   }
   .head-client {
-    font-size: 40pt;
+    font-size: 36pt;
     font-weight: 900;
     line-height: 1;
     letter-spacing: -1pt;
     word-break: break-word;
   }
-  .head-request {
+  .head-sub {
+    font-size: 14pt;
+    color: #333;
+    margin-top: 2mm;
+    font-weight: 600;
+  }
+
+  .barcode-block {
+    border: 3px solid #000;
+    border-radius: 3mm;
+    padding: 6mm 6mm 6mm 6mm;
+    margin-bottom: 6mm;
+    text-align: center;
+  }
+  .bc-value {
+    font-family: "Courier New", monospace;
+    font-size: 40pt;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 1pt;
+    margin-bottom: 4mm;
+    word-break: break-all;
+  }
+  .bc-pre { color: #555; font-weight: 500; }
+  .bc-suf { color: #000; font-weight: 900; }
+  .bc-title {
     font-size: 16pt;
     font-weight: 600;
-    margin-top: 2mm;
-    color: #333;
+    color: #222;
+    word-break: break-word;
+    line-height: 1.25;
   }
 
   .meta {
     display: grid;
-    grid-template-columns: 1.2fr 1fr 1fr 1fr;
-    gap: 3mm;
+    grid-template-columns: 1fr 1fr;
+    gap: 4mm;
     margin-bottom: 6mm;
   }
   .meta-cell {
-    border: 1px solid #999;
+    border: 2px solid #000;
     border-radius: 2mm;
-    padding: 3mm 4mm;
+    padding: 4mm 5mm;
   }
   .meta-label {
-    font-size: 9pt;
+    font-size: 10pt;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    color: #555;
+    margin-bottom: 2mm;
+  }
+  .meta-value-big {
+    font-size: 42pt;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -1pt;
+  }
+  .meta-line {
+    height: 42pt;
+    border-bottom: 2px solid #999;
+  }
+
+  .info-line {
+    font-size: 12pt;
+    color: #333;
+    padding: 3mm 0;
+    margin-bottom: 6mm;
+    border-top: 1px solid #ccc;
+    border-bottom: 1px solid #ccc;
+  }
+
+  .notes-box {
+    flex: 1;
+    border: 1px dashed #999;
+    border-radius: 2mm;
+    padding: 4mm;
+    min-height: 40mm;
+    display: flex;
+    flex-direction: column;
+  }
+  .notes-label {
+    font-size: 10pt;
     text-transform: uppercase;
     letter-spacing: 1pt;
     color: #666;
-    margin-bottom: 1mm;
+    margin-bottom: 3mm;
   }
-  .meta-value {
-    font-size: 14pt;
-    font-weight: 700;
-  }
-  .meta-value-big {
-    font-size: 24pt;
-    line-height: 1;
-  }
-
-  .items {
-    width: 100%;
-    border-collapse: collapse;
+  .notes-lines {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
   }
-  .items th {
-    background: #eee;
-    font-size: 10pt;
-    text-transform: uppercase;
-    letter-spacing: 0.5pt;
-    text-align: left;
-    padding: 3mm;
-    border-bottom: 2px solid #000;
-  }
-  .items td {
-    padding: 3mm;
+  .notes-lines > div {
     border-bottom: 1px solid #ccc;
-    font-size: 12pt;
-    vertical-align: middle;
-  }
-  .items tr.is-done td {
-    background: #f0fdf4;
-  }
-  .c-bc {
-    font-family: "Courier New", monospace;
-    font-weight: 700;
-    width: 48mm;
-    white-space: nowrap;
-  }
-  .bc-pre { color: #666; font-weight: 500; }
-  .bc-suf { color: #000; font-weight: 900; }
-  .c-name { word-break: break-word; }
-  .c-num {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    width: 22mm;
-  }
-  .c-scan { font-weight: 800; }
-  .c-empty {
-    text-align: center;
-    color: #999;
-    padding: 8mm 3mm;
-    font-size: 11pt;
+    height: 0;
   }
 
   .foot {
@@ -2532,7 +1695,6 @@
     margin-top: 1mm;
     text-align: center;
   }
-  .foot-cell-date { grid-column: 3; }
 
   @media print {
     .sheet {
@@ -2557,30 +1719,20 @@ ${sheets.join('')}
 
   function doPrint(opts) {
     const html = buildPrintPage(opts);
-    if (!html) {
-      toastMsg('Нечего печатать', 'error');
-      return;
-    }
+    if (!html) { toastMsg('Нечего печатать', 'error'); return; }
 
     const w = window.open('', '_blank', 'width=900,height=1000');
-    if (!w) {
-      toastMsg('Разрешите всплывающие окна для печати', 'error');
-      return;
-    }
+    if (!w) { toastMsg('Разрешите всплывающие окна для печати', 'error'); return; }
 
     w.document.open();
     w.document.write(html);
     w.document.close();
 
     closePrintModal();
-
-    const copies = opts.copies;
-    toastMsg(`Подготовлено листов: ${copies}`);
+    toastMsg(`Листов подготовлено: ${opts.copies}`);
   }
 
-  /* =========================================================
-     НАВИГАЦИЯ
-     ========================================================= */
+  /* ============ НАВИГАЦИЯ ============ */
 
   async function openListPage() {
     tr.current = null;
@@ -2600,16 +1752,12 @@ ${sheets.join('')}
     await renderListPage();
   }
 
-  /* =========================================================
-     SIDEBAR
-     ========================================================= */
+  /* ============ SIDEBAR ============ */
 
   function insertSidebarItem() {
     if (document.querySelector(`.nav[${NAV_ATTR}]`)) return;
-
     const sidebarNav = document.querySelector('.sidebar-nav');
     if (!sidebarNav) return;
-
     const baseNav = sidebarNav.querySelector('.nav[data-page="base"]');
     const anchor = baseNav || sidebarNav.querySelector('.nav[data-page="assembly"]');
     if (!anchor) return;
@@ -2630,7 +1778,6 @@ ${sheets.join('')}
           state.activeTool = '';
         }
       } catch (e) {}
-
       openListPage();
     });
 
@@ -2641,25 +1788,19 @@ ${sheets.join('')}
     document.querySelectorAll('.nav').forEach(b => b.classList.remove('active'));
     const mine = document.querySelector(`.nav[${NAV_ATTR}]`);
     if (mine) mine.classList.add('active');
-
     document.querySelectorAll('.mobile-nav-btn').forEach(b => b.classList.remove('active'));
   }
 
-  /* =========================================================
-     ХУК
-     ========================================================= */
+  /* ============ ХУК ============ */
 
   function installRenderHook() {
     if (typeof window.render !== 'function') return false;
     if (window.render.__transitWrapped) return true;
-
     const orig = window.render;
     window.render = function () {
       const result = orig.apply(this, arguments);
       try {
-        if (window.state?.currentPage === PAGE_KEY) {
-          /* Ничего */
-        }
+        if (window.state?.currentPage === PAGE_KEY) { /* Ничего */ }
       } catch (e) {}
       return result;
     };
@@ -2667,9 +1808,7 @@ ${sheets.join('')}
     return true;
   }
 
-  /* =========================================================
-     ИНИЦИАЛИЗАЦИЯ
-     ========================================================= */
+  /* ============ ИНИЦИАЛИЗАЦИЯ ============ */
 
   function init() {
     injectStyles();
@@ -2677,26 +1816,20 @@ ${sheets.join('')}
     const start = () => {
       insertSidebarItem();
       installRenderHook();
-
       const sidebarObserver = new MutationObserver(() => {
         try { insertSidebarItem(); } catch (e) {}
       });
       const sidebarNav = document.querySelector('.sidebar-nav');
-      if (sidebarNav) {
-        sidebarObserver.observe(sidebarNav, { childList: true });
-      }
+      if (sidebarNav) sidebarObserver.observe(sidebarNav, { childList: true });
     };
 
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', start, { once: true });
-    } else {
-      start();
-    }
+    } else { start(); }
 
     setTimeout(start, 500);
     setTimeout(start, 2000);
     setTimeout(start, 5000);
-
     console.log('[Transit] Модуль инициализирован');
   }
 
@@ -2705,7 +1838,7 @@ ${sheets.join('')}
   window.spTransit = {
     open: openListPage,
     openRequest: openRequestPage,
-    version: '1.4.0'
+    version: '1.5.0'
   };
 
 })();
