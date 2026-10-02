@@ -4,15 +4,11 @@
 
    Отдельный раздел, не пересекается с public.boxes.
 
-   Версия 1.3:
+   Версия 1.4:
    - ФИКС: счётчики «Отсканировано» больше не «падают».
-     Доверяем полю scanned_boxes, а не пересчитываем
-     из массива сканов (который грузится с лимитом и мог
-     терять самые старые записи при большом объёме).
+   - НОВОЕ: печать A4-листов на поддоны (кнопка «🖨 Печать»).
    - Парсер Excel читает истинные значения ячеек (raw: true).
    - Последние 4 цифры штрихкода выделены.
-   - Селектор колонки количества.
-   - Кнопка «Скачать шаблон заявки».
    ========================================================= */
 
 (function () {
@@ -25,6 +21,7 @@
   const OVERLAY_ID  = 'spTrOverlay';
   const INPUT_ID    = 'spTrInput';
   const MODAL_ID    = 'spTrModal';
+  const PRINTMOD_ID = 'spTrPrintModal';
 
   const DEFAULT_UNITS_PER_BOX = 4;
 
@@ -73,11 +70,6 @@
       .replace(/'/g, '&#039;');
   }
 
-  /*
-    Возвращает HTML для штрихкода, в котором последние 4 цифры
-    визуально выделены (темнее и жирнее) — удобно проверять
-    глазами при сканировании.
-  */
   function barcodeHtml(bc) {
     const s = String(bc == null ? '' : bc);
     if (s.length <= 4) {
@@ -197,9 +189,6 @@
       const [reqRes, itemsRes, scansRes] = await Promise.all([
         client.from('transit_requests').select('*').eq('id', id).maybeSingle(),
         client.from('transit_request_items').select('*').eq('request_id', id).order('position_order', { ascending: true }).order('id', { ascending: true }),
-        /* Берём только 50 последних сканов — их достаточно
-           для отображения «недавних операций». Полная история
-           больше не нужна: счётчики считаем из scanned_boxes. */
         client.from('transit_scans').select('*').eq('request_id', id).order('scanned_at', { ascending: false }).limit(50)
       ]);
 
@@ -225,11 +214,9 @@
 
   function recalcScannedFromScans(items, scans) {
     /*
-      ВАЖНО: доверяем полю scanned_boxes, а НЕ пересчитываем
-      из массива scans. Причина: scans грузится с лимитом,
-      и по мере накопления старые записи в выборку не попадают —
-      счётчик начинал «падать». scanned_boxes обновляется при
-      каждом скане в processScan и всегда актуален.
+      Доверяем полю scanned_boxes, а НЕ пересчитываем из массива
+      scans — иначе при накоплении старые сканы не попадают
+      в выборку и счётчик «падает».
     */
     return items.map(it => ({
       ...it,
@@ -351,7 +338,7 @@
   }
 
   /* =========================================================
-     ПАРСЕР EXCEL — шаг 1 (просто разобрать файл)
+     ПАРСЕР EXCEL
      ========================================================= */
 
   async function parseExcelFile(file) {
@@ -363,11 +350,6 @@
     if (!sheetName) throw new Error('В файле нет листов');
     const sheet = wb.Sheets[sheetName];
 
-    /*
-      raw: true — берём ИСТИННЫЕ значения ячеек.
-      Иначе Excel-числа вроде 4810122736840 превращаются
-      в строку «4.81E+12» и штрихкод портится.
-    */
     let aoa = XLSX.utils.sheet_to_json(sheet, {
       header: 1,
       defval: '',
@@ -375,7 +357,6 @@
       blankrows: false
     });
 
-    /* Обрезаем пустой хвост */
     if (aoa.length > 1) {
       let lastIdx = aoa.length - 1;
       while (lastIdx > 0) {
@@ -444,10 +425,6 @@
       sheetName
     };
   }
-
-  /* =========================================================
-     ПАРСЕР EXCEL — шаг 2
-     ========================================================= */
 
   function extractExcelRows(parsed, qtyColIndex) {
     const { aoa, headerRow, cols } = parsed;
@@ -1167,6 +1144,81 @@
         font-size: 12px;
       }
 
+      /* ---------- Модалка печати ---------- */
+      #${PRINTMOD_ID} {
+        position: fixed; inset: 0;
+        background: rgba(15,23,42,.55);
+        z-index: 100075;
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+        backdrop-filter: blur(3px);
+      }
+      #${PRINTMOD_ID} .sp-tr-modal {
+        background: #fff;
+        border-radius: 16px;
+        width: 100%; max-width: 520px;
+        max-height: 92vh;
+        display: flex; flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 25px 80px rgba(0,0,0,.35);
+      }
+      #${PRINTMOD_ID} .sp-tr-modal-head {
+        padding: 16px 20px;
+        border-bottom: 1px solid #eef1f4;
+        display: flex; align-items: center; justify-content: space-between;
+      }
+      #${PRINTMOD_ID} h3 { margin: 0; font-size: 17px; font-weight: 700; }
+      #${PRINTMOD_ID} .sp-tr-modal-body {
+        padding: 16px 20px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      #${PRINTMOD_ID} .sp-tr-field { display: block; }
+      #${PRINTMOD_ID} .sp-tr-field > span {
+        display: block; font-size: 12px; font-weight: 600;
+        color: #475569; margin-bottom: 5px;
+      }
+      #${PRINTMOD_ID} .sp-tr-field input,
+      #${PRINTMOD_ID} .sp-tr-field select {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #dfe3e8;
+        border-radius: 9px;
+        padding: 10px 12px;
+        font-size: 13px;
+        outline: none;
+        background: #fff;
+        font-family: inherit;
+      }
+      #${PRINTMOD_ID} .sp-tr-field input:focus,
+      #${PRINTMOD_ID} .sp-tr-field select:focus {
+        border-color: var(--primary, #2563EB);
+        box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+      }
+      #${PRINTMOD_ID} .sp-tr-grid2 {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      }
+      #${PRINTMOD_ID} .sp-tr-check {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 13px; cursor: pointer; user-select: none;
+      }
+      #${PRINTMOD_ID} .sp-tr-check input {
+        width: 16px; height: 16px;
+        accent-color: var(--primary, #2563EB); cursor: pointer;
+      }
+      #${PRINTMOD_ID} .sp-tr-modal-foot {
+        padding: 12px 20px 16px;
+        display: flex; gap: 8px; justify-content: flex-end;
+        border-top: 1px solid #eef1f4; background: #fafbfc;
+      }
+      #${PRINTMOD_ID} .sp-tr-hint {
+        font-size: 11px;
+        color: #94a3b8;
+        line-height: 1.5;
+      }
+
       @media (max-width: 640px) {
         #${MODAL_ID} { padding: 0; }
         #${MODAL_ID} .sp-tr-modal {
@@ -1181,6 +1233,12 @@
           display: none;
         }
         #${OVERLAY_ID} .sp-tr-ov-list-body { max-height: none; }
+
+        #${PRINTMOD_ID} { padding: 0; align-items: flex-end; }
+        #${PRINTMOD_ID} .sp-tr-modal {
+          max-width: none; border-radius: 18px 18px 0 0;
+        }
+        #${PRINTMOD_ID} .sp-tr-grid2 { grid-template-columns: 1fr; }
       }
     `;
     document.head.appendChild(style);
@@ -1380,6 +1438,9 @@
           <button type="button" class="sp-tr-btn sp-tr-btn-primary" id="spTrScanBtn">
             📷 Сканировать
           </button>
+          <button type="button" class="sp-tr-btn sp-tr-btn-primary" id="spTrPrintBtn">
+            🖨 Печать листов на поддоны
+          </button>
           <button type="button" class="sp-tr-btn sp-tr-btn-secondary" id="spTrExportBtn">
             ⬇ Экспорт CSV
           </button>
@@ -1449,6 +1510,8 @@
     document.getElementById('spTrBackBtn')?.addEventListener('click', () => backToList());
 
     document.getElementById('spTrScanBtn')?.addEventListener('click', () => openScanner());
+
+    document.getElementById('spTrPrintBtn')?.addEventListener('click', () => openPrintModal());
 
     document.getElementById('spTrExportBtn')?.addEventListener('click', exportRequestCsv);
 
@@ -2136,6 +2199,386 @@
   }
 
   /* =========================================================
+     ПЕЧАТЬ ЛИСТОВ НА ПОДДОНЫ
+     ========================================================= */
+
+  function openPrintModal() {
+    if (!tr.current) return;
+    if (document.getElementById(PRINTMOD_ID)) return;
+
+    const items = recalcScannedFromScans(tr.current.items, tr.current.scans);
+    const totalBoxes = items.reduce((s, it) => s + ceilBoxes(it.requested_units, it.units_per_box), 0);
+
+    const overlay = document.createElement('div');
+    overlay.id = PRINTMOD_ID;
+    overlay.innerHTML = `
+      <div class="sp-tr-modal">
+        <div class="sp-tr-modal-head">
+          <h3>🖨 Печать листов на поддоны</h3>
+          <button type="button" class="sp-tr-modal-close" id="spTrPrintClose">×</button>
+        </div>
+        <div class="sp-tr-modal-body">
+          <div class="sp-tr-grid2">
+            <label class="sp-tr-field">
+              <span>Сколько копий (= поддонов)</span>
+              <input id="spTrPrintCopies" type="number" min="1" max="200" value="1">
+            </label>
+            <label class="sp-tr-field">
+              <span>Начать с номера поддона</span>
+              <input id="spTrPrintStart" type="number" min="1" max="9999" value="1">
+            </label>
+          </div>
+
+          <label class="sp-tr-field">
+            <span>Формат листа</span>
+            <select id="spTrPrintMode">
+              <option value="full">Полный лист А4: все позиции заявки</option>
+              <option value="scanned">Только отсканированные позиции</option>
+              <option value="empty">Пустой бланк (заполнять вручную)</option>
+            </select>
+          </label>
+
+          <label class="sp-tr-check">
+            <input type="checkbox" id="spTrPrintFooter" checked>
+            <span>Печатать поле для подписи и даты внизу</span>
+          </label>
+
+          <div class="sp-tr-hint">
+            Откроется новое окно с готовыми листами А4 — по одному на страницу.
+            Нажмите «Печать» в системном диалоге. Одна копия = один лист на один поддон.
+          </div>
+        </div>
+        <div class="sp-tr-modal-foot">
+          <button type="button" class="sp-tr-btn sp-tr-btn-secondary" id="spTrPrintCancel">Отмена</button>
+          <button type="button" class="sp-tr-btn sp-tr-btn-primary" id="spTrPrintGo">Печать</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    document.getElementById('spTrPrintClose')?.addEventListener('click', closePrintModal);
+    document.getElementById('spTrPrintCancel')?.addEventListener('click', closePrintModal);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closePrintModal(); });
+
+    document.getElementById('spTrPrintGo')?.addEventListener('click', () => {
+      const copies = Math.max(1, Math.min(200, Number(document.getElementById('spTrPrintCopies')?.value) || 1));
+      const startNum = Math.max(1, Number(document.getElementById('spTrPrintStart')?.value) || 1);
+      const mode = document.getElementById('spTrPrintMode')?.value || 'full';
+      const showFooter = !!document.getElementById('spTrPrintFooter')?.checked;
+
+      doPrint({ copies, startNum, mode, showFooter });
+    });
+  }
+
+  function closePrintModal() {
+    document.getElementById(PRINTMOD_ID)?.remove();
+  }
+
+  function buildPrintPage({ copies, startNum, mode, showFooter }) {
+    if (!tr.current) return '';
+
+    const req = tr.current.request;
+    let items = recalcScannedFromScans(tr.current.items, tr.current.scans);
+
+    /* Фильтрация по режиму */
+    if (mode === 'scanned') {
+      items = items.filter(it => (Number(it.scanned_boxes) || 0) > 0);
+    }
+    if (mode === 'empty') {
+      items = [];
+    }
+
+    let totalBoxes = 0, doneBoxes = 0;
+    items.forEach(it => {
+      totalBoxes += ceilBoxes(it.requested_units, it.units_per_box);
+      doneBoxes  += Number(it.scanned_boxes) || 0;
+    });
+
+    const dateStr = fmtDate(new Date());
+
+    /* Один лист = одна страница A4 */
+    const sheetHtml = (num) => {
+      const rowsHtml = items.length
+        ? items.map(it => {
+            const planned = ceilBoxes(it.requested_units, it.units_per_box);
+            const scanned = Number(it.scanned_boxes) || 0;
+            const done = planned > 0 && scanned >= planned;
+            const bc = String(it.barcode || '');
+            const bcPrefix = bc.length > 4 ? bc.slice(0, -4) : '';
+            const bcSuffix = bc.slice(-4);
+            return `
+              <tr class="${done ? 'is-done' : ''}">
+                <td class="c-bc">
+                  <span class="bc-pre">${esc(bcPrefix)}</span><span class="bc-suf">${esc(bcSuffix)}</span>
+                </td>
+                <td class="c-name">${esc(it.title || it.article || '')}</td>
+                <td class="c-num">${planned}</td>
+                <td class="c-num c-scan">${scanned}</td>
+              </tr>
+            `;
+          }).join('')
+        : `<tr><td colspan="4" class="c-empty">— заполнить вручную —</td></tr>`;
+
+      return `
+        <div class="sheet">
+          <div class="head">
+            <div class="head-brand">SKLADAPLAN · ТРАНЗИТ</div>
+            <div class="head-client">${esc(req.client_name)}</div>
+            <div class="head-request">${esc(req.request_name)}</div>
+          </div>
+
+          <div class="meta">
+            <div class="meta-cell">
+              <div class="meta-label">Поддон №</div>
+              <div class="meta-value meta-value-big">${esc(num)}</div>
+            </div>
+            <div class="meta-cell">
+              <div class="meta-label">Дата</div>
+              <div class="meta-value">${esc(dateStr)}</div>
+            </div>
+            <div class="meta-cell">
+              <div class="meta-label">Заявка №</div>
+              <div class="meta-value">${esc(req.id)}</div>
+            </div>
+            <div class="meta-cell">
+              <div class="meta-label">Позиций</div>
+              <div class="meta-value">${items.length}</div>
+            </div>
+          </div>
+
+          <table class="items">
+            <thead>
+              <tr>
+                <th class="c-bc">Штрихкод</th>
+                <th class="c-name">Название</th>
+                <th class="c-num">Коробок</th>
+                <th class="c-num">Отсканировано</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+
+          ${showFooter ? `
+            <div class="foot">
+              <div class="foot-cell">
+                <div class="foot-line"></div>
+                <div class="foot-label">Собрал (ФИО, подпись)</div>
+              </div>
+              <div class="foot-cell">
+                <div class="foot-line"></div>
+                <div class="foot-label">Проверил (ФИО, подпись)</div>
+              </div>
+              <div class="foot-cell foot-cell-date">
+                <div class="foot-line"></div>
+                <div class="foot-label">Дата</div>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    };
+
+    const sheets = [];
+    for (let i = 0; i < copies; i++) {
+      sheets.push(sheetHtml(startNum + i));
+    }
+
+    return `<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Листы на поддоны — ${esc(req.client_name)}</title>
+<style>
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #000;
+    background: #fff;
+  }
+
+  .sheet {
+    width: 186mm;
+    min-height: 267mm;
+    margin: 0 auto;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    page-break-after: always;
+    break-after: page;
+  }
+  .sheet:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .head {
+    border-bottom: 4px solid #000;
+    padding-bottom: 6mm;
+    margin-bottom: 6mm;
+  }
+  .head-brand {
+    font-size: 10pt;
+    letter-spacing: 2pt;
+    color: #444;
+    margin-bottom: 2mm;
+  }
+  .head-client {
+    font-size: 40pt;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -1pt;
+    word-break: break-word;
+  }
+  .head-request {
+    font-size: 16pt;
+    font-weight: 600;
+    margin-top: 2mm;
+    color: #333;
+  }
+
+  .meta {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr 1fr 1fr;
+    gap: 3mm;
+    margin-bottom: 6mm;
+  }
+  .meta-cell {
+    border: 1px solid #999;
+    border-radius: 2mm;
+    padding: 3mm 4mm;
+  }
+  .meta-label {
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    color: #666;
+    margin-bottom: 1mm;
+  }
+  .meta-value {
+    font-size: 14pt;
+    font-weight: 700;
+  }
+  .meta-value-big {
+    font-size: 24pt;
+    line-height: 1;
+  }
+
+  .items {
+    width: 100%;
+    border-collapse: collapse;
+    flex: 1;
+  }
+  .items th {
+    background: #eee;
+    font-size: 10pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5pt;
+    text-align: left;
+    padding: 3mm;
+    border-bottom: 2px solid #000;
+  }
+  .items td {
+    padding: 3mm;
+    border-bottom: 1px solid #ccc;
+    font-size: 12pt;
+    vertical-align: middle;
+  }
+  .items tr.is-done td {
+    background: #f0fdf4;
+  }
+  .c-bc {
+    font-family: "Courier New", monospace;
+    font-weight: 700;
+    width: 48mm;
+    white-space: nowrap;
+  }
+  .bc-pre { color: #666; font-weight: 500; }
+  .bc-suf { color: #000; font-weight: 900; }
+  .c-name { word-break: break-word; }
+  .c-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    width: 22mm;
+  }
+  .c-scan { font-weight: 800; }
+  .c-empty {
+    text-align: center;
+    color: #999;
+    padding: 8mm 3mm;
+    font-size: 11pt;
+  }
+
+  .foot {
+    display: grid;
+    grid-template-columns: 1fr 1fr 40mm;
+    gap: 6mm;
+    margin-top: 8mm;
+    padding-top: 4mm;
+  }
+  .foot-line {
+    border-bottom: 1px solid #000;
+    height: 10mm;
+  }
+  .foot-label {
+    font-size: 9pt;
+    color: #666;
+    margin-top: 1mm;
+    text-align: center;
+  }
+  .foot-cell-date { grid-column: 3; }
+
+  @media print {
+    .sheet {
+      width: auto;
+      min-height: auto;
+      margin: 0;
+      padding: 0;
+    }
+  }
+</style>
+</head>
+<body>
+${sheets.join('')}
+<script>
+  window.addEventListener('load', function () {
+    setTimeout(function () { window.print(); }, 250);
+  });
+</script>
+</body>
+</html>`;
+  }
+
+  function doPrint(opts) {
+    const html = buildPrintPage(opts);
+    if (!html) {
+      toastMsg('Нечего печатать', 'error');
+      return;
+    }
+
+    const w = window.open('', '_blank', 'width=900,height=1000');
+    if (!w) {
+      toastMsg('Разрешите всплывающие окна для печати', 'error');
+      return;
+    }
+
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+
+    closePrintModal();
+
+    const copies = opts.copies;
+    toastMsg(`Подготовлено листов: ${copies}`);
+  }
+
+  /* =========================================================
      НАВИГАЦИЯ
      ========================================================= */
 
@@ -2262,7 +2705,7 @@
   window.spTransit = {
     open: openListPage,
     openRequest: openRequestPage,
-    version: '1.3.0'
+    version: '1.4.0'
   };
 
 })();
