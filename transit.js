@@ -4,12 +4,14 @@
 
    Отдельный раздел, не пересекается с public.boxes.
 
-   Версия 1.2:
-   - Парсер Excel читает истинные значения ячеек (raw: true) —
-     штрихкоды больше не превращаются в 4810120000000.
-   - Последние 4 цифры штрихкода выделены жирнее — удобно
-     проверять глазами.
-   - Селектор колонки количества (если их несколько в файле).
+   Версия 1.3:
+   - ФИКС: счётчики «Отсканировано» больше не «падают».
+     Доверяем полю scanned_boxes, а не пересчитываем
+     из массива сканов (который грузится с лимитом и мог
+     терять самые старые записи при большом объёме).
+   - Парсер Excel читает истинные значения ячеек (raw: true).
+   - Последние 4 цифры штрихкода выделены.
+   - Селектор колонки количества.
    - Кнопка «Скачать шаблон заявки».
    ========================================================= */
 
@@ -195,7 +197,10 @@
       const [reqRes, itemsRes, scansRes] = await Promise.all([
         client.from('transit_requests').select('*').eq('id', id).maybeSingle(),
         client.from('transit_request_items').select('*').eq('request_id', id).order('position_order', { ascending: true }).order('id', { ascending: true }),
-        client.from('transit_scans').select('*').eq('request_id', id).order('scanned_at', { ascending: false }).limit(500)
+        /* Берём только 50 последних сканов — их достаточно
+           для отображения «недавних операций». Полная история
+           больше не нужна: счётчики считаем из scanned_boxes. */
+        client.from('transit_scans').select('*').eq('request_id', id).order('scanned_at', { ascending: false }).limit(50)
       ]);
 
       if (reqRes.error) throw reqRes.error;
@@ -219,14 +224,16 @@
   }
 
   function recalcScannedFromScans(items, scans) {
-    const counts = new Map();
-    (scans || []).forEach(s => {
-      const k = String(s.item_id);
-      counts.set(k, (counts.get(k) || 0) + 1);
-    });
+    /*
+      ВАЖНО: доверяем полю scanned_boxes, а НЕ пересчитываем
+      из массива scans. Причина: scans грузится с лимитом,
+      и по мере накопления старые записи в выборку не попадают —
+      счётчик начинал «падать». scanned_boxes обновляется при
+      каждом скане в processScan и всегда актуален.
+    */
     return items.map(it => ({
       ...it,
-      scanned_boxes: counts.get(String(it.id)) || 0
+      scanned_boxes: Number(it.scanned_boxes) || 0
     }));
   }
 
@@ -368,8 +375,7 @@
       blankrows: false
     });
 
-    /* Обрезаем пустой хвост — SheetJS иногда отдаёт
-       массив длиной во весь лист (до 1 048 576 строк). */
+    /* Обрезаем пустой хвост */
     if (aoa.length > 1) {
       let lastIdx = aoa.length - 1;
       while (lastIdx > 0) {
@@ -440,7 +446,7 @@
   }
 
   /* =========================================================
-     ПАРСЕР EXCEL — шаг 2 (извлечь строки по выбранной колонке)
+     ПАРСЕР EXCEL — шаг 2
      ========================================================= */
 
   function extractExcelRows(parsed, qtyColIndex) {
@@ -756,8 +762,6 @@
         white-space: nowrap;
       }
       .sp-tr-items-table tr:last-child td { border-bottom: 0; }
-
-      /* -------- Штрихкод: последние 4 цифры выделены -------- */
 
       .sp-tr-bc {
         font-family: ui-monospace, Menlo, Consolas, monospace;
@@ -1720,6 +1724,7 @@
       if (scanErr) throw scanErr;
 
       tr.current.scans.unshift(scanRow);
+      if (tr.current.scans.length > 50) tr.current.scans.length = 50;
 
       const newCount = scanned + 1;
       await client
@@ -2060,7 +2065,6 @@
       { wch: 12 }
     ];
 
-    /* Делаем колонку A текстовой — чтобы Excel не портил штрихкод */
     for (let r = 0; r < aoa.length; r++) {
       const ref = XLSX.utils.encode_cell({ r, c: 0 });
       if (ws[ref]) {
@@ -2258,7 +2262,7 @@
   window.spTransit = {
     open: openListPage,
     openRequest: openRequestPage,
-    version: '1.2.0'
+    version: '1.3.0'
   };
 
 })();
